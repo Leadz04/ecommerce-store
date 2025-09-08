@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Star, ShoppingCart, Heart } from 'lucide-react';
 import { Product } from '@/types';
 import { useCartStore } from '@/store/cartStore';
+import { useWishlistStore } from '@/store/wishlistStore';
 
 interface ProductCardProps {
   product: Product;
@@ -14,6 +15,7 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const { addItem } = useCartStore();
+  const { toggleWishlist, isInWishlist } = useWishlistStore();
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -21,10 +23,14 @@ export default function ProductCard({ product }: ProductCardProps) {
     addItem(product, 1);
   };
 
-  const handleLike = (e: React.MouseEvent) => {
+  const handleLike = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsLiked(!isLiked);
+    const id = (product as any)._id || (product as any).id;
+    try {
+      const result = await toggleWishlist(id);
+      setIsLiked(result === 'added');
+    } catch {}
   };
 
   const discountPercentage = product.originalPrice 
@@ -56,7 +62,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <Heart 
-              className={`h-4 w-4 ${isLiked ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} 
+              className={`h-4 w-4 ${(isLiked || isInWishlist((product as any)._id || (product as any).id)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} 
             />
           </button>
           

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/models/Order';
 import Product from '@/models/Product';
+import OrderCounter from '@/models/OrderCounter';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 
 // Helper function to verify JWT token
 async function verifyToken(request: NextRequest) {
@@ -16,6 +18,26 @@ async function verifyToken(request: NextRequest) {
   return decoded.userId;
 }
 
+// Helper function to generate order number with date/time and incremental counter
+async function generateOrderNumber(): Promise<string> {
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+  const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, ''); // HHMMSS
+  
+  // Get or create counter for today
+  const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  let counter = await OrderCounter.findOneAndUpdate(
+    { date: today },
+    { $inc: { counter: 1 } },
+    { upsert: true, new: true }
+  );
+  
+  // Format: YYYYMMDD-HHMMSS-XXXX (where XXXX is the incremental counter)
+  const orderNumber = `${dateStr}-${timeStr}-${String(counter.counter).padStart(4, '0')}`;
+  
+  return orderNumber;
+}
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -26,11 +48,25 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const status = searchParams.get('status');
+    const search = searchParams.get('search');
+    const dateRange = searchParams.get('dateRange');
 
     // Build query
     const query: any = { userId };
-    if (status) {
+    
+    if (status && status !== 'all') {
       query.status = status;
+    }
+    
+    if (search) {
+      query.orderNumber = { $regex: search, $options: 'i' };
+    }
+    
+    if (dateRange && dateRange !== 'all') {
+      const days = parseInt(dateRange);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      query.createdAt = { $gte: startDate };
     }
 
     // Execute query
@@ -74,6 +110,9 @@ export async function POST(request: NextRequest) {
     const userId = await verifyToken(request);
     const orderData = await request.json();
     
+    // Debug: Log the received order data
+    console.log('Received order data:', JSON.stringify(orderData, null, 2));
+    
     // Validate order data
     if (!orderData.items || orderData.items.length === 0) {
       return NextResponse.json(
@@ -107,11 +146,54 @@ export async function POST(request: NextRequest) {
       await product.save();
     }
 
-    // Create order
-    const order = new Order({
+    // Debug: Log the Order schema paths
+    console.log('Order schema paths:', Object.keys(Order.schema.paths));
+    console.log('Address schema paths:', Object.keys(Order.schema.paths.shippingAddress.schema.paths));
+    
+    // Check if the schema still has the old 'street' field
+    const addressSchemaPaths = Object.keys(Order.schema.paths.shippingAddress.schema.paths);
+    console.log('Address schema has street field:', addressSchemaPaths.includes('street'));
+    console.log('Address schema has address1 field:', addressSchemaPaths.includes('address1'));
+    
+    // Generate order number with date/time and incremental counter
+    const orderNumber = await generateOrderNumber();
+    
+    // Create order with field mapping for backward compatibility
+    const orderDataWithMapping = {
       ...orderData,
-      userId
-    });
+      userId,
+      orderNumber,
+      // Map address fields for backward compatibility
+      shippingAddress: {
+        ...orderData.shippingAddress,
+        // If schema still expects 'street', map address1 to street
+        ...(addressSchemaPaths.includes('street') && !addressSchemaPaths.includes('address1') ? {
+          street: orderData.shippingAddress.address1
+        } : {})
+      },
+      billingAddress: {
+        ...orderData.billingAddress,
+        // If schema still expects 'street', map address1 to street
+        ...(addressSchemaPaths.includes('street') && !addressSchemaPaths.includes('address1') ? {
+          street: orderData.billingAddress.address1
+        } : {})
+      }
+    };
+    
+    console.log('Final order data with mapping:', JSON.stringify(orderDataWithMapping, null, 2));
+    
+    const order = new Order(orderDataWithMapping);
+
+    // Validate the order before saving
+    const validationError = order.validateSync();
+    if (validationError) {
+      console.error('Order validation error:', validationError);
+      console.error('Validation error details:', validationError.errors);
+      return NextResponse.json(
+        { error: 'Order validation failed', details: validationError.errors },
+        { status: 400 }
+      );
+    }
 
     await order.save();
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
+import { Toaster } from 'react-hot-toast';
 import Footer from '@/components/Footer';
 
 interface ClientWrapperProps {
@@ -32,6 +33,7 @@ export default function ClientWrapper({ children }: ClientWrapperProps) {
         {children}
       </main>
       <Footer />
+      <Toaster position="top-right" />
     </div>
   );
 }

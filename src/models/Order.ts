@@ -13,7 +13,8 @@ export interface IOrderItem {
 export interface IAddress {
   firstName: string;
   lastName: string;
-  street: string;
+  address1: string;
+  address2?: string;
   city: string;
   state: string;
   zipCode: string;
@@ -80,9 +81,13 @@ const AddressSchema = new Schema<IAddress>({
     required: true,
     trim: true
   },
-  street: {
+  address1: {
     type: String,
     required: true,
+    trim: true
+  },
+  address2: {
+    type: String,
     trim: true
   },
   city: {
@@ -120,7 +125,6 @@ const OrderSchema = new Schema<IOrder>({
   },
   orderNumber: {
     type: String,
-    required: true,
     unique: true,
     index: true
   },

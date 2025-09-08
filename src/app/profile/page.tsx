@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, LogOut, ShoppingBag, Heart, Settings } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, LogOut, ShoppingBag, Heart, Settings, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
+import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
-import { AuthUser, Address } from '@/types';
+import { useWishlistStore } from '@/store/wishlistStore';
+import { AuthUser } from '@/types';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -13,6 +16,23 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<AuthUser>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [activeSection, setActiveSection] = useState<'profile' | 'wishlist' | 'settings'>('profile');
+
+
+  // Wishlist
+  const { items: wishlistItems, isLoading: isWishlistLoading, error: wishlistError, fetchWishlist, removeFromWishlist } = useWishlistStore();
+
+  // Settings
+  const [settings, setSettings] = useState({ emailNotifications: true, smsNotifications: false, theme: 'system', language: 'en' });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const { items: cartItems, addItem } = useCartStore();
+  const [wishlistQty, setWishlistQty] = useState<Record<string, number>>({});
+  const changeQty = (id: string, delta: number) => {
+    setWishlistQty((prev) => {
+      const next = Math.max(1, (prev[id] || 1) + delta);
+      return { ...prev, [id]: next };
+    });
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -25,22 +45,72 @@ export default function ProfilePage() {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
-        address: user.address || {
+        address: (user.address as any) || ({
           street: '',
           city: '',
           state: '',
           zipCode: '',
           country: 'United States'
-        }
+        } as any)
       });
+
+      // Prefill settings if present
+      const userAny = user as any;
+      if (userAny.settings) {
+        setSettings({
+          emailNotifications: !!userAny.settings.emailNotifications,
+          smsNotifications: !!userAny.settings.smsNotifications,
+          theme: userAny.settings.theme || 'system',
+          language: userAny.settings.language || 'en'
+        });
+      }
     }
   }, [isAuthenticated, user, router]);
+
+  // Initialize active section from URL
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams?.get('tab');
+    if (tab === 'wishlist' || tab === 'settings' || tab === 'profile') {
+      setActiveSection(tab);
+    }
+  }, [searchParams]);
+
+  // Sync active section to URL and load data
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', activeSection);
+    window.history.replaceState(null, '', url.toString());
+    if (activeSection === 'wishlist') {
+      fetchWishlist();
+    }
+  }, [activeSection, isAuthenticated, fetchWishlist]);
+
+  const handleSaveSettings = async () => {
+    try {
+      setIsSavingSettings(true);
+      const token = localStorage.getItem('token');
+      await fetch('/api/users/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(settings)
+      });
+      // Notify
+      try {
+        const mod: any = await import('react-hot-toast');
+        mod.toast.success('Settings saved');
+      } catch {}
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
     if (name.startsWith('address.')) {
-      const addressField = name.split('.')[1] as keyof Address;
+      const addressField = name.split('.')[1] as string;
       setEditData(prev => ({
         ...prev,
         address: {
@@ -81,8 +151,8 @@ export default function ProfilePage() {
     }
     
     if (editData.address) {
-      if (!editData.address.street?.trim()) {
-        errors['address.street'] = 'Street address is required';
+      if (!editData.address.address1?.trim()) {
+        errors['address.address1'] = 'Street address is required';
       }
       if (!editData.address.city?.trim()) {
         errors['address.city'] = 'City is required';
@@ -121,13 +191,13 @@ export default function ProfilePage() {
         name: user.name,
         email: user.email,
         phone: user.phone || '',
-        address: user.address || {
+        address: (user.address as any) || ({
           street: '',
           city: '',
           state: '',
           zipCode: '',
           country: 'United States'
-        }
+        } as any)
       });
     }
     setIsEditing(false);
@@ -175,15 +245,15 @@ export default function ProfilePage() {
 
                 {/* Quick Actions */}
                 <div className="space-y-2">
-                  <button className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                  <Link href="/orders" className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                     <ShoppingBag className="h-5 w-5 mr-3" />
                     Order History
-                  </button>
-                  <button className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                  </Link>
+                  <button onClick={() => setActiveSection('wishlist')} className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                     <Heart className="h-5 w-5 mr-3" />
                     Wishlist
                   </button>
-                  <button className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                  <button onClick={() => setActiveSection('settings')} className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                     <Settings className="h-5 w-5 mr-3" />
                     Settings
                   </button>
@@ -199,8 +269,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Profile Details */}
+            {/* Right Column */}
             <div className="lg:col-span-2">
+              {/* Profile Section */}
+              {activeSection === 'profile' && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-semibold text-gray-900">Personal Information</h3>
@@ -323,11 +395,11 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <input
                           type="text"
-                          name="address.street"
-                          value={editData.address?.street || ''}
+                          name="address.address1"
+                          value={editData.address?.address1 || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 ${
-                            validationErrors['address.street'] ? 'border-red-300' : 'border-gray-300'
+                            validationErrors['address.address1'] ? 'border-red-300' : 'border-gray-300'
                           }`}
                           placeholder="Street address"
                         />
@@ -384,7 +456,7 @@ export default function ProfilePage() {
                       <div className="text-gray-900">
                         {user.address ? (
                           <div>
-                            <p>{user.address.street}</p>
+                            <p>{user.address.address1}</p>
                             <p>{user.address.city}, {user.address.state} {user.address.zipCode}</p>
                             <p>{user.address.country}</p>
                           </div>
@@ -396,6 +468,118 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
+              )}
+
+
+              {/* Wishlist Section */}
+              {activeSection === 'wishlist' && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900">Wishlist</h3>
+                </div>
+                {isWishlistLoading ? (
+                  <p className="text-gray-600">Loading wishlist...</p>
+                ) : wishlistError ? (
+                  <p className="text-red-600">{wishlistError}</p>
+                ) : wishlistItems.length === 0 ? (
+                  <p className="text-gray-600">Your wishlist is empty.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {wishlistItems.map((p: any) => {
+                      const inCartQty = cartItems.reduce((sum, it) => {
+                        const pid = (it.product as any)._id || (it.product as any).id;
+                        return pid === p._id ? sum + it.quantity : sum;
+                      }, 0);
+                      return (
+                      <div key={p._id} className="border rounded-lg p-4 flex items-center gap-4 hover:border-gray-300 transition-colors">
+                        <Link href={`/products/${p._id}`} className="shrink-0 w-16 h-16 bg-gray-100 rounded overflow-hidden" title={p.name}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/products/${p._id}`} className="block font-medium text-gray-900 hover:text-blue-600 truncate" title={p.name}>
+                            {p.name}
+                          </Link>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="text-gray-600 text-sm">${p.price}</div>
+                            {inCartQty > 0 && (
+                              <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">In cart: {inCartQty}</span>
+                            )}
+                          </div>
+                          <div className="mt-3 flex items-center gap-3 flex-wrap">
+                            <Link href={`/products/${p._id}`} className="inline-flex items-center text-blue-600 hover:text-blue-700 text-sm">
+                              View <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                            </Link>
+                            <button onClick={() => removeFromWishlist(p._id)} className="text-red-600 hover:text-red-700 text-sm">
+                              Remove
+                            </button>
+                            <div className="ml-auto flex items-center gap-2">
+                              <button onClick={() => changeQty(p._id, -1)} className="px-2 py-1 border rounded text-xs hover:bg-gray-50">-</button>
+                              <span className="text-sm w-6 text-center">{wishlistQty[p._id] || 1}</span>
+                              <button onClick={() => changeQty(p._id, 1)} className="px-2 py-1 border rounded text-xs hover:bg-gray-50">+</button>
+                              <button
+                                onClick={() => addItem(p, wishlistQty[p._id] || 1)}
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                                disabled={!p.inStock}
+                              >
+                                {p.inStock ? 'Add to Cart' : 'Out of Stock'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {/* Settings Section */}
+              {activeSection === 'settings' && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900">Settings</h3>
+                </div>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">Email Notifications</div>
+                      <div className="text-gray-600 text-sm">Receive updates about orders and offers</div>
+                    </div>
+                    <input type="checkbox" checked={settings.emailNotifications} onChange={(e) => setSettings({ ...settings, emailNotifications: e.target.checked })} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">SMS Notifications</div>
+                      <div className="text-gray-600 text-sm">Receive text messages about your orders</div>
+                    </div>
+                    <input type="checkbox" checked={settings.smsNotifications} onChange={(e) => setSettings({ ...settings, smsNotifications: e.target.checked })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
+                    <select value={settings.theme} onChange={(e) => setSettings({ ...settings, theme: e.target.value as any })} className="px-3 py-2 border rounded">
+                      <option value="system">System</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+                    <select value={settings.language} onChange={(e) => setSettings({ ...settings, language: e.target.value })} className="px-3 py-2 border rounded">
+                      <option value="en">English</option>
+                      <option value="fr">French</option>
+                      <option value="es">Spanish</option>
+                    </select>
+                  </div>
+                  <div>
+                    <button onClick={handleSaveSettings} disabled={isSavingSettings} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400">
+                      {isSavingSettings ? 'Saving...' : 'Save Settings'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              )}
             </div>
           </div>
         </div>

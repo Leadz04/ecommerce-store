@@ -27,30 +27,62 @@ export interface CartItem {
 
 export interface User {
   id: string;
+  _id?: string; // For MongoDB compatibility
   name: string;
   email: string;
   avatar?: string;
   phone?: string;
   address?: Address;
+  role: {
+    _id: string;
+    name: string;
+    description: string;
+  };
+  permissions: string[];
+  isActive: boolean;
+  lastLogin?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Address {
-  street: string;
+  firstName: string;
+  lastName: string;
+  address1: string;
+  address2?: string;
   city: string;
   state: string;
   zipCode: string;
   country: string;
+  phone?: string;
 }
 
 export interface AuthUser {
   id: string;
+  _id?: string; // For MongoDB compatibility
   name: string;
   email: string;
   avatar?: string;
   phone?: string;
   address?: Address;
+  role: {
+    _id: string;
+    name: string;
+    description: string;
+  };
+  permissions: string[];
+  isActive: boolean;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Role {
+  _id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }

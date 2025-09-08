@@ -17,13 +17,31 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
       
+      // Ensure no duplicate ids exist in the cart
+      _dedupeItems: (items: CartItem[]) => {
+        const map = new Map<string, CartItem>();
+        for (const it of items) {
+          const key = it.id;
+          if (map.has(key)) {
+            const existing = map.get(key)!;
+            map.set(key, { ...existing, quantity: existing.quantity + it.quantity });
+          } else {
+            map.set(key, it);
+          }
+        }
+        return Array.from(map.values());
+      },
+
       addItem: (product: Product, quantity = 1, size, color) => {
         const items = get().items;
+        const normalize = (v?: string) => (v && v.trim() !== '' ? v : 'default');
+        const nSize = normalize(size);
+        const nColor = normalize(color);
         const existingItemIndex = items.findIndex(
           item => 
             (item.product._id || item.product.id) === (product._id || product.id) && 
-            item.size === size && 
-            item.color === color
+            normalize(item.size) === nSize && 
+            normalize(item.color) === nColor
         );
 
         if (existingItemIndex > -1) {
@@ -34,13 +52,17 @@ export const useCartStore = create<CartStore>()(
         } else {
           // Add new item
           const newItem: CartItem = {
-            id: `${product._id || product.id}-${size || 'default'}-${color || 'default'}`,
+            id: `${product._id || product.id}-${nSize}-${nColor}`,
             product,
             quantity,
-            size,
-            color,
+            size: size,
+            color: color,
           };
-          set({ items: [...items, newItem] });
+          // Append then dedupe to guard against any legacy duplicates
+          const next = [...items, newItem];
+          // @ts-ignore - internal helper
+          const deduped = (get() as any)._dedupeItems(next);
+          set({ items: deduped });
         }
       },
 
@@ -77,6 +99,15 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'cart-storage',
+      // Clean up any legacy duplicates on hydration
+      onRehydrateStorage: () => (state) => {
+        try {
+          if (!state || !(state as any).items) return;
+          // @ts-ignore - internal helper
+          const deduped = (state as any)._dedupeItems((state as any).items);
+          (state as any).items = deduped;
+        } catch {}
+      },
     }
   )
 );

@@ -4,12 +4,13 @@ import Product from '@/models/Product';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const product = await Product.findById(params.id);
+    const { id } = await context.params;
+    const product = await Product.findById(id);
     
     if (!product) {
       return NextResponse.json(
@@ -31,15 +32,16 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
     const updateData = await request.json();
     
+    const { id } = await context.params;
     const product = await Product.findByIdAndUpdate(
-      params.id,
+      id,
       updateData,
       { new: true, runValidators: true }
     );
@@ -67,13 +69,14 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
+    const { id } = await context.params;
     const product = await Product.findByIdAndUpdate(
-      params.id,
+      id,
       { isActive: false },
       { new: true }
     );

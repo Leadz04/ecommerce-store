@@ -18,6 +18,8 @@ interface OrderStore {
     page?: number;
     limit?: number;
     status?: string;
+    search?: string;
+    dateRange?: string;
   }) => Promise<void>;
   fetchOrder: (id: string) => Promise<void>;
   createOrder: (orderData: {
@@ -61,8 +63,16 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
       searchParams.set('page', (params.page || 1).toString());
       searchParams.set('limit', (params.limit || 10).toString());
       
-      if (params.status) {
+      if (params.status && params.status !== 'all') {
         searchParams.set('status', params.status);
+      }
+      
+      if (params.search) {
+        searchParams.set('search', params.search);
+      }
+      
+      if (params.dateRange && params.dateRange !== 'all') {
+        searchParams.set('dateRange', params.dateRange);
       }
 
       const response = await fetch(`${API_BASE_URL}/api/orders?${searchParams.toString()}`, {
@@ -148,6 +158,7 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('Order creation failed:', data);
         throw new Error(data.error || 'Failed to create order');
       }
 

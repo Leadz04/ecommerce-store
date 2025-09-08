@@ -18,18 +18,25 @@ export default function ProductsPage() {
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
+  const [searchInput, setSearchInput] = useState(filters.search);
 
   const categories = ['all', 'Leather Goods', 'Electronics', 'Clothing', 'Home & Kitchen', 'Food & Beverage', 'Sports & Outdoors', 'Books'];
 
-  // Fetch products when component mounts or filters change
+  // Initial fetch
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleSearch = (searchTerm: string) => {
-    setFilters({ search: searchTerm });
-    fetchProducts({ search: searchTerm, page: 1 });
-  };
+  // Debounce search to avoid firing a request on every keystroke
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters({ search: searchInput });
+        fetchProducts({ search: searchInput, page: 1 });
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchInput, filters.search, setFilters, fetchProducts]);
 
   const handleCategoryChange = (category: string) => {
     setFilters({ category });
@@ -75,8 +82,8 @@ export default function ProductsPage() {
               <input
                 type="text"
                 placeholder="Search products..."
-                value={filters.search}
-                onChange={(e) => handleSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
               />
             </div>
@@ -149,6 +156,24 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
+                {/* Availability */}
+                <div className="mb-6">
+                  <h4 className="font-medium mb-3 text-gray-900">Availability</h4>
+                  <label className="flex items-center text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={filters.inStock === true}
+                      onChange={(e) => {
+                        const nextInStock = e.target.checked ? true : null;
+                        setFilters({ inStock: nextInStock });
+                        fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1 });
+                      }}
+                      className="mr-2 text-blue-600 focus:ring-blue-500"
+                    />
+                    In stock only
+                  </label>
+                </div>
+
                 {/* Price Range */}
                 <div className="mb-6">
                   <h4 className="font-medium mb-3 text-gray-900">Price Range</h4>
@@ -171,7 +196,8 @@ export default function ProductsPage() {
                 {/* Clear Filters */}
                 <button
                   onClick={() => {
-                    setFilters({ search: '', category: 'all', priceRange: [0, 1000] });
+                    setSearchInput('');
+                    setFilters({ search: '', category: 'all', priceRange: [0, 1000], inStock: null });
                     fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
                   }}
                   className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"

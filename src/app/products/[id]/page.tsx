@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
+import { useWishlistStore } from '@/store/wishlistStore';
 import { sampleProducts } from '@/data/products';
 
 export default function ProductPage() {
@@ -22,6 +23,7 @@ export default function ProductPage() {
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
+  const { toggleWishlist, isInWishlist } = useWishlistStore();
   
   // Fetch product when component mounts
   useEffect(() => {
@@ -243,10 +245,15 @@ export default function ProductPage() {
               <ArrowRight className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setIsLiked(!isLiked)}
+              onClick={async () => {
+                try {
+                  const res = await toggleWishlist(product._id as any);
+                  setIsLiked(res === 'added');
+                } catch {}
+              }}
               className="p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              <Heart className={`h-6 w-6 ${isLiked ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
+              <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
             </button>
           </div>
 

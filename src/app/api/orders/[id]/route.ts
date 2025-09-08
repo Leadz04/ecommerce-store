@@ -3,6 +3,57 @@ import connectDB from '@/lib/mongodb';
 import Order from '@/models/Order';
 import jwt from 'jsonwebtoken';
 
+async function verifyToken(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '');
+  if (!token) throw new Error('No token provided');
+  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+  return decoded.userId;
+}
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const userId = await verifyToken(request);
+    const { id } = await context.params;
+    const order = await Order.findOne({ _id: id, userId });
+    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    return NextResponse.json({ order });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'No token provided') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+    const userId = await verifyToken(request);
+    const { id } = await context.params;
+    const updates = await request.json();
+    const order = await Order.findOneAndUpdate({ _id: id, userId }, updates, { new: true });
+    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    return NextResponse.json({ order });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'No token provided') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server';
+import connectDB from '@/lib/mongodb';
+import Order from '@/models/Order';
+import jwt from 'jsonwebtoken';
+
 // Helper function to verify JWT token
 async function verifyToken(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');

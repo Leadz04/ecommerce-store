@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Menu, X, User, LogOut, Settings } from 'lucide-react';
+import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -11,7 +11,7 @@ export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const { items, getTotalItems, getTotalPrice } = useCartStore();
+  const { items, getTotalItems, getTotalPrice, removeItem, updateQuantity } = useCartStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -114,6 +114,25 @@ export default function Header() {
                       <Settings className="h-4 w-4 mr-3" />
                       Orders
                     </Link>
+                    {user?.permissions?.includes('system:settings') ? (
+                      <Link
+                        href="/admin"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Shield className="h-4 w-4 mr-3" />
+                        Admin Panel
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/customer"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <User className="h-4 w-4 mr-3" />
+                        My Dashboard
+                      </Link>
+                    )}
                     <hr className="my-1" />
                     <button
                       onClick={() => {
@@ -201,6 +220,23 @@ export default function Header() {
                     >
                       Orders
                     </Link>
+                    {user?.permissions?.includes('system:settings') ? (
+                      <Link
+                        href="/admin"
+                        className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Admin Panel
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/customer"
+                        className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        My Dashboard
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         logout();
@@ -258,9 +294,11 @@ export default function Header() {
                 <h2 className="text-lg font-semibold">Shopping Cart</h2>
                 <button
                   onClick={() => setIsCartOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full"
+                  aria-label="Close cart"
+                  title="Close"
+                  className="p-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-5 w-5 text-gray-700" />
                 </button>
               </div>
               
@@ -271,20 +309,38 @@ export default function Header() {
                   <p className="text-gray-500 text-center py-8">Your cart is empty</p>
                 ) : (
                   <div className="space-y-4">
-                    {items.map((item) => (
-                      <div key={item.id} className="flex items-center space-x-4 p-3 border rounded-lg">
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                        <div className="flex-1">
-                          <h3 className="font-medium text-sm">{item.product.name}</h3>
-                          <p className="text-gray-500 text-sm">${item.product.price}</p>
-                          <p className="text-gray-500 text-sm">Qty: {item.quantity}</p>
+                    {items.map((item) => {
+                      const pid = (item.product as any)._id || (item.product as any).id;
+                      return (
+                        <div key={item.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:border-gray-300 transition-colors">
+                          <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
+                            <img src={item.product.image} alt={item.product.name} className="w-14 h-14 object-cover rounded" />
+                          </Link>
+                          <div className="flex-1 min-w-0">
+                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="block font-medium text-sm text-gray-900 hover:text-blue-600 truncate">
+                              {item.product.name}
+                            </Link>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-gray-700 text-sm font-medium">${item.product.price}</span>
+                              <div className="flex items-center space-x-2">
+                                <button onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} className="px-2 py-1 border rounded text-sm hover:bg-gray-50">-</button>
+                                <span className="text-sm w-6 text-center">{item.quantity}</span>
+                                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="px-2 py-1 border rounded text-sm hover:bg-gray-50">+</button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="inline-flex items-center space-x-1 text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-200 hover:bg-red-50"
+                            aria-label={`Remove ${item.product.name}`}
+                            title="Remove"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Remove</span>
+                          </button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
