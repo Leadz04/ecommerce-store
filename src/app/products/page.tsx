@@ -1,49 +1,58 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Filter, Grid, List, SlidersHorizontal } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { sampleProducts } from '@/data/products';
-import { Product } from '@/types';
+import { useProductStore } from '@/store/productStore';
 
 export default function ProductsPage() {
-  const [products] = useState<Product[]>(sampleProducts);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
-  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const { 
+    products, 
+    isLoading, 
+    error, 
+    pagination, 
+    filters, 
+    fetchProducts, 
+    setFilters 
+  } = useProductStore();
+  
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
+  const categories = ['all', 'Leather Goods', 'Electronics', 'Clothing', 'Home & Kitchen', 'Food & Beverage', 'Sports & Outdoors', 'Books'];
 
-  const filteredAndSortedProducts = useMemo(() => {
-    let filtered = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
-      
-      return matchesSearch && matchesCategory && matchesPrice;
+  // Fetch products when component mounts or filters change
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  const handleSearch = (searchTerm: string) => {
+    setFilters({ search: searchTerm });
+    fetchProducts({ search: searchTerm, page: 1 });
+  };
+
+  const handleCategoryChange = (category: string) => {
+    setFilters({ category });
+    fetchProducts({ category: category === 'all' ? undefined : category, page: 1 });
+  };
+
+  const handleSortChange = (sortBy: string) => {
+    setFilters({ sortBy });
+    fetchProducts({ sortBy, page: 1 });
+  };
+
+  const handlePriceRangeChange = (priceRange: [number, number]) => {
+    setFilters({ priceRange });
+    fetchProducts({ 
+      minPrice: priceRange[0], 
+      maxPrice: priceRange[1], 
+      page: 1 
     });
+  };
 
-    // Sort products
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'price-low':
-          return a.price - b.price;
-        case 'price-high':
-          return b.price - a.price;
-        case 'rating':
-          return b.rating - a.rating;
-        case 'name':
-        default:
-          return a.name.localeCompare(b.name);
-      }
-    });
-
-    return filtered;
-  }, [products, searchTerm, selectedCategory, priceRange, sortBy]);
+  const handlePageChange = (page: number) => {
+    fetchProducts({ page });
+  };
 
   return (
     <div className="min-h-screen">
@@ -66,8 +75,8 @@ export default function ProductsPage() {
               <input
                 type="text"
                 placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={filters.search}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
               />
             </div>
@@ -90,14 +99,15 @@ export default function ProductsPage() {
 
             {/* Sort */}
             <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              value={filters.sortBy}
+              onChange={(e) => handleSortChange(e.target.value)}
               className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
             >
               <option value="name">Sort by Name</option>
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
               <option value="rating">Highest Rated</option>
+              <option value="newest">Newest</option>
             </select>
 
             {/* Filter Toggle */}
@@ -129,8 +139,8 @@ export default function ProductsPage() {
                           type="radio"
                           name="category"
                           value={category}
-                          checked={selectedCategory === category}
-                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          checked={filters.category === category}
+                          onChange={(e) => handleCategoryChange(e.target.value)}
                           className="mr-2 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="capitalize">{category}</span>
@@ -147,13 +157,13 @@ export default function ProductsPage() {
                       type="range"
                       min="0"
                       max="1000"
-                      value={priceRange[1]}
-                      onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                      value={filters.priceRange[1]}
+                      onChange={(e) => handlePriceRangeChange([filters.priceRange[0], parseInt(e.target.value)])}
                       className="w-full accent-blue-600"
                     />
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>${priceRange[0]}</span>
-                      <span>${priceRange[1]}</span>
+                      <span>${filters.priceRange[0]}</span>
+                      <span>${filters.priceRange[1]}</span>
                     </div>
                   </div>
                 </div>
@@ -161,9 +171,8 @@ export default function ProductsPage() {
                 {/* Clear Filters */}
                 <button
                   onClick={() => {
-                    setSearchTerm('');
-                    setSelectedCategory('all');
-                    setPriceRange([0, 1000]);
+                    setFilters({ search: '', category: 'all', priceRange: [0, 1000] });
+                    fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
                   }}
                   className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
                 >
@@ -176,34 +185,99 @@ export default function ProductsPage() {
             <div className="flex-1">
               <div className="mb-4">
                 <p className="text-gray-600">
-                  Showing {filteredAndSortedProducts.length} of {products.length} products
+                  Showing {products.length} of {pagination.total} products
                 </p>
               </div>
 
-              {filteredAndSortedProducts.length === 0 ? (
+              {/* Loading State */}
+              {isLoading && (
+                <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-4">Loading products...</p>
+                </div>
+              )}
+
+              {/* Error State */}
+              {error && (
+                <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+                  <p className="text-red-500 text-lg">{error}</p>
+                  <button 
+                    onClick={() => fetchProducts()}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
+
+              {/* Products Display */}
+              {!isLoading && !error && products.length === 0 && (
                 <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                   <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
                   <button
                     onClick={() => {
-                      setSearchTerm('');
-                      setSelectedCategory('all');
-                      setPriceRange([0, 1000]);
+                      setFilters({ search: '', category: 'all', priceRange: [0, 1000] });
+                      fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
                     }}
                     className="mt-4 text-blue-600 hover:text-blue-700 font-medium transition-colors"
                   >
                     Clear filters
                   </button>
                 </div>
-              ) : (
-                <div className={`grid gap-6 ${
-                  viewMode === 'grid' 
-                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                    : 'grid-cols-1'
-                }`}>
-                  {filteredAndSortedProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
+              )}
+
+              {!isLoading && !error && products.length > 0 && (
+                <>
+                  <div className={`grid gap-6 ${
+                    viewMode === 'grid' 
+                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                      : 'grid-cols-1'
+                  }`}>
+                    {products.map((product) => (
+                      <ProductCard key={product._id} product={product} />
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {pagination.pages > 1 && (
+                    <div className="flex justify-center mt-8">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handlePageChange(pagination.page - 1)}
+                          disabled={pagination.page === 1}
+                          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          Previous
+                        </button>
+                        
+                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                          const page = i + 1;
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => handlePageChange(page)}
+                              className={`px-4 py-2 border rounded-lg ${
+                                page === pagination.page
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                        
+                        <button
+                          onClick={() => handlePageChange(pagination.page + 1)}
+                          disabled={pagination.page === pagination.pages}
+                          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

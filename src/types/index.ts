@@ -1,5 +1,6 @@
 export interface Product {
-  id: string;
+  _id: string;
+  id?: string; // For backward compatibility
   name: string;
   description: string;
   price: number;

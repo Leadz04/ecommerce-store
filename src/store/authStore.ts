@@ -10,26 +10,10 @@ interface AuthStore extends AuthState {
   logout: () => void;
   updateProfile: (updates: Partial<AuthUser>) => Promise<void>;
   clearError: () => void;
+  verifyToken: () => Promise<void>;
 }
 
-// Mock user data for demonstration
-const mockUsers: AuthUser[] = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '+1 (555) 123-4567',
-    address: {
-      street: '123 Main St',
-      city: 'New York',
-      state: 'NY',
-      zipCode: '10001',
-      country: 'United States'
-    },
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z'
-  }
-];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export const useAuthStore = create<AuthStore>()(
   persist(
@@ -43,18 +27,25 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Mock authentication logic
-          const user = mockUsers.find(u => u.email === credentials.email);
-          
-          if (!user || credentials.password !== 'password123') {
-            throw new Error('Invalid email or password');
+          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(credentials),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
           }
-          
+
+          // Store token in localStorage
+          localStorage.setItem('token', data.token);
+
           set({
-            user,
+            user: data.user,
             isAuthenticated: true,
             isLoading: false,
             error: null
@@ -73,35 +64,25 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Check if user already exists
-          const existingUser = mockUsers.find(u => u.email === credentials.email);
-          if (existingUser) {
-            throw new Error('User with this email already exists');
+          const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(credentials),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Signup failed');
           }
-          
-          // Validate password confirmation
-          if (credentials.password !== credentials.confirmPassword) {
-            throw new Error('Passwords do not match');
-          }
-          
-          // Create new user
-          const newUser: AuthUser = {
-            id: Date.now().toString(),
-            name: credentials.name,
-            email: credentials.email,
-            phone: credentials.phone,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          
-          // Add to mock users
-          mockUsers.push(newUser);
-          
+
+          // Store token in localStorage
+          localStorage.setItem('token', data.token);
+
           set({
-            user: newUser,
+            user: data.user,
             isAuthenticated: true,
             isLoading: false,
             error: null
@@ -117,6 +98,7 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: () => {
+        localStorage.removeItem('token');
         set({
           user: null,
           isAuthenticated: false,
@@ -126,29 +108,31 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       updateProfile: async (updates: Partial<AuthUser>) => {
-        const { user } = get();
-        if (!user) return;
-        
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const updatedUser: AuthUser = {
-            ...user,
-            ...updates,
-            updatedAt: new Date().toISOString()
-          };
-          
-          // Update in mock users
-          const userIndex = mockUsers.findIndex(u => u.id === user.id);
-          if (userIndex !== -1) {
-            mockUsers[userIndex] = updatedUser;
+          const token = localStorage.getItem('token');
+          if (!token) {
+            throw new Error('No authentication token');
           }
-          
+
+          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(updates),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Profile update failed');
+          }
+
           set({
-            user: updatedUser,
+            user: data.user,
             isLoading: false,
             error: null
           });
@@ -160,15 +144,46 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
+      verifyToken: async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            localStorage.removeItem('token');
+            set({ isAuthenticated: false, user: null });
+            return;
+          }
+
+          const data = await response.json();
+          set({
+            user: data.user,
+            isAuthenticated: true
+          });
+        } catch (error) {
+          localStorage.removeItem('token');
+          set({ isAuthenticated: false, user: null });
+        }
+      },
+
       clearError: () => {
         set({ error: null });
       }
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated
+      partialize: (state) => ({ 
+        user: state.user, 
+        isAuthenticated: state.isAuthenticated 
       })
     }
   )

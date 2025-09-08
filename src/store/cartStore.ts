@@ -21,7 +21,7 @@ export const useCartStore = create<CartStore>()(
         const items = get().items;
         const existingItemIndex = items.findIndex(
           item => 
-            item.product.id === product.id && 
+            (item.product._id || item.product.id) === (product._id || product.id) && 
             item.size === size && 
             item.color === color
         );
@@ -34,7 +34,7 @@ export const useCartStore = create<CartStore>()(
         } else {
           // Add new item
           const newItem: CartItem = {
-            id: `${product.id}-${size || 'default'}-${color || 'default'}`,
+            id: `${product._id || product.id}-${size || 'default'}-${color || 'default'}`,
             product,
             quantity,
             size,

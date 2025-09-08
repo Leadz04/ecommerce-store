@@ -1,18 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight } from 'lucide-react';
-import { sampleProducts } from '@/data/products';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
+import { useProductStore } from '@/store/productStore';
+import { sampleProducts } from '@/data/products';
 
 export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
   const productId = params.id as string;
-  const product = sampleProducts.find(p => p.id === productId);
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -21,17 +21,52 @@ export default function ProductPage() {
   const [isLiked, setIsLiked] = useState(false);
   
   const { addItem } = useCartStore();
+  const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
+  
+  // Fetch product when component mounts
+  useEffect(() => {
+    if (productId) {
+      fetchProduct(productId);
+    }
+  }, [productId, fetchProduct]);
 
-  if (!product) {
+  // Fetch all products for related products
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+  
+  if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
-          <p className="text-gray-600">The product you're looking for doesn't exist.</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600 dark:text-gray-400 mt-4">Loading product...</p>
         </div>
       </div>
     );
   }
+  
+  if (error || !currentProduct) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Product Not Found</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            {error || "The product you're looking for doesn't exist."}
+          </p>
+          <Link 
+            href="/products"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Products
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
+  const product = currentProduct;
 
   const handleAddToCart = () => {
     addItem(product, quantity, selectedSize, selectedColor);
@@ -251,16 +286,16 @@ export default function ProductPage() {
       )}
 
       {/* Related Products */}
-      <div className="mt-16">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Related Products</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {sampleProducts
-            .filter(p => p.id !== product.id && p.category === product.category)
-            .slice(0, 4)
-            .map((relatedProduct) => (
+                  <div className="mt-16">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Related Products</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {products
+                  .filter(p => p._id !== product._id && p.category === product.category)
+                  .slice(0, 4)
+                  .map((relatedProduct) => (
               <div 
-                key={relatedProduct.id} 
-                onClick={() => handleRelatedProductClick(relatedProduct.id)}
+                key={relatedProduct._id} 
+                onClick={() => handleRelatedProductClick(relatedProduct._id)}
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
               >
                 <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-gray-700">
