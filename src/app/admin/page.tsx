@@ -19,11 +19,15 @@ import {
   Search,
   Filter,
   Plus,
-  RefreshCw
+  RefreshCw,
+  DollarSign,
+  Tag,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
+import ProductForm from '@/components/ProductForm';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -48,21 +52,48 @@ interface Role {
   isActive: boolean;
 }
 
+interface Product {
+  _id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  images: string[];
+  category: string;
+  brand: string;
+  rating: number;
+  reviewCount: number;
+  inStock: boolean;
+  stockCount: number;
+  tags: string[];
+  specifications: Record<string, string>;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'overview'>('overview');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'overview'>('overview');
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
+  const [showCreateProduct, setShowCreateProduct] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [deletingRole, setDeletingRole] = useState<string | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -122,6 +153,31 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error fetching roles:', error);
       toast.error('Failed to fetch roles');
+    }
+  };
+
+  // Fetch products
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/products', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch products');
+      }
+
+      const data = await response.json();
+      setProducts(data.products);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('Failed to fetch products');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -224,10 +280,49 @@ export default function AdminDashboard() {
     setShowCreateRole(false);
   };
 
+  // Product management handlers
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete product');
+      }
+
+      toast.success('Product deleted successfully');
+      fetchProducts();
+    } catch (error) {
+      console.error('Delete product error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete product');
+    }
+  };
+
+  const handleProductFormSuccess = () => {
+    fetchProducts();
+    setEditingProduct(null);
+    setShowCreateProduct(false);
+  };
+
   useEffect(() => {
     if (isAuthenticated && user?.permissions?.includes('system:settings')) {
       fetchUsers();
       fetchRoles();
+      fetchProducts();
     }
   }, [isAuthenticated, user]);
 
@@ -315,6 +410,17 @@ export default function AdminDashboard() {
               <Shield className="h-5 w-5 inline mr-2" />
               Roles & Permissions
             </button>
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'products'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Package className="h-5 w-5 inline mr-2" />
+              Products
+            </button>
           </nav>
         </div>
 
@@ -362,13 +468,11 @@ export default function AdminDashboard() {
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <div className="flex items-center">
                 <div className="p-2 bg-orange-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-orange-600" />
+                  <Package className="h-6 w-6 text-orange-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Admin Users</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {users.filter(u => u.role.name === 'ADMIN' || u.role.name === 'SUPER_ADMIN').length}
-                  </p>
+                  <p className="text-sm font-medium text-gray-600">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-900">{products.length}</p>
                 </div>
               </div>
             </div>
@@ -587,6 +691,208 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Products Tab */}
+        {activeTab === 'products' && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Product Management</h2>
+                <button
+                  onClick={() => setShowCreateProduct(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Product</span>
+                </button>
+              </div>
+
+              {/* Search and Filters */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Categories</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Clothing">Clothing</option>
+                  <option value="Home & Kitchen">Home & Kitchen</option>
+                  <option value="Food & Beverage">Food & Beverage</option>
+                  <option value="Sports & Outdoors">Sports & Outdoors</option>
+                  <option value="Books">Books</option>
+                </select>
+                <select
+                  value={selectedBrand}
+                  onChange={(e) => setSelectedBrand(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Brands</option>
+                  <option value="Apple">Apple</option>
+                  <option value="Samsung">Samsung</option>
+                  <option value="Nike">Nike</option>
+                  <option value="Adidas">Adidas</option>
+                  <option value="Sony">Sony</option>
+                  <option value="Microsoft">Microsoft</option>
+                  <option value="Google">Google</option>
+                  <option value="Amazon">Amazon</option>
+                  <option value="Generic">Generic</option>
+                </select>
+                <button
+                  onClick={fetchProducts}
+                  className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-4">Loading products...</p>
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Product
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Category
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Brand
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Stock
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {products
+                      .filter(product => {
+                        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                             product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                             product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesCategory = !selectedCategory || product.category === selectedCategory;
+                        const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                        return matchesSearch && matchesCategory && matchesBrand;
+                      })
+                      .map((product) => (
+                      <tr key={product._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-12 w-12">
+                              <img
+                                className="h-12 w-12 rounded-lg object-cover"
+                                src={product.image}
+                                alt={product.name}
+                              />
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {product.name}
+                              </div>
+                              <div className="text-sm text-gray-500 truncate max-w-xs">
+                                {product.description}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {product.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {product.brand}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <DollarSign className="h-4 w-4 text-gray-400 mr-1" />
+                            {product.price.toFixed(2)}
+                            {product.originalPrice && product.originalPrice > product.price && (
+                              <span className="ml-2 text-sm text-gray-500 line-through">
+                                ${product.originalPrice.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <Package className="h-4 w-4 text-gray-400 mr-1" />
+                            {product.stockCount}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex space-x-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              product.isActive 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {product.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              product.inStock 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {product.inStock ? 'In Stock' : 'Out of Stock'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => handleEditProduct(product)}
+                              className="text-indigo-600 hover:text-indigo-900"
+                              title="Edit product"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteProduct(product._id)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Delete product"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* User Form Modal */}
         <UserForm
           user={editingUser}
@@ -608,6 +914,17 @@ export default function AdminDashboard() {
             setEditingRole(null);
           }}
           onSuccess={handleRoleFormSuccess}
+        />
+
+        {/* Product Form Modal */}
+        <ProductForm
+          product={editingProduct}
+          isOpen={showCreateProduct || !!editingProduct}
+          onClose={() => {
+            setShowCreateProduct(false);
+            setEditingProduct(null);
+          }}
+          onSuccess={handleProductFormSuccess}
         />
       </div>
     </div>
