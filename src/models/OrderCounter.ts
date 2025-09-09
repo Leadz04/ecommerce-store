@@ -12,8 +12,7 @@ const OrderCounterSchema = new Schema<IOrderCounter>({
   date: {
     type: String,
     required: true,
-    unique: true,
-    index: true
+    unique: true
   },
   counter: {
     type: Number,

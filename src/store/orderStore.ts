@@ -156,11 +156,15 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
       });
 
       const data = await response.json();
+      console.log('Order creation response:', data);
 
       if (!response.ok) {
         console.error('Order creation failed:', data);
         throw new Error(data.error || 'Failed to create order');
       }
+
+      console.log('Order from API:', data.order);
+      console.log('Order _id:', data.order?._id);
 
       set({
         currentOrder: data.order,

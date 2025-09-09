@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import { Toaster } from 'react-hot-toast';
 import Footer from '@/components/Footer';
+import ThemeProvider from '@/components/ThemeProvider';
 
 interface ClientWrapperProps {
   children: React.ReactNode;
@@ -27,13 +28,15 @@ export default function ClientWrapper({ children }: ClientWrapperProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <main className="flex-1">
-        {children}
-      </main>
-      <Footer />
-      <Toaster position="top-right" />
-    </div>
+    <ThemeProvider>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1">
+          {children}
+        </main>
+        <Footer />
+        <Toaster position="top-right" />
+      </div>
+    </ThemeProvider>
   );
 }

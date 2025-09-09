@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Role from '@/models/Role';
 import jwt from 'jsonwebtoken';
+
+// Import all models to ensure proper schema registration
+import { User, Role } from '@/models';
 
 export async function POST(request: NextRequest) {
   try {

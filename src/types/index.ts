@@ -23,6 +23,9 @@ export interface CartItem {
   quantity: number;
   size?: string;
   color?: string;
+  image?: string; // For easier access in order displays
+  name?: string; // For easier access in order displays
+  price?: number; // For easier access in order displays
 }
 
 export interface User {
@@ -75,6 +78,12 @@ export interface AuthUser {
   lastLogin?: string;
   createdAt: string;
   updatedAt: string;
+  settings?: {
+    emailNotifications?: boolean;
+    smsNotifications?: boolean;
+    theme?: 'light' | 'dark' | 'system';
+    language?: string;
+  };
 }
 
 export interface Role {
@@ -108,9 +117,14 @@ export interface AuthState {
 }
 
 export interface Order {
-  id: string;
+  _id: string;
+  id?: string; // For backward compatibility
+  orderNumber?: string;
   userId: string;
   items: CartItem[];
+  subtotal?: number;
+  shipping?: number;
+  tax?: number;
   total: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   shippingAddress: Address;

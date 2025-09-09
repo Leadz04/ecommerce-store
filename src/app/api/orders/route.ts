@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import Order from '@/models/Order';
-import Product from '@/models/Product';
-import OrderCounter from '@/models/OrderCounter';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+
+// Import all models to ensure proper schema registration
+import { Order, Product, OrderCounter } from '@/models';
 
 // Helper function to verify JWT token
 async function verifyToken(request: NextRequest) {
@@ -123,12 +123,22 @@ export async function POST(request: NextRequest) {
 
     // Check product availability and update stock
     for (const item of orderData.items) {
-      const product = await Product.findById(item.productId);
+      let product;
+      
+      // Handle both ObjectId and string ID formats
+      if (mongoose.Types.ObjectId.isValid(item.productId)) {
+        // Valid ObjectId - search by _id
+        product = await Product.findById(item.productId);
+      } else {
+        // String ID - search by id field
+        product = await Product.findOne({ id: item.productId });
+      }
+      
       if (!product) {
-        return NextResponse.json(
-          { error: `Product ${item.name} not found` },
-          { status: 400 }
-        );
+        // If product not found in database, log warning but continue
+        // This handles cases where sample products are used
+        console.warn(`Product ${item.name} (ID: ${item.productId}) not found in database. Skipping stock validation.`);
+        continue;
       }
       
       if (!product.inStock || product.stockCount < item.quantity) {
@@ -196,6 +206,13 @@ export async function POST(request: NextRequest) {
     }
 
     await order.save();
+
+    console.log('Order saved successfully:', {
+      _id: order._id,
+      orderNumber: order.orderNumber,
+      userId: order.userId,
+      total: order.total
+    });
 
     return NextResponse.json({
       message: 'Order created successfully',

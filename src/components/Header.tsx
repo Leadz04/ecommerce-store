@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -82,6 +83,7 @@ export default function Header() {
 
           {/* Right side icons */}
           <div className="flex items-center space-x-4">
+            <ThemeToggle />
             {/* User Account */}
             {isAuthenticated ? (
               <div className="relative" ref={userMenuRef}>

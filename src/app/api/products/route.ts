@@ -24,7 +24,12 @@ export async function GET(request: NextRequest) {
     }
     
     if (search) {
-      query.$text = { $search: search };
+      // Use regex for partial matching instead of text search
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { category: { $regex: search, $options: 'i' } }
+      ];
     }
     
     if (minPrice || maxPrice) {

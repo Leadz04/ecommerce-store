@@ -40,7 +40,7 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
   },
 
   addToWishlist: async (productId: string) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) throw new Error('No authentication token');
@@ -51,16 +51,22 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to add to wishlist');
-      set({ items: data.wishlist, isLoading: false });
+      set({ items: data.wishlist });
       toast.success('Added to wishlist');
     } catch (error) {
-      set({ isLoading: false, error: error instanceof Error ? error.message : 'Failed to add to wishlist' });
+      set({ error: error instanceof Error ? error.message : 'Failed to add to wishlist' });
       toast.error(error instanceof Error ? error.message : 'Failed to add to wishlist');
     }
   },
 
   removeFromWishlist: async (productId: string) => {
-    set({ isLoading: true, error: null });
+    // Optimistic update - remove from local state immediately
+    const currentItems = get().items;
+    const updatedItems = currentItems.filter((item: any) => 
+      (item._id || item.id) !== productId
+    );
+    set({ items: updatedItems, error: null });
+    
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) throw new Error('No authentication token');
@@ -70,10 +76,12 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to remove from wishlist');
-      set({ items: data.wishlist, isLoading: false });
+      // Update with server response to ensure consistency
+      set({ items: data.wishlist });
       toast.success('Removed from wishlist');
     } catch (error) {
-      set({ isLoading: false, error: error instanceof Error ? error.message : 'Failed to remove from wishlist' });
+      // Revert optimistic update on error
+      set({ items: currentItems, error: error instanceof Error ? error.message : 'Failed to remove from wishlist' });
       toast.error(error instanceof Error ? error.message : 'Failed to remove from wishlist');
     }
   },

@@ -34,15 +34,21 @@ export async function POST(request: NextRequest) {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         
         // Update order status
-        await Order.findOneAndUpdate(
+        const updatedOrder = await Order.findOneAndUpdate(
           { paymentIntentId: paymentIntent.id },
           { 
             paymentStatus: 'paid',
-            status: 'processing'
-          }
+            status: 'processing',
+            paymentMethod: paymentIntent.payment_method_types[0] || 'card',
+            paidAt: new Date()
+          },
+          { new: true }
         );
         
-        console.log('Payment succeeded:', paymentIntent.id);
+        if (updatedOrder) {
+          console.log('Payment succeeded for order:', updatedOrder.orderNumber || updatedOrder._id);
+          // Here you could send confirmation emails, update inventory, etc.
+        }
         break;
 
       case 'payment_intent.payment_failed':
@@ -53,11 +59,42 @@ export async function POST(request: NextRequest) {
           { paymentIntentId: failedPayment.id },
           { 
             paymentStatus: 'failed',
-            status: 'cancelled'
+            status: 'cancelled',
+            failureReason: failedPayment.last_payment_error?.message || 'Payment failed'
           }
         );
         
         console.log('Payment failed:', failedPayment.id);
+        break;
+
+      case 'payment_intent.canceled':
+        const canceledPayment = event.data.object as Stripe.PaymentIntent;
+        
+        await Order.findOneAndUpdate(
+          { paymentIntentId: canceledPayment.id },
+          { 
+            paymentStatus: 'canceled',
+            status: 'cancelled'
+          }
+        );
+        
+        console.log('Payment canceled:', canceledPayment.id);
+        break;
+
+      case 'charge.dispute.created':
+        const dispute = event.data.object as Stripe.Dispute;
+        
+        // Handle dispute - update order status and notify admin
+        await Order.findOneAndUpdate(
+          { paymentIntentId: dispute.payment_intent },
+          { 
+            paymentStatus: 'disputed',
+            status: 'disputed',
+            disputeId: dispute.id
+          }
+        );
+        
+        console.log('Dispute created:', dispute.id);
         break;
 
       default:

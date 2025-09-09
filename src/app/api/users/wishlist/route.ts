@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import Product from '@/models/Product';
 import jwt from 'jsonwebtoken';
+
+// Import all models to ensure proper schema registration
+import { User, Product } from '@/models';
 
 async function verifyToken(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');

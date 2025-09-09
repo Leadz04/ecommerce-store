@@ -108,6 +108,11 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       updateProfile: async (updates: Partial<AuthUser>) => {
+        // Optimistic update for settings/theme for snappy UI
+        const prev = get().user;
+        if (prev && updates.settings) {
+          set({ user: { ...prev, settings: { ...(prev as any).settings, ...updates.settings } } as any });
+        }
         set({ isLoading: true, error: null });
         
         try {
@@ -125,19 +130,26 @@ export const useAuthStore = create<AuthStore>()(
             body: JSON.stringify(updates),
           });
 
-          const data = await response.json();
+          const text = await response.text();
+          const data = text ? JSON.parse(text) : {};
 
           if (!response.ok) {
             throw new Error(data.error || 'Profile update failed');
           }
 
-          set({
-            user: data.user,
-            isLoading: false,
-            error: null
-          });
+          if (data.user) {
+            set({
+              user: data.user,
+              isLoading: false,
+              error: null
+            });
+          } else {
+            set({ isLoading: false });
+          }
         } catch (error) {
+          // Revert optimistic update on failure
           set({
+            user: prev || null,
             isLoading: false,
             error: error instanceof Error ? error.message : 'Profile update failed'
           });

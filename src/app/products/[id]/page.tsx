@@ -39,10 +39,10 @@ export default function ProductPage() {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50  flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 dark:text-gray-400 mt-4">Loading product...</p>
+          <p className="text-gray-600  mt-4">Loading product...</p>
         </div>
       </div>
     );
@@ -52,8 +52,8 @@ export default function ProductPage() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Product Not Found</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
+          <h1 className="text-2xl font-bold text-gray-900  mb-4">Product Not Found</h1>
+          <p className="text-gray-600  mb-8">
             {error || "The product you're looking for doesn't exist."}
           </p>
           <Link 
@@ -83,13 +83,13 @@ export default function ProductPage() {
   const colors = ['Black', 'White', 'Blue', 'Red'];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 ">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Product Images */}
           <div className="space-y-4">
             {/* Main Image */}
-            <div className="aspect-square overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700">
+            <div className="aspect-square overflow-hidden rounded-xl bg-white  shadow-lg border border-gray-200 ">
               <Image
                 src={images[selectedImage]}
                 alt={product.name}
@@ -108,8 +108,8 @@ export default function ProductPage() {
                     onClick={() => setSelectedImage(index)}
                     className={`aspect-square overflow-hidden rounded-lg border-2 transition-all duration-200 ${
                       selectedImage === index 
-                        ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800' 
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'border-blue-500 ring-2 ring-blue-200 ' 
+                        : 'border-gray-200  hover:border-gray-300 '
                     }`}
                   >
                     <Image
@@ -126,11 +126,11 @@ export default function ProductPage() {
           </div>
 
         {/* Product Info */}
-        <div className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="space-y-6 bg-white  p-6 rounded-xl shadow-lg border border-gray-200 ">
           {/* Brand and Name */}
           <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium uppercase tracking-wide">{product.brand}</p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{product.name}</h1>
+            <p className="text-sm text-gray-500  mb-2 font-medium uppercase tracking-wide">{product.brand}</p>
+            <h1 className="text-3xl font-bold text-gray-900  mb-4">{product.name}</h1>
           </div>
 
           {/* Rating */}
@@ -142,24 +142,24 @@ export default function ProductPage() {
                   className={`h-5 w-5 ${
                     i < Math.floor(product.rating)
                       ? 'text-yellow-400 fill-current'
-                      : 'text-gray-300 dark:text-gray-600'
+                      : 'text-gray-300 '
                   }`}
                 />
               ))}
             </div>
-            <span className="text-gray-600 dark:text-gray-300 font-medium">
+            <span className="text-gray-600  font-medium">
               {product.rating} ({product.reviewCount} reviews)
             </span>
           </div>
 
           {/* Price */}
           <div className="flex items-center space-x-4">
-            <span className="text-3xl font-bold text-gray-900 dark:text-white">${product.price}</span>
+            <span className="text-3xl font-bold text-gray-900 ">${product.price}</span>
             {product.originalPrice && (
-              <span className="text-xl text-gray-500 dark:text-gray-400 line-through">${product.originalPrice}</span>
+              <span className="text-xl text-gray-500  line-through">${product.originalPrice}</span>
             )}
             {product.originalPrice && (
-              <span className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 text-sm font-bold px-3 py-1 rounded-full">
+              <span className="bg-red-100  text-red-800  text-sm font-bold px-3 py-1 rounded-full">
                 Save ${(product.originalPrice - product.price).toFixed(2)}
               </span>
             )}
@@ -167,13 +167,13 @@ export default function ProductPage() {
 
           {/* Description */}
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Description</h3>
-            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{product.description}</p>
+            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Description</h3>
+            <p className="text-gray-600  leading-relaxed">{product.description}</p>
           </div>
 
           {/* Size Selection */}
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Size</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Size</h3>
             <div className="flex flex-wrap gap-2">
               {sizes.map((size) => (
                 <button
@@ -181,8 +181,8 @@ export default function ProductPage() {
                   onClick={() => setSelectedSize(size)}
                   className={`px-4 py-2 border-2 rounded-lg font-medium transition-all duration-200 ${
                     selectedSize === size
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 ring-2 ring-blue-200 dark:ring-blue-800'
-                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      ? 'border-blue-500 bg-blue-50  text-blue-700  ring-2 ring-blue-200 '
+                      : 'border-gray-300  hover:border-gray-400  text-gray-700  hover:bg-gray-50 '
                   }`}
                 >
                   {size}
@@ -193,7 +193,7 @@ export default function ProductPage() {
 
           {/* Color Selection */}
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Color</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Color</h3>
             <div className="flex flex-wrap gap-2">
               {colors.map((color) => (
                 <button
@@ -201,8 +201,8 @@ export default function ProductPage() {
                   onClick={() => setSelectedColor(color)}
                   className={`px-4 py-2 border-2 rounded-lg font-medium transition-all duration-200 ${
                     selectedColor === color
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 ring-2 ring-blue-200 dark:ring-blue-800'
-                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      ? 'border-blue-500 bg-blue-50  text-blue-700  ring-2 ring-blue-200 '
+                      : 'border-gray-300  hover:border-gray-400  text-gray-700  hover:bg-gray-50 '
                   }`}
                 >
                   {color}
@@ -213,23 +213,23 @@ export default function ProductPage() {
 
           {/* Quantity */}
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Quantity</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Quantity</h3>
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="p-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
               >
-                <Minus className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                <Minus className="h-4 w-4 text-gray-600 " />
               </button>
-              <span className="text-lg font-medium w-12 text-center text-gray-900 dark:text-white">{quantity}</span>
+              <span className="text-lg font-medium w-12 text-center text-gray-900 ">{quantity}</span>
               <button
                 onClick={() => setQuantity(Math.min(product.stockCount, quantity + 1))}
-                className="p-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
               >
-                <Plus className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                <Plus className="h-4 w-4 text-gray-600 " />
               </button>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 font-medium">
+            <p className="text-sm text-gray-500  mt-2 font-medium">
               {product.stockCount} items in stock
             </p>
           </div>
@@ -239,7 +239,7 @@ export default function ProductPage() {
             <button
               onClick={handleAddToCart}
               disabled={!product.inStock}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+              className="flex-1 bg-blue-600 hover:bg-blue-700   text-white py-3 px-6 rounded-lg font-semibold disabled:bg-gray-300  disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
             >
               <span>{product.inStock ? 'Add to Cart' : 'Out of Stock'}</span>
               <ArrowRight className="h-4 w-4" />
@@ -251,25 +251,25 @@ export default function ProductPage() {
                   setIsLiked(res === 'added');
                 } catch {}
               }}
-              className="p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="p-3 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
             >
-              <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
+              <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 '}`} />
             </button>
           </div>
 
           {/* Features */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-gray-200 ">
             <div className="flex items-center space-x-2">
-              <Truck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">Free Shipping</span>
+              <Truck className="h-5 w-5 text-blue-600 " />
+              <span className="text-sm text-gray-600  font-medium">Free Shipping</span>
             </div>
             <div className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">Secure Payment</span>
+              <Shield className="h-5 w-5 text-blue-600 " />
+              <span className="text-sm text-gray-600  font-medium">Secure Payment</span>
             </div>
             <div className="flex items-center space-x-2">
-              <RotateCcw className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">Easy Returns</span>
+              <RotateCcw className="h-5 w-5 text-blue-600 " />
+              <span className="text-sm text-gray-600  font-medium">Easy Returns</span>
             </div>
           </div>
         </div>
@@ -278,13 +278,13 @@ export default function ProductPage() {
       {/* Product Specifications */}
       {product.specifications && (
         <div className="mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Specifications</h2>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900  mb-6">Specifications</h2>
+          <div className="bg-white  rounded-xl p-6 shadow-lg border border-gray-200 ">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {Object.entries(product.specifications).map(([key, value]) => (
-                <div key={key} className="flex justify-between py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                  <span className="font-semibold text-gray-700 dark:text-gray-300">{key}</span>
-                  <span className="text-gray-600 dark:text-gray-400 font-medium">{value}</span>
+                <div key={key} className="flex justify-between py-3 border-b border-gray-200  last:border-b-0">
+                  <span className="font-semibold text-gray-700 ">{key}</span>
+                  <span className="text-gray-600  font-medium">{value}</span>
                 </div>
               ))}
             </div>
@@ -294,7 +294,7 @@ export default function ProductPage() {
 
       {/* Related Products */}
                   <div className="mt-16">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Related Products</h2>
+              <h2 className="text-2xl font-bold text-gray-900  mb-6">Related Products</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {products
                   .filter(p => p._id !== product._id && p.category === product.category)
@@ -303,9 +303,9 @@ export default function ProductPage() {
               <div 
                 key={relatedProduct._id} 
                 onClick={() => handleRelatedProductClick(relatedProduct._id)}
-                className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                className="bg-white  rounded-xl shadow-lg border border-gray-200  overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
               >
-                <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-gray-700">
+                <div className="aspect-square overflow-hidden bg-gray-100 ">
                   <Image
                     src={relatedProduct.image}
                     alt={relatedProduct.name}
@@ -315,13 +315,13 @@ export default function ProductPage() {
                   />
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  <h3 className="font-semibold text-gray-900  mb-2 line-clamp-2 group-hover:text-blue-600  transition-colors">
                     {relatedProduct.name}
                   </h3>
                   <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">${relatedProduct.price}</p>
+                    <p className="text-lg font-bold text-gray-900 ">${relatedProduct.price}</p>
                     {relatedProduct.originalPrice && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 line-through">
+                      <p className="text-sm text-gray-500  line-through">
                         ${relatedProduct.originalPrice}
                       </p>
                     )}
@@ -334,12 +334,12 @@ export default function ProductPage() {
                           className={`h-3 w-3 ${
                             i < Math.floor(relatedProduct.rating)
                               ? 'text-yellow-400 fill-current'
-                              : 'text-gray-300 dark:text-gray-600'
+                              : 'text-gray-300 '
                           }`}
                         />
                       ))}
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                    <span className="text-xs text-gray-500  ml-1">
                       ({relatedProduct.reviewCount})
                     </span>
                   </div>
