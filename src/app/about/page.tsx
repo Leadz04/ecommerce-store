@@ -50,18 +50,18 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Story</h2>
-              <p className="text-gray-600 mb-4">
+              <h2 className="text-3xl font-bold text-white-900 mb-6">Our Story</h2>
+              <p className="text-offwhite-600 mb-4">
                 Founded in 2020, ShopEase started as a small online store with a simple mission: 
                 to make quality products accessible to everyone. What began as a passion project 
                 has grown into a trusted e-commerce platform serving customers worldwide.
               </p>
-              <p className="text-gray-600 mb-4">
+              <p className="text-offwhite-600 mb-4">
                 We believe that shopping should be easy, enjoyable, and rewarding. That's why we've 
                 built our platform with user experience at its core, offering intuitive navigation, 
                 secure payments, and fast delivery.
               </p>
-              <p className="text-gray-600">
+              <p className="text-offwhite-600">
                 Today, we're proud to offer thousands of products across multiple categories, 
                 all carefully selected for their quality, value, and customer satisfaction.
               </p>
@@ -104,8 +104,8 @@ export default function AboutPage() {
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Values</h2>
-            <p className="text-gray-600">The principles that guide everything we do</p>
+            <h2 className="text-3xl font-bold text-white-900 mb-4">Our Values</h2>
+            <p className="text-offwhite-600">The principles that guide everything we do</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {values.map((value, index) => (
@@ -114,8 +114,8 @@ export default function AboutPage() {
                   <value.icon className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{value.title}</h3>
-                  <p className="text-gray-600">{value.description}</p>
+                  <h3 className="text-xl font-semibold text-white-900 mb-2">{value.title}</h3>
+                  <p className="text-offwhite-600">{value.description}</p>
                 </div>
               </div>
             ))}
