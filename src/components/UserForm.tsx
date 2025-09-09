@@ -225,7 +225,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   required
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter full name"
                 />
               </div>
@@ -240,7 +240,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   required
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter email address"
                 />
               </div>
@@ -254,7 +254,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter phone number"
                 />
               </div>
@@ -268,7 +268,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   required
                   value={formData.roleId}
                   onChange={(e) => handleInputChange('roleId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select a role</option>
                   {roles.map(role => (
@@ -290,7 +290,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                       required
                       value={formData.password}
                       onChange={(e) => handleInputChange('password', e.target.value)}
-                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 pr-10 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter password"
                     />
                     <button
@@ -310,7 +310,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   id="isActive"
                   checked={formData.isActive}
                   onChange={(e) => handleInputChange('isActive', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500  text-gray-700 mb-2 border-gray-300 rounded"
                 />
                 <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">
                   Active User
@@ -329,56 +329,56 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   type="text"
                   value={formData.address.firstName}
                   onChange={(e) => handleInputChange('address.firstName', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="First Name"
                 />
                 <input
                   type="text"
                   value={formData.address.lastName}
                   onChange={(e) => handleInputChange('address.lastName', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Last Name"
                 />
                 <input
                   type="text"
                   value={formData.address.address1}
                   onChange={(e) => handleInputChange('address.address1', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Address Line 1"
                 />
                 <input
                   type="text"
                   value={formData.address.address2}
                   onChange={(e) => handleInputChange('address.address2', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg  text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Address Line 2"
                 />
                 <input
                   type="text"
                   value={formData.address.city}
                   onChange={(e) => handleInputChange('address.city', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg  text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="City"
                 />
                 <input
                   type="text"
                   value={formData.address.state}
                   onChange={(e) => handleInputChange('address.state', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg  text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="State"
                 />
                 <input
                   type="text"
                   value={formData.address.zipCode}
                   onChange={(e) => handleInputChange('address.zipCode', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg  text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="ZIP Code"
                 />
                 <input
                   type="text"
                   value={formData.address.country}
                   onChange={(e) => handleInputChange('address.country', e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 rounded-lg  text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Country"
                 />
               </div>
@@ -397,7 +397,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                     id="emailNotifications"
                     checked={formData.settings.emailNotifications}
                     onChange={(e) => handleInputChange('settings.emailNotifications', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500  text-gray-700 mb-2 border-gray-300 rounded"
                   />
                   <label htmlFor="emailNotifications" className="ml-2 block text-sm text-gray-700">
                     Email Notifications
@@ -409,7 +409,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                     id="smsNotifications"
                     checked={formData.settings.smsNotifications}
                     onChange={(e) => handleInputChange('settings.smsNotifications', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500  text-gray-700 mb-2 border-gray-300 rounded"
                   />
                   <label htmlFor="smsNotifications" className="ml-2 block text-sm text-gray-700">
                     SMS Notifications
@@ -422,7 +422,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   <select
                     value={formData.settings.theme}
                     onChange={(e) => handleInputChange('settings.theme', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
@@ -436,7 +436,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   <select
                     value={formData.settings.language}
                     onChange={(e) => handleInputChange('settings.language', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="en">English</option>
                     <option value="es">Spanish</option>

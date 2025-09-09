@@ -121,7 +121,7 @@ export default function ContactPage() {
                 <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <info.icon className="h-8 w-8 text-blue-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{info.title}</h3>
+                <h3 className="text-lg font-semibold text-white-900 mb-2">{info.title}</h3>
                 <div className="space-y-1 mb-2">
                   {info.details.map((detail, i) => (
                     <p key={i} className="text-gray-600 text-sm">{detail}</p>

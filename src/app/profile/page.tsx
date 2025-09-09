@@ -558,7 +558,7 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
-                    <select value={settings.theme} onChange={(e) => setSettings({ ...settings, theme: e.target.value as any })} className="px-3 py-2 border rounded">
+                    <select value={settings.theme} onChange={(e) => setSettings({ ...settings, theme: e.target.value as any })} className="px-3 py-2 border text-gray-700 mb-2 rounded">
                       <option value="system">System</option>
                       <option value="light">Light</option>
                       <option value="dark">Dark</option>
@@ -566,7 +566,7 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-                    <select value={settings.language} onChange={(e) => setSettings({ ...settings, language: e.target.value })} className="px-3 py-2 border rounded">
+                    <select value={settings.language} onChange={(e) => setSettings({ ...settings, language: e.target.value })} className="px-3 py-2 border  text-gray-700 mb-2 rounded">
                       <option value="en">English</option>
                       <option value="fr">French</option>
                       <option value="es">Spanish</option>
