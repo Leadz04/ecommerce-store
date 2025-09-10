@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/models/Order';
+import User from '@/models/User';
 import jwt from 'jsonwebtoken';
 
-// Helper function to verify JWT token
+// Helper function to verify JWT token and get user info
 async function verifyToken(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
   
@@ -25,8 +26,22 @@ export async function GET(
     const userId = await verifyToken(request);
     const { id } = await context.params;
     
-    // Get order details
-    const order = await Order.findOne({ _id: id, userId });
+    // Get user info to check if admin
+    const user = await User.findById(userId).populate('role');
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Check if user is admin or if order belongs to user
+    const isAdmin = user.role?.name === 'ADMIN' || user.role?.name === 'SUPER_ADMIN';
+    
+    // Get order details - admin can access any order, regular users only their own
+    const orderQuery = isAdmin ? { _id: id } : { _id: id, userId };
+    const order = await Order.findOne(orderQuery).populate('userId', 'name email');
+    
     if (!order) {
       return NextResponse.json(
         { error: 'Order not found' },
@@ -217,6 +232,7 @@ function generateInvoiceHTML(order: any): string {
                 <p>${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zipCode}</p>
                 <p>${order.shippingAddress.country}</p>
                 ${order.shippingAddress.phone ? `<p>Phone: ${order.shippingAddress.phone}</p>` : ''}
+                ${order.userId?.email ? `<p>Email: ${order.userId.email}</p>` : ''}
             </div>
             <div class="detail-section">
                 <h3>Invoice Details:</h3>

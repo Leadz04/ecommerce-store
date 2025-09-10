@@ -104,62 +104,35 @@ export default function CheckoutPage() {
     try {
       setIsProcessing(true);
       
-      // Validate all product IDs before creating order
-      for (const item of items) {
-        if (!item.product._id && !item.product.id) {
-          throw new Error(`Invalid product ID for ${item.product.name}`);
-        }
+      // Update the existing order with payment confirmation
+      if (!createdOrder || !createdOrder._id) {
+        throw new Error('No order found to update');
       }
-      
-      // Create order with payment confirmation
-      const orderData = {
-        items: items.map(item => ({
-          productId: item.product._id || item.product.id,
-          name: item.product.name,
-          price: item.product.price,
-          quantity: item.quantity,
-          image: item.product.image,
-          size: item.size,
-          color: item.color
-        })),
-        subtotal,
-        shipping,
-        tax,
-        total,
-        shippingAddress: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          address1: formData.address,
-          city: formData.city,
-          state: formData.state,
-          zipCode: formData.zipCode,
-          country: formData.country,
-          phone: formData.phone
-        },
-        billingAddress: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          address1: formData.address,
-          city: formData.city,
-          state: formData.state,
-          zipCode: formData.zipCode,
-          country: formData.country,
-          phone: formData.phone
-        },
-        paymentMethod: 'card',
-        paymentStatus: 'paid',
-        paymentIntentId: paymentIntent.id
-      };
 
-      const order = await createOrder(orderData);
-      setCreatedOrder(order);
+      // Update the existing order with payment information
+      const { updateOrder } = useOrderStore.getState();
+      await updateOrder(createdOrder._id, {
+        paymentStatus: 'paid',
+        paymentIntentId: paymentIntent.id,
+        status: 'processing'
+      });
+
+      // Update the local order state
+      const updatedOrder = {
+        ...createdOrder,
+        paymentStatus: 'paid',
+        paymentIntentId: paymentIntent.id,
+        status: 'processing'
+      };
+      
+      setCreatedOrder(updatedOrder);
       setOrderSuccess(true);
       setCurrentStep('confirmation');
       clearCart();
       
     } catch (error) {
-      console.error('Order creation error:', error);
-      toast.error('Failed to create order. Please try again.');
+      console.error('Order update error:', error);
+      toast.error('Failed to update order. Please try again.');
     } finally {
       setIsProcessing(false);
     }

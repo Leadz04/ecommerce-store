@@ -12,7 +12,8 @@ const OrderCounterSchema = new Schema<IOrderCounter>({
   date: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    index: true
   },
   counter: {
     type: Number,
@@ -22,8 +23,5 @@ const OrderCounterSchema = new Schema<IOrderCounter>({
 }, {
   timestamps: true
 });
-
-// Index for efficient queries
-OrderCounterSchema.index({ date: 1 });
 
 export default mongoose.models.OrderCounter || mongoose.model<IOrderCounter>('OrderCounter', OrderCounterSchema);

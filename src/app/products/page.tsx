@@ -118,6 +118,16 @@ export default function ProductsPage() {
     fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
   };
 
+  // Check if there are any active filters
+  const hasActiveFilters = () => {
+    return (
+      filters.search && filters.search.trim() !== '' ||
+      filters.category && filters.category !== 'all' ||
+      filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000) ||
+      filters.inStock !== null
+    );
+  };
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -276,12 +286,14 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Clear Filters */}
-                <button
-                  onClick={clearAllFilters}
-                  className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                >
-                  Clear All Filters
-                </button>
+                {hasActiveFilters() && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                  >
+                    Clear All Filters
+                  </button>
+                )}
               </div>
             </div>
 
@@ -340,23 +352,27 @@ export default function ProductsPage() {
                         >
                           Clear Search
                         </button>
-                        <button
-                          onClick={clearAllFilters}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          Clear All Filters
-                        </button>
+                        {hasActiveFilters() && (
+                          <button
+                            onClick={clearAllFilters}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Clear All Filters
+                          </button>
+                        )}
                       </div>
                     </>
                   ) : (
                     <>
                       <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
-                      <button
-                        onClick={clearAllFilters}
-                        className="mt-4 text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                      >
-                        Clear filters
-                      </button>
+                      {hasActiveFilters() && (
+                        <button
+                          onClick={clearAllFilters}
+                          className="mt-4 text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                        >
+                          Clear filters
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

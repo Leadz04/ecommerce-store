@@ -563,23 +563,33 @@ export default function AdminDashboard() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download invoice');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to download invoice');
       }
 
-      const blob = await response.blob();
+      // Get the HTML content
+      const htmlContent = await response.text();
+      
+      // Create a blob with the HTML content
+      const blob = new Blob([htmlContent], { type: 'text/html' });
       const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoice-${orderId}.pdf`;
+      a.download = `invoice-${orderId}.html`;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
+      
+      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
       toast.success('Invoice downloaded successfully');
     } catch (error) {
       console.error('Download invoice error:', error);
-      toast.error('Failed to download invoice');
+      toast.error(error instanceof Error ? error.message : 'Failed to download invoice');
     }
   };
 
@@ -615,7 +625,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
@@ -639,7 +649,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Navigation Tabs */}
         <div className="mb-8">
           <nav className="flex space-x-8">
@@ -903,7 +913,7 @@ export default function AdminDashboard() {
 
             {/* Users Table */}
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[800px]">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -938,7 +948,7 @@ export default function AdminDashboard() {
                     </tr>
                   ) : (
                     filteredUsers.map((user) => (
-                      <tr key={user._id} className="hover:bg-gray-50">
+                      <tr key={user._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleEditUser(user)}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">{user.name}</div>
@@ -968,14 +978,20 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button 
-                              onClick={() => handleEditUser(user)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditUser(user);
+                              }}
                               className="text-indigo-600 hover:text-indigo-900"
                               title="Edit user"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button 
-                              onClick={() => handleDeleteUser(user._id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteUser(user._id);
+                              }}
                               className="text-red-600 hover:text-red-900"
                               title="Delete user"
                             >
@@ -1143,7 +1159,7 @@ export default function AdminDashboard() {
                   <p className="text-gray-500 mt-4">Loading products...</p>
                 </div>
               ) : (
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 min-w-[1000px]">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1180,7 +1196,7 @@ export default function AdminDashboard() {
                         return matchesSearch && matchesCategory && matchesBrand;
                       })
                       .map((product) => (
-                      <tr key={product._id} className="hover:bg-gray-50">
+                      <tr key={product._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleEditProduct(product)}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-12 w-12">
@@ -1246,14 +1262,20 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button 
-                              onClick={() => handleEditProduct(product)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditProduct(product);
+                              }}
                               className="text-indigo-600 hover:text-indigo-900"
                               title="Edit product"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button 
-                              onClick={() => handleDeleteProduct(product._id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProduct(product._id);
+                              }}
                               className="text-red-600 hover:text-red-900"
                               title="Delete product"
                             >
@@ -1321,7 +1343,7 @@ export default function AdminDashboard() {
                   <p className="text-gray-500 mt-4">Loading orders...</p>
                 </div>
               ) : (
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 min-w-[1200px]">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1360,7 +1382,7 @@ export default function AdminDashboard() {
                         return matchesSearch && matchesStatus;
                       })
                       .map((order) => (
-                      <tr key={order._id} className="hover:bg-gray-50">
+                      <tr key={order._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleViewOrder(order)}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">#{order.orderNumber}</div>
@@ -1393,6 +1415,7 @@ export default function AdminDashboard() {
                             <select
                               value={order.status}
                               onChange={(e) => handleUpdateOrderStatus(order._id, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
                               className={`text-xs font-medium px-2 py-1 rounded-full border-0 focus:ring-2 focus:ring-blue-500 ${
                                 order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                 order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
@@ -1434,21 +1457,30 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button 
-                              onClick={() => handleViewOrder(order)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewOrder(order);
+                              }}
                               className="text-indigo-600 hover:text-indigo-900"
                               title="View order details"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
                             <button 
-                              onClick={() => handleDownloadInvoice(order._id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadInvoice(order._id);
+                              }}
                               className="text-green-600 hover:text-green-900"
                               title="Download invoice"
                             >
                               <Download className="h-4 w-4" />
                             </button>
                             <button 
-                              onClick={() => handleDeleteOrder(order._id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteOrder(order._id);
+                              }}
                               className="text-red-600 hover:text-red-900"
                               title="Delete order"
                             >
