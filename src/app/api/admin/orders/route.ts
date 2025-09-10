@@ -1,29 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Order, User } from '@/models';
-import jwt from 'jsonwebtoken';
-
-async function verifyAdminToken(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  
-  if (!token) {
-    throw new Error('No token provided');
-  }
-
-  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-  const user = await User.findById(decoded.userId).populate('role');
-  
-  if (!user || !user.permissions?.includes('system:settings')) {
-    throw new Error('Admin access required');
-  }
-
-  return decoded.userId;
-}
+import { requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    await verifyAdminToken(request);
+    await requirePermission(PERMISSIONS.ORDER_VIEW_ALL)(request);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -46,31 +30,35 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get orders with user population
+    // Get orders
     const orders = await Order.find(query)
-      .populate({
-        path: 'userId',
-        select: 'name email',
-        model: 'User'
-      })
-      .populate({
-        path: 'items.productId',
-        select: 'name image price',
-        model: 'Product'
-      })
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    // Transform the data to match expected format
-    const transformedOrders = orders.map(order => ({
-      ...order.toObject(),
-      user: order.userId, // Rename userId to user for consistency
-      items: order.items.map(item => ({
-        ...item.toObject(),
-        product: item.productId // Rename productId to product for consistency
-      }))
-    }));
+    // Fetch related users (batch to avoid N+1 lookups)
+    const uniqueUserIds = Array.from(new Set(orders.map(o => o.userId).filter(Boolean)));
+    const users = await User.find({ _id: { $in: uniqueUserIds } }).select('name email');
+    const userMap = new Map(users.map(u => [u._id.toString(), { _id: u._id.toString(), name: u.name, email: u.email }]));
+
+    // Transform the data to match expected format expected by the admin UI
+    const transformedOrders = orders.map(order => {
+      const plain = order.toObject();
+      const user = userMap.get(plain.userId?.toString()) || null;
+      return {
+        ...plain,
+        user,
+        items: plain.items.map((item: any) => ({
+          ...item,
+          product: {
+            _id: item.productId,
+            name: item.name,
+            image: item.image,
+            price: item.price
+          }
+        }))
+      };
+    });
 
     const total = await Order.countDocuments(query);
 
@@ -86,6 +74,12 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Admin orders fetch error:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch orders' },
       { status: 500 }
@@ -96,7 +90,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     await connectDB();
-    await verifyAdminToken(request);
+    await requirePermission(PERMISSIONS.ORDER_UPDATE)(request);
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
@@ -115,6 +109,12 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     console.error('Admin order delete error:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to delete order' },
       { status: 500 }

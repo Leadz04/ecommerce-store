@@ -1,0 +1,274 @@
+{
+  "Migration": {
+    "fields": {
+      "version": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "name": {
+        "type": "String",
+        "required": true
+      },
+      "description": {
+        "type": "String",
+        "required": true
+      },
+      "appliedAt": {
+        "type": "Date",
+        "default": "Date.now"
+      },
+      "executedBy": {
+        "type": "String",
+        "required": true
+      },
+      "executionTime": {
+        "type": "Number",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "error": {
+        "type": "String"
+      },
+      "rollbackVersion": {
+        "type": "String"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Order": {
+    "fields": {
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "name": {
+        "type": "String",
+        "required": true
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "quantity": {
+        "type": "Number",
+        "required": true
+      },
+      "image": {
+        "type": "String",
+        "required": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "OrderCounter": {
+    "fields": {
+      "date": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "counter": {
+        "type": "Number",
+        "required": true,
+        "default": "0"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Product": {
+    "fields": {
+      "name": {
+        "type": "String"
+      },
+      "description": {
+        "type": "String"
+      },
+      "price": {
+        "type": "Number"
+      },
+      "originalPrice": {
+        "type": "Number"
+      },
+      "image": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String",
+        "enum": [
+          "Leather Goods",
+          "Electronics",
+          "Clothing",
+          "Home & Kitchen",
+          "Food & Beverage",
+          "Sports & Outdoors",
+          "Books"
+        ]
+      },
+      "brand": {
+        "type": "String"
+      },
+      "rating": {
+        "type": "Number",
+        "default": "0"
+      },
+      "reviewCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "inStock": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "stockCount": {
+        "type": "Number"
+      },
+      "specifications": {
+        "type": "Map"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Role": {
+    "fields": {
+      "name": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "description": {
+        "type": "String",
+        "required": true
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "User": {
+    "fields": {
+      "name": {
+        "type": "String"
+      },
+      "email": {
+        "type": "String",
+        "unique": true
+      },
+      "password": {
+        "type": "String"
+      },
+      "phone": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      },
+      "lastName": {
+        "type": "String"
+      },
+      "address1": {
+        "type": "String"
+      },
+      "address2": {
+        "type": "String"
+      },
+      "city": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      },
+      "zipCode": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String",
+        "default": "'United States'"
+      },
+      "role": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "isEmailVerified": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "settings": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "smsNotifications": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "theme": {
+        "type": "String",
+        "default": "'system'",
+        "enum": [
+          "light",
+          "dark",
+          "system"
+        ]
+      },
+      "language": {
+        "type": "String",
+        "default": "'en'"
+      },
+      "lastLoginAt": {
+        "type": "Date"
+      },
+      "loginCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "lastLogin": {
+        "type": "Date"
+      },
+      "loginAttempts": {
+        "type": "Number",
+        "default": "0"
+      },
+      "lockUntil": {
+        "type": "Date"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  }
+}

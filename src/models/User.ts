@@ -28,6 +28,8 @@ export interface IUser extends Document {
     theme: 'light' | 'dark' | 'system';
     language: string;
   };
+  lastLoginAt?: Date;
+  loginCount: number;
   isActive: boolean;
   lastLogin?: Date;
   loginAttempts: number;
@@ -94,6 +96,13 @@ const UserSchema = new Schema<IUser>({
     smsNotifications: { type: Boolean, default: false },
     theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
     language: { type: String, default: 'en' }
+  },
+  lastLoginAt: {
+    type: Date
+  },
+  loginCount: {
+    type: Number,
+    default: 0
   },
   isActive: {
     type: Boolean,

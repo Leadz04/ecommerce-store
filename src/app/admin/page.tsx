@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Users, 
@@ -135,6 +135,8 @@ interface Order {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'overview'>('overview');
   const [users, setUsers] = useState<User[]>([]);
@@ -160,6 +162,49 @@ export default function AdminDashboard() {
   const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
 
+  // Navigation helpers for Overview clickable cards
+  const goToUsers = () => {
+    setActiveTab('users');
+    // Optionally clear filters relevant to users
+    setSearchTerm('');
+    setSelectedRole('');
+    updateQuery({ tab: 'users', status: undefined, orderId: undefined, userId: undefined, productId: undefined });
+  };
+
+  const goToRoles = () => {
+    setActiveTab('roles');
+    updateQuery({ tab: 'roles', status: undefined, orderId: undefined, userId: undefined, productId: undefined });
+  };
+
+  const goToProducts = () => {
+    setActiveTab('products');
+    setSearchTerm('');
+    setSelectedCategory('');
+    setSelectedBrand('');
+    updateQuery({ tab: 'products', status: undefined, orderId: undefined, userId: undefined, productId: undefined });
+  };
+
+  const goToOrders = (status?: string) => {
+    setActiveTab('orders');
+    setSearchTerm('');
+    setSelectedOrderStatus(status || '');
+    updateQuery({ tab: 'orders', status: status || '', orderId: undefined, userId: undefined, productId: undefined });
+  };
+
+  // Update URL query params helper
+  const updateQuery = (updates: Record<string, string | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!value) {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    });
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  };
+
   // Redirect if not authenticated or not admin
   useEffect(() => {
     if (!isAuthenticated) {
@@ -173,6 +218,38 @@ export default function AdminDashboard() {
       return;
     }
   }, [isAuthenticated, user, router]);
+
+  // Deep-link: set tab/status from URL
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'overview' | null;
+    if (tabParam) setActiveTab(tabParam);
+    if (tabParam === 'orders') setSelectedOrderStatus(searchParams.get('status') || '');
+  }, [searchParams]);
+
+  // Open detail modals based on URL ids when data is present
+  useEffect(() => {
+    const orderId = searchParams.get('orderId');
+    if (orderId && activeTab === 'orders' && orders.length) {
+      const found = orders.find(o => o._id === orderId);
+      if (found) setViewingOrder(found);
+    }
+  }, [searchParams, activeTab, orders]);
+
+  useEffect(() => {
+    const userId = searchParams.get('userId');
+    if (userId && activeTab === 'users' && users.length) {
+      const found = users.find(u => u._id === userId);
+      if (found) setEditingUser(found);
+    }
+  }, [searchParams, activeTab, users]);
+
+  useEffect(() => {
+    const productId = searchParams.get('productId');
+    if (productId && activeTab === 'products' && products.length) {
+      const found = products.find(p => p._id === productId);
+      if (found) setEditingProduct(found);
+    }
+  }, [searchParams, activeTab, products]);
 
   // Fetch users
   const fetchUsers = async () => {
@@ -297,6 +374,7 @@ export default function AdminDashboard() {
   // User management handlers
   const handleEditUser = (user: User) => {
     setEditingUser(user);
+    updateQuery({ tab: 'users', userId: user._id });
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -330,6 +408,7 @@ export default function AdminDashboard() {
     fetchUsers();
     setEditingUser(null);
     setShowCreateUser(false);
+    updateQuery({ userId: undefined });
   };
 
   // Role management handlers
@@ -373,6 +452,7 @@ export default function AdminDashboard() {
   // Product management handlers
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
+    updateQuery({ tab: 'products', productId: product._id });
   };
 
   const handleDeleteProduct = async (productId: string) => {
@@ -406,11 +486,13 @@ export default function AdminDashboard() {
     fetchProducts();
     setEditingProduct(null);
     setShowCreateProduct(false);
+    updateQuery({ productId: undefined });
   };
 
   // Order management handlers
   const handleViewOrder = (order: Order) => {
     setViewingOrder(order);
+    updateQuery({ tab: 'orders', orderId: order._id });
   };
 
   const handleEditOrder = (order: Order) => {
@@ -436,6 +518,7 @@ export default function AdminDashboard() {
 
       toast.success('Order status updated successfully');
       fetchOrders();
+      updateQuery({ orderId });
     } catch (error) {
       console.error('Update order error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update order status');
@@ -463,6 +546,7 @@ export default function AdminDashboard() {
 
       toast.success('Order deleted successfully');
       fetchOrders();
+      updateQuery({ orderId: undefined });
     } catch (error) {
       console.error('Delete order error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to delete order');
@@ -622,7 +706,7 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={goToUsers} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Users className="h-6 w-6 text-blue-600" />
@@ -633,8 +717,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={goToUsers} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <UserCheck className="h-6 w-6 text-green-600" />
@@ -647,8 +730,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={goToRoles} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <Shield className="h-6 w-6 text-purple-600" />
@@ -659,8 +741,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={goToProducts} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-orange-100 rounded-lg">
                     <Package className="h-6 w-6 text-orange-600" />
@@ -675,7 +756,7 @@ export default function AdminDashboard() {
 
             {/* Order Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={() => goToOrders()} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <ShoppingCart className="h-6 w-6 text-blue-600" />
@@ -686,8 +767,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={() => goToOrders('pending')} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-yellow-100 rounded-lg">
                     <Clock className="h-6 w-6 text-yellow-600" />
@@ -700,8 +780,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={() => goToOrders('processing')} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Truck className="h-6 w-6 text-blue-600" />
@@ -714,8 +793,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={() => goToOrders('delivered')} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <CheckCircle className="h-6 w-6 text-green-600" />
@@ -728,8 +806,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div onClick={() => goToOrders('cancelled')} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
                 <div className="flex items-center">
                   <div className="p-2 bg-red-100 rounded-lg">
                     <XCircle className="h-6 w-6 text-red-600" />
@@ -745,7 +822,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Revenue Summary */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div onClick={() => goToOrders()} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Summary</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">
@@ -800,14 +877,14 @@ export default function AdminDashboard() {
                       placeholder="Search users..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
                 <select
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Roles</option>
                   {roles.map(role => (
@@ -1012,37 +1089,41 @@ export default function AdminDashboard() {
                       placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Categories</option>
-                  <option value="Electronics">Electronics</option>
+                  <option value="Leather Goods">Leather Goods</option>
                   <option value="Clothing">Clothing</option>
+                  <option value="Electronics">Electronics</option>
                   <option value="Home & Kitchen">Home & Kitchen</option>
-                  <option value="Food & Beverage">Food & Beverage</option>
                   <option value="Sports & Outdoors">Sports & Outdoors</option>
                   <option value="Books">Books</option>
                 </select>
                 <select
                   value={selectedBrand}
                   onChange={(e) => setSelectedBrand(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Brands</option>
+                  <option value="LeatherCraft">LeatherCraft</option>
+                  <option value="LuxuryLeather">LuxuryLeather</option>
+                  <option value="CraftLeather">CraftLeather</option>
+                  <option value="VintageLeather">VintageLeather</option>
+                  <option value="CustomCraft">CustomCraft</option>
+                  <option value="MinimalLeather">MinimalLeather</option>
+                  <option value="BohoLeather">BohoLeather</option>
+                  <option value="HandCraft">HandCraft</option>
                   <option value="Apple">Apple</option>
                   <option value="Samsung">Samsung</option>
                   <option value="Nike">Nike</option>
                   <option value="Adidas">Adidas</option>
-                  <option value="Sony">Sony</option>
-                  <option value="Microsoft">Microsoft</option>
-                  <option value="Google">Google</option>
-                  <option value="Amazon">Amazon</option>
                   <option value="Generic">Generic</option>
                 </select>
                 <button
@@ -1214,14 +1295,14 @@ export default function AdminDashboard() {
                       placeholder="Search orders by number, customer name, or email..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border text-gray-700 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
                 <select
                   value={selectedOrderStatus}
                   onChange={(e) => setSelectedOrderStatus(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Statuses</option>
                   <option value="pending">Pending</option>
@@ -1392,6 +1473,7 @@ export default function AdminDashboard() {
           onClose={() => {
             setShowCreateUser(false);
             setEditingUser(null);
+            updateQuery({ userId: undefined });
           }}
           onSuccess={handleUserFormSuccess}
         />
@@ -1414,6 +1496,7 @@ export default function AdminDashboard() {
           onClose={() => {
             setShowCreateProduct(false);
             setEditingProduct(null);
+            updateQuery({ productId: undefined });
           }}
           onSuccess={handleProductFormSuccess}
         />
@@ -1422,7 +1505,10 @@ export default function AdminDashboard() {
         <OrderDetailModal
           order={viewingOrder}
           isOpen={!!viewingOrder}
-          onClose={() => setViewingOrder(null)}
+          onClose={() => {
+            setViewingOrder(null);
+            updateQuery({ orderId: undefined });
+          }}
           onUpdateStatus={handleUpdateOrderStatus}
           onDeleteOrder={handleDeleteOrder}
           onDownloadInvoice={handleDownloadInvoice}

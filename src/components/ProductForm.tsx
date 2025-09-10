@@ -242,7 +242,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   required
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter product name"
                 />
               </div>
@@ -255,7 +255,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   required
                   value={formData.brand}
                   onChange={(e) => handleInputChange('brand', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select a brand</option>
                   {BRANDS.map(brand => (
@@ -272,7 +272,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   required
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select a category</option>
                   {CATEGORIES.map(category => (
@@ -291,7 +291,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   min="0"
                   value={formData.stockCount}
                   onChange={(e) => handleInputChange('stockCount', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter stock count"
                 />
               </div>
@@ -307,7 +307,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                 rows={4}
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter product description"
               />
             </div>
@@ -326,7 +326,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   step="0.01"
                   value={formData.price}
                   onChange={(e) => handleInputChange('price', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter price"
                 />
               </div>
@@ -341,7 +341,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   step="0.01"
                   value={formData.originalPrice}
                   onChange={(e) => handleInputChange('originalPrice', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter original price"
                 />
               </div>
@@ -365,7 +365,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                     required
                     value={formData.image}
                     onChange={(e) => handleInputChange('image', e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter main image URL"
                   />
                   <button
@@ -395,7 +395,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                             newImages[index] = e.target.value;
                             handleInputChange('images', newImages);
                           }}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Enter image URL"
                         />
                         <button
@@ -424,7 +424,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter tag and press Enter"
                 />
                 <button
@@ -440,7 +440,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   {formData.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                      className="inline-flex items-center px-3 py-1 text-gray-700 mb-2 rounded-full text-sm bg-blue-100 text-blue-800"
                     >
                       {tag}
                       <button
@@ -466,14 +466,14 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   type="text"
                   value={newSpecKey}
                   onChange={(e) => setNewSpecKey(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Specification name"
                 />
                 <input
                   type="text"
                   value={newSpecValue}
                   onChange={(e) => setNewSpecValue(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Specification value"
                 />
                 <button

@@ -6,7 +6,15 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "node scripts/migrate.js",
+    "migrate:up": "node scripts/migrate.js up",
+    "migrate:down": "node scripts/migrate.js down",
+    "migrate:status": "node scripts/migrate.js status",
+    "migrate:generate": "node scripts/migrate.js generate",
+    "migrate:auto": "node scripts/migrate.js auto",
+    "migrate:snapshot": "node scripts/migrate.js snapshot",
+    "migrate:diff": "node scripts/migrate.js diff"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^4.0.1",

@@ -697,130 +697,132 @@ export const sampleProducts: Product[] = [
     }
   },
 
-  // Food & Beverage (5 products)
+  // Leather Clothing & Accessories (5 products)
   {
     id: '28',
-    name: 'Premium Coffee Beans',
-    description: 'Single-origin coffee beans from Ethiopia. Medium roast with notes of citrus and chocolate. Perfect for coffee enthusiasts.',
-    price: 18.99,
-    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500&h=500&fit=crop',
+    name: 'Vintage-Inspired Leather Skirt - Women\'s',
+    description: 'Handcrafted leather skirt with 90s Y2K revival vibes. Made from upcycled genuine leather with a mini length and asymmetrical hem. Perfect for sustainable fashion enthusiasts.',
+    price: 89.99,
+    originalPrice: 119.99,
+    image: 'https://images.unsplash.com/photo-1591047139820-dc7fd73f61a3?w=500&h=500&fit=crop',
     images: [
-      'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500&h=500&fit=crop',
-      'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=500&h=500&fit=crop'
+      'https://images.unsplash.com/photo-1591047139820-dc7fd73f61a3?w=500&h=500&fit=crop',
+      'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop'
     ],
-    category: 'Food & Beverage',
-    brand: 'BeanCraft',
+    category: 'Clothing',
+    brand: 'VintageLeather',
     rating: 4.8,
     reviewCount: 94,
     inStock: true,
-    stockCount: 40,
-    tags: ['coffee', 'single-origin', 'ethiopia', 'medium-roast'],
+    stockCount: 15,
+    tags: ['leather', 'skirt', 'vintage', 'y2k', 'sustainable', 'upcycled'],
     specifications: {
-      'Origin': 'Ethiopia',
-      'Roast Level': 'Medium',
-      'Weight': '12 oz',
-      'Flavor Notes': 'Citrus, Chocolate'
+      'Material': 'Upcycled Genuine Leather',
+      'Style': 'Mini, Asymmetrical',
+      'Sizes': 'XS, S, M, L',
+      'Care': 'Spot Clean Only',
+      'Sustainability': 'Eco-Friendly'
     }
   },
   {
     id: '29',
-    name: 'Organic Green Tea',
-    description: 'Premium organic green tea from Japan. Rich in antioxidants with a delicate, refreshing flavor. Perfect for daily wellness.',
+    name: 'Custom Engraved Leather Bracelet - Personalized',
+    description: 'Handcrafted leather bracelet with custom engraving. Choose your text, symbols, or initials. Made from ethically sourced leather with adjustable sizing.',
     price: 24.99,
-    originalPrice: 29.99,
-    image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=500&h=500&fit=crop',
+    originalPrice: 34.99,
+    image: 'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=500&h=500&fit=crop',
     images: [
-      'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=500&h=500&fit=crop',
-      'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=500&h=500&fit=crop'
+      'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=500&h=500&fit=crop',
+      'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Food & Beverage',
-    brand: 'TeaZen',
-    rating: 4.6,
-    reviewCount: 78,
+    category: 'Leather Goods',
+    brand: 'CustomCraft',
+    rating: 4.9,
+    reviewCount: 178,
     inStock: true,
-    stockCount: 35,
-    tags: ['tea', 'green-tea', 'organic', 'japan', 'antioxidants'],
+    stockCount: 50,
+    tags: ['leather', 'bracelet', 'custom', 'engraved', 'personalized', 'handmade'],
     specifications: {
-      'Origin': 'Japan',
-      'Type': 'Organic Green Tea',
-      'Weight': '100g',
-      'Caffeine': 'Low',
-      'Antioxidants': 'High'
+      'Material': 'Ethically Sourced Leather',
+      'Customization': 'Text, Symbols, Initials',
+      'Sizing': 'Adjustable 6-8 inches',
+      'Engraving': 'Laser Engraved',
+      'Colors': 'Black, Brown, Tan'
     }
   },
   {
     id: '30',
-    name: 'Artisan Chocolate Box',
-    description: 'Luxury artisan chocolate box with 12 handcrafted pieces. Made from premium Belgian chocolate with unique flavor combinations.',
-    price: 39.99,
-    image: 'https://images.unsplash.com/photo-1511381939415-e44015466834?w=500&h=500&fit=crop',
+    name: 'Minimalist Leather Crossbody Bag - Sustainable',
+    description: 'Clean, minimalist leather crossbody bag perfect for everyday use. Made from vegetable-tanned leather with a modern, sustainable approach to fashion.',
+    price: 79.99,
+    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
     images: [
-      'https://images.unsplash.com/photo-1511381939415-e44015466834?w=500&h=500&fit=crop',
-      'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop'
+      'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
+      'https://images.unsplash.com/photo-1594223274512-ad4803739b7c?w=500&h=500&fit=crop'
     ],
-    category: 'Food & Beverage',
-    brand: 'ChocoArt',
-    rating: 4.9,
+    category: 'Leather Goods',
+    brand: 'MinimalLeather',
+    rating: 4.7,
     reviewCount: 156,
     inStock: true,
-    stockCount: 22,
-    tags: ['chocolate', 'artisan', 'belgian', 'luxury', 'gift'],
+    stockCount: 25,
+    tags: ['leather', 'crossbody', 'minimalist', 'sustainable', 'vegetable-tanned'],
     specifications: {
-      'Origin': 'Belgium',
-      'Pieces': '12',
-      'Cocoa Content': '70%',
-      'Flavors': 'Mixed',
-      'Packaging': 'Gift Box'
+      'Material': 'Vegetable-Tanned Leather',
+      'Dimensions': '10" x 7" x 2"',
+      'Strap': 'Adjustable 20-24 inches',
+      'Compartments': 'Main + 2 Interior',
+      'Sustainability': 'Eco-Friendly Process'
     }
   },
   {
     id: '31',
-    name: 'Craft Beer Selection',
-    description: 'Curated selection of 6 craft beers from local breweries. Features IPAs, stouts, and lagers for beer enthusiasts.',
-    price: 29.99,
-    image: 'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=500&h=500&fit=crop',
+    name: 'Leather Gloves - Handcrafted',
+    description: 'Premium handcrafted leather gloves with touchscreen compatibility. Made from soft lambskin leather with a classic, timeless design.',
+    price: 49.99,
+    image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop',
     images: [
-      'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=500&h=500&fit=crop',
-      'https://images.unsplash.com/photo-1581578731548-c6a0c3f2fcc0?w=500&h=500&fit=crop'
+      'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop',
+      'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Food & Beverage',
-    brand: 'BrewCraft',
-    rating: 4.4,
+    category: 'Leather Goods',
+    brand: 'HandCraft',
+    rating: 4.6,
     reviewCount: 89,
     inStock: true,
-    stockCount: 18,
-    tags: ['beer', 'craft', 'selection', 'local', 'variety'],
+    stockCount: 30,
+    tags: ['leather', 'gloves', 'handcrafted', 'touchscreen', 'lambskin'],
     specifications: {
-      'Quantity': '6 bottles',
-      'Types': 'IPA, Stout, Lager',
-      'Origin': 'Local Breweries',
-      'ABV': '5-8%',
-      'Volume': '330ml each'
+      'Material': 'Soft Lambskin Leather',
+      'Features': 'Touchscreen Compatible',
+      'Sizes': 'S, M, L, XL',
+      'Lining': 'Silk',
+      'Care': 'Professional Clean Only'
     }
   },
   {
     id: '32',
-    name: 'Organic Honey - Wildflower',
-    description: 'Pure organic wildflower honey from local beekeepers. Raw, unfiltered, and packed with natural goodness.',
-    price: 16.99,
-    image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=500&h=500&fit=crop',
+    name: 'Leather Hair Accessory Set - Boho Style',
+    description: 'Boho-inspired leather hair accessories including headbands, scrunchies, and hair ties. Handmade from upcycled leather with natural dye finishes.',
+    price: 34.99,
+    image: 'https://images.unsplash.com/photo-1511381939415-e44015466834?w=500&h=500&fit=crop',
     images: [
-      'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=500&h=500&fit=crop',
+      'https://images.unsplash.com/photo-1511381939415-e44015466834?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Food & Beverage',
-    brand: 'HoneyPure',
-    rating: 4.7,
+    category: 'Leather Goods',
+    brand: 'BohoLeather',
+    rating: 4.8,
     reviewCount: 112,
     inStock: true,
-    stockCount: 45,
-    tags: ['honey', 'organic', 'wildflower', 'raw', 'local'],
+    stockCount: 40,
+    tags: ['leather', 'hair-accessories', 'boho', 'upcycled', 'natural-dye'],
     specifications: {
-      'Type': 'Wildflower',
-      'Processing': 'Raw, Unfiltered',
-      'Weight': '500g',
-      'Origin': 'Local Beekeepers',
-      'Certification': 'Organic'
+      'Material': 'Upcycled Leather',
+      'Contents': '2 Headbands, 3 Scrunchies, 5 Hair Ties',
+      'Dye': 'Natural Plant-Based',
+      'Style': 'Boho, Vintage',
+      'Sustainability': 'Zero Waste Process'
     }
   },
 
@@ -1086,10 +1088,9 @@ export const sampleProducts: Product[] = [
 
 export const categories = [
   { id: 'leather-goods', name: 'Leather Goods', slug: 'leather-goods' },
-  { id: 'electronics', name: 'Electronics', slug: 'electronics' },
   { id: 'clothing', name: 'Clothing', slug: 'clothing' },
+  { id: 'electronics', name: 'Electronics', slug: 'electronics' },
   { id: 'home-kitchen', name: 'Home & Kitchen', slug: 'home-kitchen' },
-  { id: 'food-beverage', name: 'Food & Beverage', slug: 'food-beverage' },
   { id: 'sports', name: 'Sports & Outdoors', slug: 'sports' },
   { id: 'books', name: 'Books', slug: 'books' }
 ];

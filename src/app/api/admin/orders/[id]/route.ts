@@ -1,24 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Order, User } from '@/models';
-import jwt from 'jsonwebtoken';
-
-async function verifyAdminToken(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  
-  if (!token) {
-    throw new Error('No token provided');
-  }
-
-  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-  const user = await User.findById(decoded.userId).populate('role');
-  
-  if (!user || !user.permissions?.includes('system:settings')) {
-    throw new Error('Admin access required');
-  }
-
-  return decoded.userId;
-}
+import { requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 
 export async function GET(
   request: NextRequest,
@@ -26,33 +10,37 @@ export async function GET(
 ) {
   try {
     await connectDB();
-    await verifyAdminToken(request);
+    await requirePermission(PERMISSIONS.ORDER_VIEW_ALL)(request);
     
     const { id } = await params;
 
-    const order = await Order.findById(id)
-      .populate({
-        path: 'userId',
-        select: 'name email phone address',
-        model: 'User'
-      })
-      .populate({
-        path: 'items.productId',
-        select: 'name image price category brand',
-        model: 'Product'
-      });
+    const order = await Order.findById(id);
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Transform the data to match expected format
+    const plain = order.toObject();
+    const user = await User.findById(plain.userId).select('name email phone address');
     const transformedOrder = {
-      ...order.toObject(),
-      user: order.userId, // Rename userId to user for consistency
-      items: order.items.map(item => ({
-        ...item.toObject(),
-        product: item.productId // Rename productId to product for consistency
+      ...plain,
+      user: user ? {
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: (user as any).address
+      } : null,
+      items: plain.items.map((item: any) => ({
+        ...item,
+        product: {
+          _id: item.productId,
+          name: item.name,
+          image: item.image,
+          price: item.price,
+          category: undefined,
+          brand: undefined
+        }
       }))
     };
 
@@ -60,6 +48,12 @@ export async function GET(
 
   } catch (error) {
     console.error('Admin order fetch error:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch order' },
       { status: 500 }
@@ -73,7 +67,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await verifyAdminToken(request);
+    await requirePermission(PERMISSIONS.ORDER_UPDATE)(request);
     
     const { id } = await params;
     const body = await request.json();
@@ -93,29 +87,33 @@ export async function PUT(
       id,
       updateData,
       { new: true, runValidators: true }
-    )
-      .populate({
-        path: 'userId',
-        select: 'name email phone address',
-        model: 'User'
-      })
-      .populate({
-        path: 'items.productId',
-        select: 'name image price category brand',
-        model: 'Product'
-      });
+    );
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Transform the data to match expected format
+    const plain = order.toObject();
+    const user = await User.findById(plain.userId).select('name email phone address');
     const transformedOrder = {
-      ...order.toObject(),
-      user: order.userId, // Rename userId to user for consistency
-      items: order.items.map(item => ({
-        ...item.toObject(),
-        product: item.productId // Rename productId to product for consistency
+      ...plain,
+      user: user ? {
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: (user as any).address
+      } : null,
+      items: plain.items.map((item: any) => ({
+        ...item,
+        product: {
+          _id: item.productId,
+          name: item.name,
+          image: item.image,
+          price: item.price,
+          category: undefined,
+          brand: undefined
+        }
       }))
     };
 
@@ -123,6 +121,12 @@ export async function PUT(
 
   } catch (error) {
     console.error('Admin order update error:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update order' },
       { status: 500 }
@@ -136,7 +140,7 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await verifyAdminToken(request);
+    await requirePermission(PERMISSIONS.ORDER_UPDATE)(request);
     
     const { id } = await params;
 
@@ -150,6 +154,12 @@ export async function DELETE(
 
   } catch (error) {
     console.error('Admin order delete error:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to delete order' },
       { status: 500 }
