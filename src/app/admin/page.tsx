@@ -29,12 +29,15 @@ import {
   CheckCircle,
   XCircle,
   Truck,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  Gift
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
 import ProductForm from '@/components/ProductForm';
+import OccasionForm from '@/components/OccasionForm';
 import OrderDetailModal from '@/components/OrderDetailModal';
 import toast from 'react-hot-toast';
 
@@ -133,16 +136,31 @@ interface Order {
   updatedAt: string;
 }
 
+interface Occasion {
+  _id: string;
+  name: string;
+  description: string;
+  date: string;
+  orderDaysBefore: number;
+  image: string;
+  link: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'overview'>('overview');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview'>('overview');
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [occasions, setOccasions] = useState<Occasion[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
@@ -155,8 +173,10 @@ export default function AdminDashboard() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingOccasion, setEditingOccasion] = useState<Occasion | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [showOccasionForm, setShowOccasionForm] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [deletingRole, setDeletingRole] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
@@ -217,11 +237,18 @@ export default function AdminDashboard() {
       toast.error('Access denied. Admin privileges required.');
       return;
     }
-  }, [isAuthenticated, user, router]);
+
+    // Check if user tries to access occasions tab without SUPER_ADMIN role
+    if (activeTab === 'occasions' && user?.role?.name !== 'SUPER_ADMIN') {
+      setActiveTab('overview');
+      toast.error('Access denied. Super Admin privileges required for occasion management.');
+      return;
+    }
+  }, [isAuthenticated, user, router, activeTab]);
 
   // Deep-link: set tab/status from URL
   useEffect(() => {
-    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'overview' | null;
+    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | null;
     if (tabParam) setActiveTab(tabParam);
     if (tabParam === 'orders') setSelectedOrderStatus(searchParams.get('status') || '');
   }, [searchParams]);
@@ -343,6 +370,31 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast.error('Failed to fetch orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch occasions
+  const fetchOccasions = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/occasions', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch occasions');
+      }
+
+      const data = await response.json();
+      setOccasions(data.occasions);
+    } catch (error) {
+      console.error('Error fetching occasions:', error);
+      toast.error('Failed to fetch occasions');
     } finally {
       setLoading(false);
     }
@@ -489,6 +541,71 @@ export default function AdminDashboard() {
     updateQuery({ productId: undefined });
   };
 
+  // Occasion management handlers
+  const handleEditOccasion = (occasion: Occasion) => {
+    setEditingOccasion(occasion);
+  };
+
+  const handleDeleteOccasion = async (occasionId: string) => {
+    if (!confirm('Are you sure you want to delete this occasion? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/occasions/${occasionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete occasion');
+      }
+
+      toast.success('Occasion deleted successfully');
+      fetchOccasions();
+    } catch (error) {
+      console.error('Delete occasion error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete occasion');
+    }
+  };
+
+  const handleOccasionFormSuccess = async (occasionData: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      const url = editingOccasion 
+        ? `/api/admin/occasions/${editingOccasion._id}`
+        : '/api/admin/occasions';
+      
+      const method = editingOccasion ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(occasionData),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save occasion');
+      }
+
+      toast.success(`Occasion ${editingOccasion ? 'updated' : 'created'} successfully`);
+      fetchOccasions();
+      setEditingOccasion(null);
+      setShowOccasionForm(false);
+    } catch (error) {
+      console.error('Save occasion error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save occasion');
+    }
+  };
+
   // Order management handlers
   const handleViewOrder = (order: Order) => {
     setViewingOrder(order);
@@ -599,6 +716,7 @@ export default function AdminDashboard() {
       fetchRoles();
       fetchProducts();
       fetchOrders();
+      fetchOccasions();
     }
   }, [isAuthenticated, user]);
 
@@ -708,6 +826,19 @@ export default function AdminDashboard() {
               <ShoppingCart className="h-5 w-5 inline mr-2" />
               Orders
             </button>
+            {user?.role?.name === 'SUPER_ADMIN' && (
+              <button
+                onClick={() => setActiveTab('occasions')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'occasions'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Calendar className="h-5 w-5 inline mr-2" />
+                Occasions
+              </button>
+            )}
           </nav>
         </div>
 
@@ -1497,6 +1628,160 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Occasions Tab */}
+        {activeTab === 'occasions' && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Occasion Management</h2>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={fetchOccasions}
+                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    <span>Refresh</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingOccasion(null);
+                      setShowOccasionForm(true);
+                    }}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Occasion</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Search occasions by name or description..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border text-gray-700 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-4">Loading occasions...</p>
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200 min-w-[800px]">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Occasion
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Order Days Before
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {occasions
+                      .filter(occasion => 
+                        !searchTerm || 
+                        occasion.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        occasion.description.toLowerCase().includes(searchTerm.toLowerCase())
+                      )
+                      .map((occasion) => (
+                      <tr key={occasion._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-12 w-12">
+                              <img
+                                className="h-12 w-12 rounded-lg object-cover"
+                                src={occasion.image}
+                                alt={occasion.name}
+                                onError={(e) => {
+                                  e.currentTarget.src = 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=200&h=200&fit=crop';
+                                }}
+                              />
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{occasion.name}</div>
+                              <div className="text-sm text-gray-500 max-w-xs truncate">
+                                {occasion.description}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {new Date(occasion.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{occasion.orderDaysBefore} days</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            occasion.isActive
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {occasion.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(occasion.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => handleEditOccasion(occasion)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Edit occasion"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOccasion(occasion._id)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Delete occasion"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* User Form Modal */}
         <UserForm
           user={editingUser || undefined}
@@ -1531,6 +1816,17 @@ export default function AdminDashboard() {
             updateQuery({ productId: undefined });
           }}
           onSuccess={handleProductFormSuccess}
+        />
+
+        {/* Occasion Form Modal */}
+        <OccasionForm
+          occasion={editingOccasion || undefined}
+          isOpen={showOccasionForm || !!editingOccasion}
+          onClose={() => {
+            setShowOccasionForm(false);
+            setEditingOccasion(null);
+          }}
+          onSave={handleOccasionFormSuccess}
         />
 
         {/* Order Detail Modal */}

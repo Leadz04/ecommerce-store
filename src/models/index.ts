@@ -11,6 +11,7 @@ export { default as Role } from './Role';
 export { default as Product } from './Product';
 export { default as Order } from './Order';
 export { default as OrderCounter } from './OrderCounter';
+export { default as Occasion } from './Occasion';
 
 // Export interfaces
 export type { IUser } from './User';
@@ -18,3 +19,4 @@ export type { IRole } from './Role';
 export type { IProduct } from './Product';
 export type { IOrder } from './Order';
 export type { IOrderCounter } from './OrderCounter';
+export type { IOccasion } from './Occasion';

@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import { Toaster } from 'react-hot-toast';
 import Footer from '@/components/Footer';
 import ThemeProvider from '@/components/ThemeProvider';
+import OccasionReminder from '@/components/OccasionReminder';
 
 interface ClientWrapperProps {
   children: React.ReactNode;
@@ -31,6 +32,7 @@ export default function ClientWrapper({ children }: ClientWrapperProps) {
     <ThemeProvider>
       <div className="min-h-screen flex flex-col">
         <Header />
+        <OccasionReminder />
         <main className="flex-1">
           {children}
         </main>
