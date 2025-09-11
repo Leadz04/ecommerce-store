@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useOrderStore } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
+import { OrderCardSkeleton } from '@/components/LoadingSkeleton';
 import toast from 'react-hot-toast';
 
 interface OrderFilters {
@@ -181,8 +182,9 @@ export default function OrdersPage() {
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
+  const formatDate = (date: string | Date) => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -193,7 +195,7 @@ export default function OrdersPage() {
 
   const filteredOrders = orders.filter(order => {
     if (filters.status !== 'all' && order.status !== filters.status) return false;
-    if (filters.search && !order.orderNumber.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    if (filters.search && !(order.orderNumber ?? '').toLowerCase().includes(filters.search.toLowerCase())) return false;
     return true;
   });
 
@@ -310,9 +312,10 @@ export default function OrdersPage() {
         {/* Orders List */}
         <div className="space-y-4">
           {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-4">Loading orders...</p>
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <OrderCardSkeleton key={i} />
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
@@ -356,8 +359,20 @@ export default function OrdersPage() {
           ) : (
             filteredOrders.map((order) => (
               <div key={order._id} className="bg-white rounded-xl shadow-sm border-2 border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                {/* Order Header */}
-                <div className="p-6 border-b-2 border-gray-100">
+                {/* Order Header (clickable to toggle details) */}
+                <div
+                  className="p-6 border-b-2 border-gray-100 cursor-pointer focus:outline-none"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedOrder === order._id}
+                  onClick={() => setExpandedOrder(expandedOrder === order._id ? null : order._id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setExpandedOrder(expandedOrder === order._id ? null : order._id);
+                    }
+                  }}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div>
@@ -384,7 +399,10 @@ export default function OrdersPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => setExpandedOrder(expandedOrder === order._id ? null : order._id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedOrder(expandedOrder === order._id ? null : order._id);
+                        }}
                         className="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         {expandedOrder === order._id ? (
@@ -409,8 +427,8 @@ export default function OrdersPage() {
                             <div key={index} className="flex items-center space-x-4 p-4 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
                               <div className="relative w-20 h-20 flex-shrink-0">
                                 <Image
-                                  src={item.image || '/placeholder-product.jpg'}
-                                  alt={item.name}
+                                  src={(item.image as string) || '/placeholder-product.jpg'}
+                                  alt={(item.name as string) || 'Product image'}
                                   fill
                                   className="object-cover rounded-lg"
                                 />
@@ -435,7 +453,7 @@ export default function OrdersPage() {
                               </div>
                               <div className="text-right">
                                 <p className="text-base font-bold text-gray-900">
-                                  ${item.price.toFixed(2)}
+                                  ${(item.price ?? 0).toFixed(2)}
                                 </p>
                               </div>
                             </div>
@@ -449,15 +467,15 @@ export default function OrdersPage() {
                         <div className="bg-white rounded-xl border-2 border-gray-200 p-6 space-y-4 shadow-sm">
                           <div className="flex justify-between text-base">
                             <span className="text-gray-700 font-medium">Subtotal</span>
-                            <span className="text-gray-900 font-semibold">${order.subtotal.toFixed(2)}</span>
+                            <span className="text-gray-900 font-semibold">${(order.subtotal ?? 0).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-base">
                             <span className="text-gray-700 font-medium">Shipping</span>
-                            <span className="text-gray-900 font-semibold">${order.shipping.toFixed(2)}</span>
+                            <span className="text-gray-900 font-semibold">${(order.shipping ?? 0).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-base">
                             <span className="text-gray-700 font-medium">Tax</span>
-                            <span className="text-gray-900 font-semibold">${order.tax.toFixed(2)}</span>
+                            <span className="text-gray-900 font-semibold">${(order.tax ?? 0).toFixed(2)}</span>
                           </div>
                           <div className="border-t-2 border-gray-200 pt-4">
                             <div className="flex justify-between">

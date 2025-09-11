@@ -5,6 +5,7 @@ import { Calendar, Gift, Clock, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 // import { getActiveOccasions, Occasion } from '@/data/occasions';
 import OccasionCard from '@/components/OccasionCard';
+import { OccasionCardSkeleton } from '@/components/LoadingSkeleton';
 import { useAuthStore } from '@/store/authStore';
 
 interface Occasion {
@@ -89,9 +90,10 @@ export default function OccasionsPage() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading occasions...</p>
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <OccasionCardSkeleton key={i} />
+            ))}
           </div>
         ) : occasions.length === 0 ? (
           <div className="text-center py-12">

@@ -39,6 +39,7 @@ import RoleForm from '@/components/RoleForm';
 import ProductForm from '@/components/ProductForm';
 import OccasionForm from '@/components/OccasionForm';
 import OrderDetailModal from '@/components/OrderDetailModal';
+import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -1285,10 +1286,7 @@ export default function AdminDashboard() {
 
             <div className="overflow-x-auto">
               {loading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-4">Loading products...</p>
-                </div>
+                <TableSkeleton rows={8} columns={6} />
               ) : (
                 <table className="min-w-full divide-y divide-gray-200 min-w-[1000px]">
                   <thead className="bg-gray-50">
@@ -1469,10 +1467,7 @@ export default function AdminDashboard() {
 
             <div className="overflow-x-auto">
               {loading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-4">Loading orders...</p>
-                </div>
+                <TableSkeleton rows={8} columns={7} />
               ) : (
                 <table className="min-w-full divide-y divide-gray-200 min-w-[1200px]">
                   <thead className="bg-gray-50">
@@ -1674,10 +1669,7 @@ export default function AdminDashboard() {
 
             <div className="overflow-x-auto">
               {loading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-4">Loading occasions...</p>
-                </div>
+                <TableSkeleton rows={5} columns={6} />
               ) : (
                 <table className="min-w-full divide-y divide-gray-200 min-w-[800px]">
                   <thead className="bg-gray-50">

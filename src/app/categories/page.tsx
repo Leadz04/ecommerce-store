@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Star, Search, X } from 'lucide-react';
+import { CategoriesSkeleton } from '@/components/LoadingSkeleton';
 import { sampleProducts } from '@/data/products';
 
 const categories = [
@@ -70,11 +71,19 @@ export default function CategoriesPage() {
 
   const [searchInput, setSearchInput] = useState('');
   const [filteredCategories, setFilteredCategories] = useState<typeof categories>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Initialize from URL params
   useEffect(() => {
     const search = searchParams.get('search') || '';
     setSearchInput(search);
+    
+    // Simulate loading for skeleton demonstration
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
   }, [searchParams]);
 
   // Update URL when search changes
@@ -125,6 +134,10 @@ export default function CategoriesPage() {
     setSearchInput('');
     updateURL('');
   };
+
+  if (isLoading) {
+    return <CategoriesSkeleton />;
+  }
 
   return (
     <div className="min-h-screen">

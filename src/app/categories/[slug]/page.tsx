@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
+import { ProductCardSkeleton, CategoryDetailSkeleton } from '@/components/LoadingSkeleton';
 import { useProductStore } from '@/store/productStore';
 
 export default function CategoryPage() {
@@ -149,6 +150,11 @@ export default function CategoryPage() {
     description: 'Browse our collection of products in this category.',
     image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=400&fit=crop'
   };
+
+  // Show loading skeleton while products are loading
+  if (isLoading) {
+    return <CategoryDetailSkeleton />;
+  }
 
   // Only show "Category Not Found" if the category doesn't exist in our mapping
   if (!categoryMap[categorySlug as keyof typeof categoryMap]) {
@@ -359,9 +365,10 @@ export default function CategoryPage() {
 
               {/* Loading State */}
               {isLoading && (
-                <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-4">Loading products...</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <ProductCardSkeleton key={i} />
+                  ))}
                 </div>
               )}
 

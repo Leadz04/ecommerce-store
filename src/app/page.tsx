@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Truck, Shield, RotateCcw, Headphones } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
+import { ProductCardSkeleton } from "@/components/LoadingSkeleton";
 import { sampleProducts } from "@/data/products";
 
 export default function Home() {

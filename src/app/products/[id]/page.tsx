@@ -8,6 +8,7 @@ import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLe
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
 import { sampleProducts } from '@/data/products';
 
 export default function ProductPage() {
@@ -20,6 +21,7 @@ export default function ProductPage() {
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [isLiked, setIsLiked] = useState(false);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
@@ -28,6 +30,7 @@ export default function ProductPage() {
   // Fetch product when component mounts
   useEffect(() => {
     if (productId) {
+      setHasAttemptedFetch(true);
       fetchProduct(productId);
     }
   }, [productId, fetchProduct]);
@@ -38,17 +41,11 @@ export default function ProductPage() {
   }, [fetchProducts]);
   
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50  flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600  mt-4">Loading product...</p>
-        </div>
-      </div>
-    );
+    return <ProductDetailSkeleton />;
   }
   
-  if (error || !currentProduct) {
+  // Only show error if we've attempted to fetch and we're not loading and there's actually an error or no product
+  if (hasAttemptedFetch && !isLoading && (error || !currentProduct)) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center">

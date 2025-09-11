@@ -30,7 +30,7 @@ export async function PUT(request: NextRequest) {
     await connectDB();
     const userId = await verifyToken(request);
     const updates = await request.json();
-    const allowed = ['emailNotifications', 'smsNotifications', 'theme', 'language'];
+    const allowed = ['emailNotifications', 'smsNotifications'];
     const sanitized: Record<string, unknown> = {};
     for (const key of allowed) {
       if (key in updates) sanitized[key] = updates[key];

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { ProfileSkeleton } from '@/components/LoadingSkeleton';
 import { AuthUser } from '@/types';
 
 export default function ProfilePage() {
@@ -22,8 +23,8 @@ export default function ProfilePage() {
   // Wishlist
   const { items: wishlistItems, isLoading: isWishlistLoading, error: wishlistError, fetchWishlist, removeFromWishlist } = useWishlistStore();
 
-  // Settings
-  const [settings, setSettings] = useState({ emailNotifications: true, smsNotifications: false, theme: 'system', language: 'en' });
+  // Settings (only email/sms toggles)
+  const [settings, setSettings] = useState({ emailNotifications: true, smsNotifications: false });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const { items: cartItems, addItem } = useCartStore();
   const [wishlistQty, setWishlistQty] = useState<Record<string, number>>({});
@@ -54,14 +55,12 @@ export default function ProfilePage() {
         } as any)
       });
 
-      // Prefill settings if present
+      // Prefill notification settings if present
       const userAny = user as any;
       if (userAny.settings) {
         setSettings({
           emailNotifications: !!userAny.settings.emailNotifications,
-          smsNotifications: !!userAny.settings.smsNotifications,
-          theme: userAny.settings.theme || 'system',
-          language: userAny.settings.language || 'en'
+          smsNotifications: !!userAny.settings.smsNotifications
         });
       }
     }
@@ -90,13 +89,8 @@ export default function ProfilePage() {
   const handleSaveSettings = async () => {
     try {
       setIsSavingSettings(true);
-      const token = localStorage.getItem('token');
-      await fetch('/api/users/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(settings)
-      });
-      // Notify
+      // Use the auth store endpoint so the user in state is refreshed
+      await updateProfile({ settings } as any);
       try {
         const mod: any = await import('react-hot-toast');
         mod.toast.success('Settings saved');
@@ -210,8 +204,12 @@ export default function ProfilePage() {
     router.push('/');
   };
 
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated) {
     return null; // Will redirect to login
+  }
+
+  if (isLoading || !user) {
+    return <ProfileSkeleton />;
   }
 
   return (
@@ -555,22 +553,6 @@ export default function ProfilePage() {
                       <div className="text-gray-600 text-sm">Receive text messages about your orders</div>
                     </div>
                     <input type="checkbox" checked={settings.smsNotifications} onChange={(e) => setSettings({ ...settings, smsNotifications: e.target.checked })} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
-                    <select value={settings.theme} onChange={(e) => setSettings({ ...settings, theme: e.target.value as any })} className="px-3 py-2 border text-gray-700 mb-2 rounded">
-                      <option value="system">System</option>
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-                    <select value={settings.language} onChange={(e) => setSettings({ ...settings, language: e.target.value })} className="px-3 py-2 border  text-gray-700 mb-2 rounded">
-                      <option value="en">English</option>
-                      <option value="fr">French</option>
-                      <option value="es">Spanish</option>
-                    </select>
                   </div>
                   <div>
                     <button onClick={handleSaveSettings} disabled={isSavingSettings} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400">

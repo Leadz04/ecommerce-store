@@ -25,8 +25,6 @@ export interface IUser extends Document {
   settings?: {
     emailNotifications: boolean;
     smsNotifications: boolean;
-    theme: 'light' | 'dark' | 'system';
-    language: string;
   };
   lastLoginAt?: Date;
   loginCount: number;
@@ -93,9 +91,7 @@ const UserSchema = new Schema<IUser>({
   wishlist: [{ type: Schema.Types.ObjectId, ref: 'Product', index: true }],
   settings: {
     emailNotifications: { type: Boolean, default: true },
-    smsNotifications: { type: Boolean, default: false },
-    theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
-    language: { type: String, default: 'en' }
+    smsNotifications: { type: Boolean, default: false }
   },
   lastLoginAt: {
     type: Date

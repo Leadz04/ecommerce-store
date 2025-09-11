@@ -81,8 +81,6 @@ export interface AuthUser {
   settings?: {
     emailNotifications?: boolean;
     smsNotifications?: boolean;
-    theme?: 'light' | 'dark' | 'system';
-    language?: string;
   };
 }
 

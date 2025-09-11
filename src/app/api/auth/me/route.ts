@@ -116,7 +116,13 @@ export async function PUT(request: NextRequest) {
     if (email) userDoc.email = email;
     if (phone !== undefined) userDoc.phone = phone;
     if (address) userDoc.address = { ...(userDoc.address || {}), ...address };
-    if (settings) userDoc.settings = { ...(userDoc.settings || {}), ...settings };
+    if (settings) {
+      // Only allow email/sms notification settings now
+      const allowed: any = {};
+      if (typeof settings.emailNotifications === 'boolean') allowed.emailNotifications = settings.emailNotifications;
+      if (typeof settings.smsNotifications === 'boolean') allowed.smsNotifications = settings.smsNotifications;
+      userDoc.settings = { ...(userDoc.settings || {}), ...allowed };
+    }
 
     await userDoc.save();
 
@@ -150,9 +156,7 @@ export async function PUT(request: NextRequest) {
         wishlist: updatedUser.wishlist || [],
         settings: updatedUser.settings || {
           emailNotifications: true,
-          smsNotifications: false,
-          theme: 'system',
-          language: 'en'
+          smsNotifications: false
         },
         isActive: updatedUser.isActive,
         lastLogin: updatedUser.lastLogin,

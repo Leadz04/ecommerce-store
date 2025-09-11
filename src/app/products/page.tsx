@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, Grid, List, SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
+import { LoadingSkeleton, ProductCardSkeleton } from '@/components/LoadingSkeleton';
 import { useProductStore } from '@/store/productStore';
 
 export default function ProductsPage() {
@@ -307,9 +308,10 @@ export default function ProductsPage() {
 
               {/* Loading State */}
               {isLoading && (
-                <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-4">Loading products...</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <ProductCardSkeleton key={i} />
+                  ))}
                 </div>
               )}
 
