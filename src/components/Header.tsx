@@ -192,13 +192,21 @@ export default function Header() {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
+          <div className="md:hidden fixed inset-0 z-40 bg-white overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <Link href="/" className="text-xl font-semibold text-gray-900" onClick={() => setIsMenuOpen(false)}>
+                ShopEase
+              </Link>
+              <button onClick={() => setIsMenuOpen(false)} className="p-2 text-gray-700 hover:text-gray-900">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                  className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   {item.name}
@@ -211,14 +219,14 @@ export default function Header() {
                   <>
                     <Link
                       href="/profile"
-                      className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                      className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       My Profile
                     </Link>
                     <Link
                       href="/orders"
-                      className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                      className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Orders
@@ -226,7 +234,7 @@ export default function Header() {
                     {user?.permissions?.includes('system:settings') ? (
                       <Link
                         href="/admin"
-                        className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                        className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         Admin Panel
@@ -234,7 +242,7 @@ export default function Header() {
                     ) : (
                       <Link
                         href="/customer"
-                        className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                        className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         My Dashboard
@@ -245,7 +253,7 @@ export default function Header() {
                         logout();
                         setIsMenuOpen(false);
                       }}
-                      className="text-red-600 hover:text-red-700 block px-3 py-2 text-base font-medium w-full text-left"
+                      className="text-red-600 hover:text-red-700 block px-3 py-3 text-base font-medium w-full text-left"
                     >
                       Sign Out
                     </button>
@@ -254,14 +262,14 @@ export default function Header() {
                   <>
                     <Link
                       href="/login"
-                      className="text-gray-700 hover:text-gray-900 block px-3 py-2 text-base font-medium"
+                      className="text-gray-700 hover:text-gray-900 block px-3 py-3 text-base font-medium"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Sign In
                     </Link>
                     <Link
                       href="/signup"
-                      className="text-blue-600 hover:text-blue-700 block px-3 py-2 text-base font-medium"
+                      className="text-blue-600 hover:text-blue-700 block px-3 py-3 text-base font-medium"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Sign Up
@@ -291,7 +299,7 @@ export default function Header() {
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsCartOpen(false)} />
-          <div className="absolute right-0 top-0 h-full w-96 bg-white shadow-xl">
+          <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl">
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b">
                 <h2 className="text-lg font-semibold">Shopping Cart</h2>

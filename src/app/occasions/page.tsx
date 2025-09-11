@@ -5,6 +5,7 @@ import { Calendar, Gift, Clock, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 // import { getActiveOccasions, Occasion } from '@/data/occasions';
 import OccasionCard from '@/components/OccasionCard';
+import { useAuthStore } from '@/store/authStore';
 
 interface Occasion {
   id: string;
@@ -22,6 +23,8 @@ interface Occasion {
 export default function OccasionsPage() {
   const [occasions, setOccasions] = useState<Occasion[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated } = useAuthStore();
+  const isAdmin = !!(isAuthenticated && (user as any)?.permissions?.includes('system:settings'));
 
   useEffect(() => {
     const fetchOccasions = async () => {
@@ -69,14 +72,16 @@ export default function OccasionsPage() {
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Don't miss out on these special occasions! Order early to ensure your gifts arrive on time.
             </p>
-            <div className="mt-4">
-              <button
-                onClick={handleResetHidden}
-                className="inline-flex items-center px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                Reset hidden reminders
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="mt-4">
+                <button
+                  onClick={handleResetHidden}
+                  className="inline-flex items-center px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Reset hidden reminders
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -107,7 +112,8 @@ export default function OccasionsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Stats */}
+            {/* Stats - Admin only */}
+            {isAdmin && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center">
@@ -147,6 +153,7 @@ export default function OccasionsPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Occasions List */}
             <div className="space-y-4">
