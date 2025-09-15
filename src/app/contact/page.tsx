@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Phone, MapPin, Clock, Send, CheckCircle, AlertCircle, Loader2, Star } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -13,6 +14,17 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [submitError, setSubmitError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate loading for better UX
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -20,29 +32,98 @@ export default function ContactPage() {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    if (submitError) {
+      setSubmitError('');
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
+    }
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    if (!formData.subject.trim()) {
+      newErrors.subject = 'Subject is required';
+    } else if (formData.subject.trim().length < 5) {
+      newErrors.subject = 'Subject must be at least 5 characters';
+    }
+    
+    if (!formData.message.trim()) {
+      newErrors.message = 'Message is required';
+    } else if (formData.message.trim().length < 10) {
+      newErrors.message = 'Message must be at least 10 characters';
+    } else if (formData.message.trim().length > 500) {
+      newErrors.message = 'Message must be less than 500 characters';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form
+    if (!validateForm()) {
+      toast.error('Please fix the errors below');
+      return;
+    }
+    
     setIsSubmitting(true);
+    setSubmitError('');
     
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setFormData({
-        name: '',
-        email: '',
-        subject: '',
-        message: '',
-        inquiryType: 'general'
+    try {
+      const response = await fetch('/api/email/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
-    }, 3000);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send message');
+      }
+
+      setIsSubmitted(true);
+      toast.success('Message sent successfully! We\'ll get back to you soon.');
+      
+      // Reset form after 5 seconds
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setFormData({
+          name: '',
+          email: '',
+          subject: '',
+          message: '',
+          inquiryType: 'general'
+        });
+        setErrors({});
+      }, 5000);
+    } catch (error) {
+      console.error('Contact form error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message. Please try again.';
+      setSubmitError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
@@ -99,6 +180,64 @@ export default function ContactPage() {
     }
   ];
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        {/* Header Skeleton */}
+        <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="h-12 bg-white/20 rounded-lg mb-4 animate-pulse"></div>
+            <div className="h-6 bg-white/20 rounded-lg max-w-3xl mx-auto animate-pulse"></div>
+          </div>
+        </section>
+
+        {/* Content Skeleton */}
+        <section className="py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="text-center">
+                  <div className="bg-gray-200 w-16 h-16 rounded-full mx-auto mb-4 animate-pulse"></div>
+                  <div className="h-6 bg-gray-200 rounded-lg mb-2 animate-pulse"></div>
+                  <div className="space-y-1 mb-2">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-3 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Form Skeleton */}
+        <section className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div>
+                <div className="h-8 bg-gray-200 rounded-lg mb-6 animate-pulse"></div>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                    <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  </div>
+                  <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                  <div className="h-32 bg-gray-200 rounded-lg animate-pulse"></div>
+                  <div className="h-12 bg-gray-200 rounded-lg animate-pulse"></div>
+                </div>
+              </div>
+              <div>
+                <div className="h-8 bg-gray-200 rounded-lg mb-6 animate-pulse"></div>
+                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -143,13 +282,37 @@ export default function ContactPage() {
               <h2 className="text-3xl font-bold text-gray-900 mb-6">Send us a Message</h2>
               
               {isSubmitted ? (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-green-800 mb-2">Message Sent!</h3>
-                  <p className="text-green-600">Thank you for contacting us. We'll get back to you soon.</p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center animate-pulse">
+                  <div className="relative">
+                    <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4 animate-bounce" />
+                    <div className="absolute -top-1 -right-1">
+                      <Star className="h-6 w-6 text-yellow-400 animate-ping" />
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold text-green-800 mb-3">Message Sent Successfully!</h3>
+                  <p className="text-green-600 text-lg mb-4">Thank you for contacting us. We'll get back to you within 24 hours.</p>
+                  <div className="bg-white rounded-lg p-4 border border-green-200">
+                    <p className="text-sm text-green-700">
+                      <strong>What happens next?</strong><br />
+                      • You'll receive a confirmation email shortly<br />
+                      • Our team will review your message<br />
+                      • We'll respond within 24 hours
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Error Message */}
+                  {submitError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
+                      <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h3 className="text-sm font-medium text-red-800">Error</h3>
+                        <p className="text-sm text-red-600 mt-1">{submitError}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -161,10 +324,16 @@ export default function ContactPage() {
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 border  text-gray-700 mb-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.name 
+                            ? 'border-red-300 bg-red-50' 
+                            : 'border-gray-300'
+                        }`}
                         placeholder="Your full name"
                       />
+                      {errors.name && (
+                        <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                      )}
                     </div>
                     <div>
                       <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -176,10 +345,16 @@ export default function ContactPage() {
                         name="email"
                         value={formData.email}
                         onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 border text-gray-700 mb-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          errors.email 
+                            ? 'border-red-300 bg-red-50' 
+                            : 'border-gray-300'
+                        }`}
                         placeholder="your.email@example.com"
                       />
+                      {errors.email && (
+                        <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                      )}
                     </div>
                   </div>
 
@@ -192,12 +367,13 @@ export default function ContactPage() {
                       name="inquiryType"
                       value={formData.inquiryType}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="general">General Inquiry</option>
-                      <option value="support">Customer Support</option>
-                      <option value="sales">Sales Question</option>
-                      <option value="returns">Returns & Exchanges</option>
+                      <option value="support">Technical Support</option>
+                      <option value="billing">Billing Question</option>
+                      <option value="order">Order Status</option>
+                      <option value="return">Return/Exchange</option>
                       <option value="feedback">Feedback</option>
                       <option value="partnership">Partnership</option>
                     </select>
@@ -213,10 +389,16 @@ export default function ContactPage() {
                       name="subject"
                       value={formData.subject}
                       onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border text-gray-700 mb-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Brief subject of your message"
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        errors.subject 
+                          ? 'border-red-300 bg-red-50' 
+                          : 'border-gray-300'
+                      }`}
+                      placeholder="Brief description of your inquiry"
                     />
+                    {errors.subject && (
+                      <p className="mt-1 text-sm text-red-600">{errors.subject}</p>
+                    )}
                   </div>
 
                   <div>
@@ -228,27 +410,43 @@ export default function ContactPage() {
                       name="message"
                       value={formData.message}
                       onChange={handleInputChange}
-                      required
+                      maxLength={500}
                       rows={6}
-                      className="w-full px-4 py-3 border  text-gray-700 mb-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Please provide details about your inquiry..."
+                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical ${
+                        errors.message 
+                          ? 'border-red-300 bg-red-50' 
+                          : 'border-gray-300'
+                      }`}
+                      placeholder="Please provide as much detail as possible about your inquiry..."
                     />
+                    {errors.message && (
+                      <p className="mt-1 text-sm text-red-600">{errors.message}</p>
+                    )}
+                    <p className={`mt-1 text-sm ${
+                      formData.message.length > 450 
+                        ? 'text-orange-600' 
+                        : formData.message.length > 400 
+                        ? 'text-yellow-600' 
+                        : 'text-gray-500'
+                    }`}>
+                      {formData.message.length}/500 characters
+                    </p>
                   </div>
 
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                    className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center space-x-2"
                   >
                     {isSubmitting ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Sending...
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Sending Message...</span>
                       </>
                     ) : (
                       <>
-                        <Send className="h-5 w-5 mr-2" />
-                        Send Message
+                        <Send className="h-5 w-5" />
+                        <span>Send Message</span>
                       </>
                     )}
                   </button>

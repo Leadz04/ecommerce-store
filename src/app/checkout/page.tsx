@@ -129,6 +129,41 @@ export default function CheckoutPage() {
       setOrderSuccess(true);
       setCurrentStep('confirmation');
       clearCart();
+
+      // Send order confirmation email
+      try {
+        const emailData = {
+          orderNumber: updatedOrder.orderNumber || updatedOrder._id,
+          customerName: `${formData.firstName} ${formData.lastName}`,
+          customerEmail: formData.email,
+          orderTotal: updatedOrder.total,
+          items: updatedOrder.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          shippingAddress: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            address1: formData.address,
+            city: formData.city,
+            state: formData.state,
+            zipCode: formData.zipCode,
+            country: formData.country
+          }
+        };
+
+        await fetch('/api/email/order-confirmation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(emailData),
+        });
+      } catch (emailError) {
+        console.error('Failed to send order confirmation email:', emailError);
+        // Don't fail the order if email fails
+      }
       
     } catch (error) {
       console.error('Order update error:', error);
