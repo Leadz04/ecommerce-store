@@ -1,7 +1,25 @@
 import type { NextConfig } from "next";
 
+const isGitHubPages = process.env.GITHUB_PAGES === 'true';
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+// If deploying to GitHub Pages, default basePath to "/<repo>" when not provided
+const inferredRepoName = process.env.GITHUB_REPOSITORY?.split('/')?.[1] ?? '';
+const basePath = configuredBasePath || (isGitHubPages && inferredRepoName ? `/${inferredRepoName}` : '');
+
 const nextConfig: NextConfig = {
+  // Enable static export when targeting GitHub Pages
+  ...(isGitHubPages
+    ? {
+      output: 'export',
+      trailingSlash: true,
+      basePath,
+      assetPrefix: basePath || undefined,
+    }
+    : {}),
   images: {
+    // Images must be unoptimized for static exports on GitHub Pages
+    ...(isGitHubPages ? { unoptimized: true } : {}),
     remotePatterns: [
       {
         protocol: 'https',
