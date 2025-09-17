@@ -435,13 +435,11 @@ export default function CategoryPage() {
 
   // Map slug to category name
   const categoryMap: Record<string, string> = {
-    'leather-goods': 'Leather Goods',
-    'electronics': 'Electronics',
-    'clothing': 'Clothing',
-    'home-kitchen': 'Home & Kitchen',
-    'food-beverage': 'Food & Beverage',
-    'sports': 'Sports & Outdoors',
-    'books': 'Books'
+    'men': 'Men',
+    'women': 'Women',
+    'office-travel': 'Office & Travel',
+    'accessories': 'Accessories',
+    'gifting': 'Gifting'
   };
 
   const categoryName = categoryMap[categorySlug as keyof typeof categoryMap] || 'Unknown Category';

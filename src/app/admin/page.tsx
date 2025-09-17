@@ -1251,12 +1251,11 @@ export default function AdminDashboard() {
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Categories</option>
-                  <option value="Leather Goods">Leather Goods</option>
-                  <option value="Clothing">Clothing</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Home & Kitchen">Home & Kitchen</option>
-                  <option value="Sports & Outdoors">Sports & Outdoors</option>
-                  <option value="Books">Books</option>
+                  <option value="Men">Men</option>
+                  <option value="Women">Women</option>
+                  <option value="Office & Travel">Office & Travel</option>
+                  <option value="Accessories">Accessories</option>
+                  <option value="Gifting">Gifting</option>
                 </select>
                 <select
                   value={selectedBrand}

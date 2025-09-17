@@ -62,7 +62,8 @@ const ProductSchema = new Schema<IProduct>({
   }],
   category: {
     type: String,
-    required: false,
+    enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
+    default: 'Accessories'
   },
   brand: {
     type: String,

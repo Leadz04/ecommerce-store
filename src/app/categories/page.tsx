@@ -10,57 +10,48 @@ import { sampleProducts } from '@/data/products';
 
 const categories = [
     {
-      id: 'electronics',
-      name: 'Electronics',
-      slug: 'electronics',
-      description: 'Latest gadgets, smartphones, laptops, and tech accessories',
-      image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&h=400&fit=crop',
-      productCount: 45,
-      featuredProducts: sampleProducts.filter(p => p.category === 'Electronics').slice(0, 3)
-    },
-    {
-      id: 'clothing',
-      name: 'Clothing',
-      slug: 'clothing',
-      description: 'Fashion for men, women, and kids. From casual to formal wear',
-      image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop',
-      productCount: 32,
-      featuredProducts: sampleProducts.filter(p => p.category === 'Clothing').slice(0, 3)
-    },
-    {
-      id: 'home-kitchen',
-      name: 'Home & Kitchen',
-      slug: 'home-kitchen',
-      description: 'Everything for your home and kitchen. Furniture, appliances, and decor',
-      image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=400&fit=crop',
-      productCount: 28,
-      featuredProducts: sampleProducts.filter(p => p.category === 'Home & Kitchen').slice(0, 3)
-    },
-    {
-      id: 'food-beverage',
-      name: 'Food & Beverage',
-      slug: 'food-beverage',
-      description: 'Premium food items, beverages, and gourmet products',
-      image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=600&h=400&fit=crop',
-      productCount: 19,
-      featuredProducts: sampleProducts.filter(p => p.category === 'Food & Beverage').slice(0, 3)
-    },
-    {
-      id: 'sports',
-      name: 'Sports & Outdoors',
-      slug: 'sports',
-      description: 'Sports equipment, outdoor gear, and fitness accessories',
-      image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
-      productCount: 24,
+      id: 'men',
+      name: 'Men',
+      slug: 'men',
+      description: 'Premium leather goods, clothing, and accessories for men',
+      image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&h=400&fit=crop',
+      productCount: 0,
       featuredProducts: []
     },
     {
-      id: 'books',
-      name: 'Books',
-      slug: 'books',
-      description: 'Books for all ages. Fiction, non-fiction, educational, and more',
-      image: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=600&h=400&fit=crop',
-      productCount: 15,
+      id: 'women',
+      name: 'Women',
+      slug: 'women',
+      description: 'Elegant leather goods, clothing, and accessories for women',
+      image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop',
+      productCount: 41,
+      featuredProducts: []
+    },
+    {
+      id: 'office-travel',
+      name: 'Office & Travel',
+      slug: 'office-travel',
+      description: 'Professional bags, briefcases, and travel accessories',
+      image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&h=400&fit=crop',
+      productCount: 0,
+      featuredProducts: []
+    },
+    {
+      id: 'accessories',
+      name: 'Accessories',
+      slug: 'accessories',
+      description: 'Wallets, belts, phone cases, and other leather accessories',
+      image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&h=400&fit=crop',
+      productCount: 32,
+      featuredProducts: []
+    },
+    {
+      id: 'gifting',
+      name: 'Gifting',
+      slug: 'gifting',
+      description: 'Perfect gifts for special occasions and loved ones',
+      image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=600&h=400&fit=crop',
+      productCount: 0,
       featuredProducts: []
     }
   ];

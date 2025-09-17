@@ -20,7 +20,13 @@
     "migrate:auto": "node scripts/migrate.js auto",
     "migrate:snapshot": "node scripts/migrate.js snapshot",
     "migrate:diff": "node scripts/migrate.js diff",
-    "import:products": "node scripts/import-scraped-products.js scraped.csv"
+    "import:products": "node scripts/import-scraped-products.js scraped.csv",
+    "cleanup:categories": "node scripts/cleanup-categories.js",
+    "import:women": "node scripts/import-women-collection.js",
+    "update:men": "node scripts/update-men-category.js",
+    "ensure:men": "node scripts/ensure-men-products.js",
+    "import:men": "node scripts/import-men-from-scraped.js",
+    "categorize:all": "node scripts/categorize-all-products.js"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^4.0.1",
@@ -32,6 +38,7 @@
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.542.0",

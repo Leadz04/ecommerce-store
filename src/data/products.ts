@@ -14,7 +14,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1591047139820-dc7fd73f61a3?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'LeatherCraft',
     rating: 4.8,
     reviewCount: 156,
@@ -41,7 +41,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1594223274512-ad4803739b7c?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'LuxuryLeather',
     rating: 4.6,
     reviewCount: 89,
@@ -66,7 +66,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'CraftLeather',
     rating: 4.7,
     reviewCount: 234,
@@ -92,7 +92,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'ProLeather',
     rating: 4.5,
     reviewCount: 67,
@@ -117,7 +117,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'TravelLeather',
     rating: 4.4,
     reviewCount: 43,
@@ -143,7 +143,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'BeltCraft',
     rating: 4.6,
     reviewCount: 178,
@@ -168,7 +168,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'GiftLeather',
     rating: 4.8,
     reviewCount: 92,
@@ -194,7 +194,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'StyleLeather',
     rating: 4.5,
     reviewCount: 76,
@@ -219,7 +219,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'StudentLeather',
     rating: 4.3,
     reviewCount: 134,
@@ -244,7 +244,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'WatchLeather',
     rating: 4.7,
     reviewCount: 201,
@@ -270,7 +270,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'PhoneLeather',
     rating: 4.4,
     reviewCount: 87,
@@ -295,7 +295,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'OfficeLeather',
     rating: 4.6,
     reviewCount: 45,
@@ -324,7 +324,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1484704849700-f032a568e944?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=500&h=500&fit=crop'
     ],
-    category: 'Electronics',
+    category: 'Accessories',
     brand: 'SoundMax',
     rating: 4.5,
     reviewCount: 128,
@@ -349,7 +349,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1544117519-31a4b719223d?w=500&h=500&fit=crop'
     ],
-    category: 'Electronics',
+    category: 'Accessories',
     brand: 'FitTech',
     rating: 4.3,
     reviewCount: 89,
@@ -372,7 +372,7 @@ export const sampleProducts: Product[] = [
     images: [
       'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=500&h=500&fit=crop'
     ],
-    category: 'Electronics',
+    category: 'Accessories',
     brand: 'ChargeTech',
     rating: 4.4,
     reviewCount: 67,
@@ -397,7 +397,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1461151304267-b35a2240c6d5?w=500&h=500&fit=crop'
     ],
-    category: 'Electronics',
+    category: 'Accessories',
     brand: 'TechVision',
     rating: 4.6,
     reviewCount: 234,
@@ -423,7 +423,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500&h=500&fit=crop'
     ],
-    category: 'Electronics',
+    category: 'Accessories',
     brand: 'GameTech',
     rating: 4.7,
     reviewCount: 156,
@@ -450,7 +450,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'EcoWear',
     rating: 4.7,
     reviewCount: 203,
@@ -475,7 +475,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1506629905607-1b0a0a0a0a0a?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'DenimCo',
     rating: 4.4,
     reviewCount: 187,
@@ -501,7 +501,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1591047139820-dc7fd73f61a3?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'WoolCraft',
     rating: 4.6,
     reviewCount: 92,
@@ -526,7 +526,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'RunMax',
     rating: 4.5,
     reviewCount: 145,
@@ -552,7 +552,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'FormalWear',
     rating: 4.3,
     reviewCount: 78,
@@ -580,7 +580,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Home & Kitchen',
+    category: 'Office & Travel',
     brand: 'HydroLife',
     rating: 4.6,
     reviewCount: 156,
@@ -605,7 +605,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=500&h=500&fit=crop'
     ],
-    category: 'Home & Kitchen',
+    category: 'Office & Travel',
     brand: 'CookPro',
     rating: 4.4,
     reviewCount: 89,
@@ -630,7 +630,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=500&h=500&fit=crop'
     ],
-    category: 'Home & Kitchen',
+    category: 'Office & Travel',
     brand: 'BrewTech',
     rating: 4.7,
     reviewCount: 134,
@@ -656,7 +656,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1581578731548-c6a0c3f2fcc0?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500&h=500&fit=crop'
     ],
-    category: 'Home & Kitchen',
+    category: 'Office & Travel',
     brand: 'AirClean',
     rating: 4.5,
     reviewCount: 67,
@@ -681,7 +681,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&h=500&fit=crop'
     ],
-    category: 'Home & Kitchen',
+    category: 'Office & Travel',
     brand: 'ChefPro',
     rating: 4.8,
     reviewCount: 203,
@@ -709,7 +709,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1591047139820-dc7fd73f61a3?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop'
     ],
-    category: 'Clothing',
+    category: 'Women',
     brand: 'VintageLeather',
     rating: 4.8,
     reviewCount: 94,
@@ -735,7 +735,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'CustomCraft',
     rating: 4.9,
     reviewCount: 178,
@@ -760,7 +760,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1594223274512-ad4803739b7c?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'MinimalLeather',
     rating: 4.7,
     reviewCount: 156,
@@ -785,7 +785,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'HandCraft',
     rating: 4.6,
     reviewCount: 89,
@@ -810,7 +810,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1511381939415-e44015466834?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Leather Goods',
+    category: 'Men',
     brand: 'BohoLeather',
     rating: 4.8,
     reviewCount: 112,
@@ -838,7 +838,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=500&fit=crop'
     ],
-    category: 'Sports & Outdoors',
+    category: 'Men',
     brand: 'YogaPro',
     rating: 4.6,
     reviewCount: 187,
@@ -863,7 +863,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=500&h=500&fit=crop'
     ],
-    category: 'Sports & Outdoors',
+    category: 'Men',
     brand: 'FitBand',
     rating: 4.4,
     reviewCount: 134,
@@ -889,7 +889,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=500&fit=crop'
     ],
-    category: 'Sports & Outdoors',
+    category: 'Men',
     brand: 'HikePro',
     rating: 4.5,
     reviewCount: 92,
@@ -914,7 +914,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop'
     ],
-    category: 'Sports & Outdoors',
+    category: 'Men',
     brand: 'SportBottle',
     rating: 4.7,
     reviewCount: 203,
@@ -940,7 +940,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=500&fit=crop'
     ],
-    category: 'Sports & Outdoors',
+    category: 'Men',
     brand: 'TennisPro',
     rating: 4.6,
     reviewCount: 78,
@@ -967,7 +967,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=500&h=500&fit=crop'
     ],
-    category: 'Books',
+    category: 'Office & Travel',
     brand: 'FinancePress',
     rating: 4.8,
     reviewCount: 234,
@@ -993,7 +993,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=500&h=500&fit=crop'
     ],
-    category: 'Books',
+    category: 'Office & Travel',
     brand: 'SelfHelpBooks',
     rating: 4.9,
     reviewCount: 456,
@@ -1018,7 +1018,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=500&h=500&fit=crop'
     ],
-    category: 'Books',
+    category: 'Office & Travel',
     brand: 'BusinessBooks',
     rating: 4.5,
     reviewCount: 189,
@@ -1044,7 +1044,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=500&h=500&fit=crop'
     ],
-    category: 'Books',
+    category: 'Office & Travel',
     brand: 'HistoryPress',
     rating: 4.7,
     reviewCount: 312,
@@ -1069,7 +1069,7 @@ export const sampleProducts: Product[] = [
       'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=500&h=500&fit=crop',
       'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=500&h=500&fit=crop'
     ],
-    category: 'Books',
+    category: 'Office & Travel',
     brand: 'SelfHelpBooks',
     rating: 4.6,
     reviewCount: 567,
@@ -1087,10 +1087,9 @@ export const sampleProducts: Product[] = [
 ];
 
 export const categories = [
-  { id: 'leather-goods', name: 'Leather Goods', slug: 'leather-goods' },
-  { id: 'clothing', name: 'Clothing', slug: 'clothing' },
-  { id: 'electronics', name: 'Electronics', slug: 'electronics' },
-  { id: 'home-kitchen', name: 'Home & Kitchen', slug: 'home-kitchen' },
-  { id: 'sports', name: 'Sports & Outdoors', slug: 'sports' },
-  { id: 'books', name: 'Books', slug: 'books' }
+  { id: 'men', name: 'Men', slug: 'men' },
+  { id: 'women', name: 'Women', slug: 'women' },
+  { id: 'office-travel', name: 'Office & Travel', slug: 'office-travel' },
+  { id: 'accessories', name: 'Accessories', slug: 'accessories' },
+  { id: 'gifting', name: 'Gifting', slug: 'gifting' }
 ];

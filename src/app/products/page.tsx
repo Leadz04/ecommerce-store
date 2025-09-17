@@ -24,7 +24,7 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
 
-  const categories = ['all', 'Leather Goods', 'Electronics', 'Clothing', 'Home & Kitchen', 'Food & Beverage', 'Sports & Outdoors', 'Books'];
+  const categories = ['all', 'Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'];
 
   // Initialize from URL params
   useEffect(() => {

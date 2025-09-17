@@ -28,12 +28,11 @@ interface ProductFormProps {
 }
 
 const CATEGORIES = [
-  'Electronics',
-  'Clothing',
-  'Home & Kitchen',
-  'Food & Beverage',
-  'Sports & Outdoors',
-  'Books'
+  'Men',
+  'Women',
+  'Office & Travel',
+  'Accessories',
+  'Gifting'
 ];
 
 const BRANDS = [
