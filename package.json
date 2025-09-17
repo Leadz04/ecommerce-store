@@ -19,7 +19,8 @@
     "migrate:generate": "node scripts/migrate.js generate",
     "migrate:auto": "node scripts/migrate.js auto",
     "migrate:snapshot": "node scripts/migrate.js snapshot",
-    "migrate:diff": "node scripts/migrate.js diff"
+    "migrate:diff": "node scripts/migrate.js diff",
+    "import:products": "node scripts/import-scraped-products.js scraped.csv"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^4.0.1",

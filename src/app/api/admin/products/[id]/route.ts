@@ -63,7 +63,10 @@ export async function PUT(
       stockCount,
       tags,
       specifications,
-      isActive
+      isActive,
+      productType,
+      sourceUrl,
+      variants
     } = body;
 
     const product = await Product.findById(id);
@@ -106,6 +109,9 @@ export async function PUT(
     if (tags !== undefined) product.tags = tags;
     if (specifications !== undefined) product.specifications = specifications;
     if (typeof isActive === 'boolean') product.isActive = isActive;
+    if (productType !== undefined) (product as any).productType = productType;
+    if (sourceUrl !== undefined) (product as any).sourceUrl = sourceUrl;
+    if (variants !== undefined) (product as any).variants = variants;
 
     await product.save();
 
@@ -122,10 +128,11 @@ export async function PUT(
         { status: 403 }
       );
     }
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    const err: any = error;
+    if (err?.name === 'ValidationError') {
+      return NextResponse.json({ error: err.message, errors: err.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

@@ -160,6 +160,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productPage, setProductPage] = useState(1);
+  const [productPerPage, setProductPerPage] = useState(20);
   const [orders, setOrders] = useState<Order[]>([]);
   const [occasions, setOccasions] = useState<Occasion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -331,7 +333,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/products', {
+      const response = await fetch('/api/admin/products?limit=100', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -343,6 +345,8 @@ export default function AdminDashboard() {
 
       const data = await response.json();
       setProducts(data.products);
+      // Reset to first page on fresh fetch
+      setProductPage(1);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to fetch products');
@@ -1236,14 +1240,14 @@ export default function AdminDashboard() {
                       type="text"
                       placeholder="Search products..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => { setSearchTerm(e.target.value); setProductPage(1); }}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
                 <select
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  onChange={(e) => { setSelectedCategory(e.target.value); setProductPage(1); }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Categories</option>
@@ -1256,7 +1260,7 @@ export default function AdminDashboard() {
                 </select>
                 <select
                   value={selectedBrand}
-                  onChange={(e) => setSelectedBrand(e.target.value)}
+                  onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">All Brands</option>
@@ -1289,32 +1293,32 @@ export default function AdminDashboard() {
                 <TableSkeleton rows={8} columns={6} />
               ) : (
                 <table className="min-w-full divide-y divide-gray-200 min-w-[1000px]">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-100">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Product
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Category
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Brand
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Price
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Stock
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-100">
                     {products
                       .filter(product => {
                         const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1324,39 +1328,40 @@ export default function AdminDashboard() {
                         const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
                         return matchesSearch && matchesCategory && matchesBrand;
                       })
-                      .map((product) => (
-                      <tr key={product._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleEditProduct(product)}>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      .slice((productPage - 1) * productPerPage, productPage * productPerPage)
+                      .map((product, index) => (
+                      <tr key={product._id} className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`} onClick={() => handleEditProduct(product)}>
+                        <td className="px-6 py-5 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-12 w-12">
+                            <div className="flex-shrink-0 h-14 w-14">
                               <img
-                                className="h-12 w-12 rounded-lg object-cover"
+                                className="h-14 w-14 rounded-xl object-cover shadow-sm border border-gray-200"
                                 src={product.image}
                                 alt={product.name}
                               />
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-semibold text-gray-900">
                                 {product.name}
                               </div>
-                              <div className="text-sm text-gray-500 truncate max-w-xs">
+                              <div className="text-sm text-gray-600 truncate max-w-xs">
                                 {product.description}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
                             {product.category}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-5 whitespace-nowrap text-sm font-medium text-gray-700">
                           {product.brand}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-5 whitespace-nowrap text-sm">
                           <div className="flex items-center">
-                            <DollarSign className="h-4 w-4 text-gray-400 mr-1" />
-                            {product.price.toFixed(2)}
+                            <DollarSign className="h-4 w-4 text-green-500 mr-1" />
+                            <span className="font-semibold text-gray-900">${product.price.toFixed(2)}</span>
                             {product.originalPrice && product.originalPrice > product.price && (
                               <span className="ml-2 text-sm text-gray-500 line-through">
                                 ${product.originalPrice.toFixed(2)}
@@ -1364,38 +1369,38 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-5 whitespace-nowrap text-sm">
                           <div className="flex items-center">
-                            <Package className="h-4 w-4 text-gray-400 mr-1" />
-                            {product.stockCount}
+                            <Package className="h-4 w-4 text-indigo-500 mr-1" />
+                            <span className="font-medium text-gray-700">{product.stockCount}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <div className="flex flex-col space-y-1">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                               product.isActive 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
+                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                                : 'bg-red-100 text-red-800 border border-red-200'
                             }`}>
                               {product.isActive ? 'Active' : 'Inactive'}
                             </span>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                               product.inStock 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
                             }`}>
                               {product.inStock ? 'In Stock' : 'Out of Stock'}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEditProduct(product);
                               }}
-                              className="text-indigo-600 hover:text-indigo-900"
+                              className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors duration-150"
                               title="Edit product"
                             >
                               <Edit className="h-4 w-4" />
@@ -1405,7 +1410,7 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleDeleteProduct(product._id);
                               }}
-                              className="text-red-600 hover:text-red-900"
+                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors duration-150"
                               title="Delete product"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1418,6 +1423,73 @@ export default function AdminDashboard() {
                 </table>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {!loading && (
+              <div className="flex items-center justify-between px-6 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-t border-gray-200">
+                <div className="text-sm text-gray-600 font-medium">
+                  {(() => {
+                    const filteredCount = products.filter(product => {
+                      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                      const matchesCategory = !selectedCategory || product.category === selectedCategory;
+                      const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                      return matchesSearch && matchesCategory && matchesBrand;
+                    }).length;
+                    const start = (productPage - 1) * productPerPage + 1;
+                    const end = Math.min(productPage * productPerPage, filteredCount);
+                    return `Showing ${start}-${end} of ${filteredCount} products`;
+                  })()}
+                </div>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600 font-medium">Show:</span>
+                    <select
+                      value={productPerPage}
+                      onChange={(e) => { setProductPerPage(parseInt(e.target.value)); setProductPage(1); }}
+                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                    >
+                      <option value={10}>10 per page</option>
+                      <option value={20}>20 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
+                      disabled={productPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <div className="flex items-center space-x-1">
+                      <span className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-100 rounded-lg">
+                        {productPage}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const filteredCount = products.filter(product => {
+                          const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                          const matchesCategory = !selectedCategory || product.category === selectedCategory;
+                          const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                          return matchesSearch && matchesCategory && matchesBrand;
+                        }).length;
+                        const totalPages = Math.max(1, Math.ceil(filteredCount / productPerPage));
+                        setProductPage((p) => Math.min(totalPages, p + 1));
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

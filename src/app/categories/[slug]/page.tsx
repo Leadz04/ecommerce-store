@@ -104,7 +104,9 @@ SearchAndControls.displayName = 'SearchAndControls';
 const SidebarFilters = memo(({ 
   filters, 
   setFilters, 
-  updateURL, 
+  setPagination,
+  searchParams,
+  categorySlug,
   fetchProducts, 
   categoryName, 
   clearAllFilters, 
@@ -112,7 +114,9 @@ const SidebarFilters = memo(({
 }: {
   filters: any;
   setFilters: (filters: any) => void;
-  updateURL: (params: Record<string, string>) => void;
+  setPagination: (pagination: any) => void;
+  searchParams: URLSearchParams;
+  categorySlug: string;
   fetchProducts: (params: any) => void;
   categoryName: string;
   clearAllFilters: () => void;
@@ -135,7 +139,18 @@ const SidebarFilters = memo(({
             onChange={(e) => {
               const nextInStock = e.target.checked ? true : null;
               setFilters({ inStock: nextInStock });
-              updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
+              setPagination({ page: 1 });
+              // Update URL without causing re-render
+              const params = new URLSearchParams(searchParams);
+              if (e.target.checked) {
+                params.set('inStock', 'true');
+              } else {
+                params.delete('inStock');
+              }
+              params.set('page', '1');
+              const query = params.toString();
+              const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
+              window.history.replaceState(null, '', newURL);
               fetchProducts({ 
                 category: categoryName, 
                 inStock: e.target.checked ? true : undefined, 
@@ -168,7 +183,23 @@ const SidebarFilters = memo(({
               
               // Set new timeout for debounced fetch
               priceDebounceRef.current = window.setTimeout(() => {
-                updateURL({ minPrice: nextRange[0].toString(), maxPrice: nextRange[1].toString(), page: '1' });
+                setPagination({ page: 1 });
+                // Update URL without causing re-render
+                const params = new URLSearchParams(searchParams);
+                if (nextRange[0] > 0) {
+                  params.set('minPrice', nextRange[0].toString());
+                } else {
+                  params.delete('minPrice');
+                }
+                if (nextRange[1] < 1000) {
+                  params.set('maxPrice', nextRange[1].toString());
+                } else {
+                  params.delete('maxPrice');
+                }
+                params.set('page', '1');
+                const query = params.toString();
+                const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
+                window.history.replaceState(null, '', newURL);
                 fetchProducts({ 
                   category: categoryName, 
                   minPrice: nextRange[0], 
@@ -209,6 +240,7 @@ const ProductsGrid = memo(({
   categoryName, 
   filters, 
   fetchProducts, 
+  setPagination,
   clearSearch, 
   clearAllFilters 
 }: {
@@ -220,6 +252,7 @@ const ProductsGrid = memo(({
   categoryName: string;
   filters: any;
   fetchProducts: (params: any) => void;
+  setPagination: (pagination: any) => void;
   clearSearch: () => void;
   clearAllFilters: () => void;
 }) => {
@@ -227,18 +260,14 @@ const ProductsGrid = memo(({
     <div className="flex-1">
       <div className="mb-4">
         <p className="text-gray-600">
-          Showing {products.length} of {pagination.total} products
+          {isLoading ? (
+            <span className="animate-pulse">Loading products...</span>
+          ) : (
+            `Showing ${products.length} of ${pagination.total} products`
+          )}
         </p>
       </div>
 
-      {/* Loading State */}
-      {isLoading && products.length > 0 && (
-        <div className="relative">
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-lg">
-            <div className="animate-spin rounded-full h-10 w-10 border-2 border-blue-600 border-t-transparent" />
-          </div>
-        </div>
-      )}
 
       {/* Error State */}
       {error && (
@@ -302,53 +331,92 @@ const ProductsGrid = memo(({
       )}
 
       {/* Products */}
-      {!isLoading && !error && products.length > 0 && (
-        <div className={`grid gap-6 ${
-          viewMode === 'grid' 
-            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-            : 'grid-cols-1'
-        }`}>
-          {products.map((product) => (
-            <ProductCard key={(product as any)._id || (product as any).id} product={product as any} />
-          ))}
-        </div>
+      {!error && (
+        <>
+          {isLoading ? (
+            // Show skeleton when loading
+            <div className={`grid gap-6 ${
+              viewMode === 'grid' 
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                : 'grid-cols-1'
+            }`}>
+              {Array.from({ length: 12 }, (_, i) => (
+                <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 animate-pulse">
+                  <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded mb-2 w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          ) : products.length > 0 ? (
+            // Show products normally
+            <div className={`grid gap-6 ${
+              viewMode === 'grid' 
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                : 'grid-cols-1'
+            }`}>
+              {products.map((product) => (
+                <ProductCard key={(product as any)._id || (product as any).id} product={product as any} />
+              ))}
+            </div>
+          ) : null}
+        </>
       )}
 
       {/* Pagination */}
       {pagination.pages > 1 && (
-        <div className="flex justify-center mt-8">
-          <div className="flex space-x-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between mt-12 px-6 py-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+          <div className="text-sm text-gray-600 font-medium mb-4 sm:mb-0">
+            Showing {((pagination.page - 1) * 12) + 1} to {Math.min(pagination.page * 12, pagination.total)} of {pagination.total} products
+          </div>
+          
+          <div className="flex items-center space-x-2">
             <button
-              onClick={() => fetchProducts({ category: categoryName, page: pagination.page - 1 })}
-              disabled={pagination.page === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              onClick={() => {
+                const newPage = pagination.page - 1;
+                setPagination({ page: newPage });
+                fetchProducts({ category: categoryName, page: newPage });
+              }}
+              disabled={pagination.page === 1 || isLoading}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
             >
-              Previous
+              {isLoading ? '...' : 'Previous'}
             </button>
 
-            {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-              const page = i + 1;
-              return (
-                <button
-                  key={page}
-                  onClick={() => fetchProducts({ category: categoryName, page })}
-                  className={`px-4 py-2 border rounded-lg ${
-                    page === pagination.page
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                const page = i + 1;
+                return (
+                  <button
+                    key={page}
+                    onClick={() => {
+                      setPagination({ page });
+                      fetchProducts({ category: categoryName, page });
+                    }}
+                    disabled={isLoading}
+                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      page === pagination.page
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-white hover:text-blue-600 border border-gray-300 bg-white'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
 
             <button
-              onClick={() => fetchProducts({ category: categoryName, page: pagination.page + 1 })}
-              disabled={pagination.page === pagination.pages}
-              className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              onClick={() => {
+                const newPage = pagination.page + 1;
+                setPagination({ page: newPage });
+                fetchProducts({ category: categoryName, page: newPage });
+              }}
+              disabled={pagination.page === pagination.pages || isLoading}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
             >
-              Next
+              {isLoading ? '...' : 'Next'}
             </button>
           </div>
         </div>
@@ -385,7 +453,8 @@ export default function CategoryPage() {
     pagination,
     filters,
     fetchProducts,
-    setFilters
+    setFilters,
+    setPagination
   } = useProductStore();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -393,10 +462,11 @@ export default function CategoryPage() {
   const [searchInput, setSearchInput] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const priceDebounceRef = useRef<number | null>(null);
+  const initializationRef = useRef(false);
 
   // Initialize from URL params only once
   useEffect(() => {
-    if (isInitialized) return;
+    if (initializationRef.current) return;
     
     const search = searchParams.get('search') || '';
     const sortBy = searchParams.get('sortBy') || 'name';
@@ -418,8 +488,9 @@ export default function CategoryPage() {
       page 
     });
     
+    initializationRef.current = true;
     setIsInitialized(true);
-  }, [categoryName, setFilters, fetchProducts, isInitialized]);
+  }, [categoryName, setFilters, fetchProducts, searchParams]);
 
   // Update URL when filters change
   const updateURL = useCallback((newParams: Record<string, string>) => {
@@ -445,32 +516,72 @@ export default function CategoryPage() {
     const t = setTimeout(() => {
       if (searchInput !== filters.search) {
         setFilters({ search: searchInput });
-        updateURL({ search: searchInput, page: '1' });
+        setPagination({ page: 1 });
         fetchProducts({ category: categoryName, search: searchInput, page: 1 });
+        // Update URL after state changes to avoid triggering effects
+        setTimeout(() => {
+          const params = new URLSearchParams(searchParams);
+          if (searchInput) {
+            params.set('search', searchInput);
+          } else {
+            params.delete('search');
+          }
+          params.set('page', '1');
+          const query = params.toString();
+          const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
+          window.history.replaceState(null, '', newURL);
+        }, 0);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, updateURL, isInitialized]);
+  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, setPagination, searchParams, categorySlug, isInitialized]);
 
   const handleSortChange = useCallback((sortBy: string) => {
     setFilters({ sortBy });
-    updateURL({ sortBy, page: '1' });
+    setPagination({ page: 1 });
     fetchProducts({ category: categoryName, sortBy, page: 1 });
-  }, [setFilters, updateURL, fetchProducts, categoryName]);
+    // Update URL after state changes to avoid triggering effects
+    setTimeout(() => {
+      const params = new URLSearchParams(searchParams);
+      if (sortBy !== 'name') {
+        params.set('sortBy', sortBy);
+      } else {
+        params.delete('sortBy');
+      }
+      params.set('page', '1');
+      const query = params.toString();
+      const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
+      window.history.replaceState(null, '', newURL);
+    }, 0);
+  }, [setFilters, setPagination, searchParams, categorySlug, fetchProducts, categoryName]);
 
   const clearSearch = useCallback(() => {
     setSearchInput('');
     setFilters({ search: '' });
-    updateURL({ search: '', page: '1' });
+    setPagination({ page: 1 });
     fetchProducts({ category: categoryName, search: '', page: 1 });
-  }, [setFilters, updateURL, fetchProducts, categoryName]);
+    // Update URL after state changes to avoid triggering effects
+    setTimeout(() => {
+      const params = new URLSearchParams(searchParams);
+      params.delete('search');
+      params.set('page', '1');
+      const query = params.toString();
+      const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
+      window.history.replaceState(null, '', newURL);
+    }, 0);
+  }, [setFilters, setPagination, searchParams, categorySlug, fetchProducts, categoryName]);
 
   const clearAllFilters = useCallback(() => {
     setSearchInput('');
     setFilters({ search: '', priceRange: [0, 1000], inStock: null });
-    updateURL({});
+    setPagination({ page: 1 });
     fetchProducts({ category: categoryName, search: '', minPrice: 0, maxPrice: 1000, page: 1 });
-  }, [setFilters, updateURL, fetchProducts, categoryName]);
+    // Update URL after state changes to avoid triggering effects
+    setTimeout(() => {
+      const newURL = `/categories/${categorySlug}`;
+      window.history.replaceState(null, '', newURL);
+    }, 0);
+  }, [setFilters, setPagination, categorySlug, fetchProducts, categoryName]);
 
   const categoryInfo = {
     'Electronics': {
@@ -606,7 +717,9 @@ export default function CategoryPage() {
               <SidebarFilters
                 filters={filters}
                 setFilters={setFilters}
-                updateURL={updateURL}
+                setPagination={setPagination}
+                searchParams={searchParams}
+                categorySlug={categorySlug}
                 fetchProducts={fetchProducts}
                 categoryName={categoryName}
                 clearAllFilters={clearAllFilters}
@@ -624,6 +737,7 @@ export default function CategoryPage() {
               categoryName={categoryName}
               filters={filters}
               fetchProducts={fetchProducts}
+              setPagination={setPagination}
               clearSearch={clearSearch}
               clearAllFilters={clearAllFilters}
             />

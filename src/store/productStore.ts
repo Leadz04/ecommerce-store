@@ -33,6 +33,7 @@ interface ProductStore {
   }) => Promise<void>;
   fetchProduct: (id: string) => Promise<void>;
   setFilters: (filters: Partial<ProductStore['filters']>) => void;
+  setPagination: (pagination: Partial<ProductStore['pagination']>) => void;
   clearError: () => void;
 }
 
@@ -64,9 +65,9 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       const { filters } = get();
       const searchParams = new URLSearchParams();
       
-      // Use provided params or fall back to store filters
-      searchParams.set('page', (params.page || filters.search ? 1 : get().pagination.page).toString());
-      searchParams.set('limit', (params.limit || 12).toString());
+      // Use provided params or fall back to store pagination
+      searchParams.set('page', (params.page || get().pagination.page).toString());
+      searchParams.set('limit', (params.limit || get().pagination.limit).toString());
       
       if (params.category || filters.category !== 'all') {
         searchParams.set('category', params.category || filters.category);
@@ -143,6 +144,12 @@ export const useProductStore = create<ProductStore>((set, get) => ({
   setFilters: (newFilters) => {
     set((state) => ({
       filters: { ...state.filters, ...newFilters }
+    }));
+  },
+
+  setPagination: (newPagination) => {
+    set((state) => ({
+      pagination: { ...state.pagination, ...newPagination }
     }));
   },
 

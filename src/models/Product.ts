@@ -8,15 +8,25 @@ export interface IProduct extends Document {
   originalPrice?: number;
   image: string;
   images: string[];
-  category: string;
-  brand: string;
+  category?: string;
+  brand?: string;
   rating: number;
   reviewCount: number;
   inStock: boolean;
-  stockCount: number;
+  stockCount?: number;
   tags: string[];
   specifications: Record<string, string>;
   isActive: boolean;
+  sourceUrl?: string;
+  productType?: string;
+  variants?: Array<{
+    title?: string;
+    sku?: string;
+    price?: number;
+    originalPrice?: number;
+    available?: boolean;
+    inventory?: number | null;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,13 +36,13 @@ const ProductSchema = new Schema<IProduct>({
     type: String,
     required: [true, 'Product name is required'],
     trim: true,
-    maxlength: [100, 'Product name cannot be more than 100 characters']
+    maxlength: [200, 'Product name cannot be more than 200 characters']
   },
   description: {
     type: String,
     required: [true, 'Product description is required'],
     trim: true,
-    maxlength: [1000, 'Description cannot be more than 1000 characters']
+    maxlength: [5000, 'Description cannot be more than 5000 characters']
   },
   price: {
     type: Number,
@@ -52,12 +62,11 @@ const ProductSchema = new Schema<IProduct>({
   }],
   category: {
     type: String,
-    required: [true, 'Category is required'],
-    enum: ['Leather Goods', 'Electronics', 'Clothing', 'Home & Kitchen', 'Food & Beverage', 'Sports & Outdoors', 'Books']
+    required: false,
   },
   brand: {
     type: String,
-    required: [true, 'Brand is required'],
+    required: false,
     trim: true
   },
   rating: {
@@ -77,7 +86,8 @@ const ProductSchema = new Schema<IProduct>({
   },
   stockCount: {
     type: Number,
-    required: [true, 'Stock count is required'],
+    required: false,
+    default: 0,
     min: [0, 'Stock count cannot be negative']
   },
   tags: [{
@@ -91,7 +101,23 @@ const ProductSchema = new Schema<IProduct>({
   isActive: {
     type: Boolean,
     default: true
-  }
+  },
+  sourceUrl: {
+    type: String,
+    index: true,
+    sparse: true,
+  },
+  productType: {
+    type: String,
+  },
+  variants: [{
+    title: { type: String },
+    sku: { type: String },
+    price: { type: Number, min: 0 },
+    originalPrice: { type: Number, min: 0 },
+    available: { type: Boolean },
+    inventory: { type: Number, min: 0, required: false },
+  }]
 }, {
   timestamps: true
 });

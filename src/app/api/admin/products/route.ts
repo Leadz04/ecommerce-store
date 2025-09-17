@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 1000);
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const brand = searchParams.get('brand') || '';
@@ -118,13 +118,16 @@ export async function POST(request: NextRequest) {
       stockCount,
       tags,
       specifications,
-      isActive = true
+      isActive = true,
+      productType,
+      sourceUrl,
+      variants
     } = body;
 
     // Validate required fields
-    if (!name || !description || !price || !image || !category || !brand || stockCount === undefined) {
+    if (!name || !description || price === undefined || price === null || !image) {
       return NextResponse.json(
-        { error: 'Name, description, price, image, category, brand, and stock count are required' },
+        { error: 'Name, description, price, and image are required' },
         { status: 400 }
       );
     }
@@ -138,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate stock count
-    if (stockCount < 0) {
+    if (stockCount !== undefined && stockCount < 0) {
       return NextResponse.json(
         { error: 'Stock count cannot be negative' },
         { status: 400 }
@@ -146,6 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new product
+    const normalizedStock = typeof stockCount === 'number' ? stockCount : 0;
     const product = new Product({
       name,
       description,
@@ -155,11 +159,14 @@ export async function POST(request: NextRequest) {
       images: images || [],
       category,
       brand,
-      stockCount,
-      inStock: stockCount > 0,
+      stockCount: normalizedStock,
+      inStock: normalizedStock > 0,
       tags: tags || [],
       specifications: specifications || {},
-      isActive
+      isActive,
+      productType,
+      sourceUrl,
+      variants
     });
 
     await product.save();
@@ -177,9 +184,11 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Surface validation details when possible
+    const err: any = error;
+    if (err?.name === 'ValidationError') {
+      return NextResponse.json({ error: err.message, errors: err.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
