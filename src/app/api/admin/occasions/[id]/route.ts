@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 import Occasion from '@/models/Occasion';
 
 // GET /api/admin/occasions/[id] - Get single occasion
@@ -11,8 +12,8 @@ export async function GET(
   try {
     await connectDB();
     
-    // Require SUPER_ADMIN permission
-    const userId = await requirePermission(request, 'SUPER_ADMIN');
+    // Require content management permission
+    await requirePermission(PERMISSIONS.CONTENT_MANAGE)(request);
     
     const { id } = await context.params;
     
@@ -44,8 +45,8 @@ export async function PUT(
   try {
     await connectDB();
     
-    // Require SUPER_ADMIN permission
-    const userId = await requirePermission(request, 'SUPER_ADMIN');
+    // Require content management permission
+    await requirePermission(PERMISSIONS.CONTENT_MANAGE)(request);
     
     const { id } = await context.params;
     const body = await request.json();
@@ -140,8 +141,8 @@ export async function DELETE(
   try {
     await connectDB();
     
-    // Require SUPER_ADMIN permission
-    const userId = await requirePermission(request, 'SUPER_ADMIN');
+    // Require content management permission
+    await requirePermission(PERMISSIONS.CONTENT_MANAGE)(request);
     
     const { id } = await context.params;
     

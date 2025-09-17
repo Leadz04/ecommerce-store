@@ -179,13 +179,30 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
   const handleInputChange = (field: string, value: any) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent as keyof typeof prev],
-          [child]: value
+      setFormData(prev => {
+        if (parent === 'address') {
+          return {
+            ...prev,
+            address: {
+              ...prev.address,
+              [child]: value
+            }
+          };
         }
-      }));
+        if (parent === 'settings') {
+          return {
+            ...prev,
+            settings: {
+              ...prev.settings,
+              [child]: value
+            }
+          };
+        }
+        return {
+          ...prev,
+          [parent]: value as never
+        };
+      });
     } else {
       setFormData(prev => ({
         ...prev,

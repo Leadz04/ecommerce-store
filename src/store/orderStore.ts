@@ -23,7 +23,15 @@ interface OrderStore {
   }) => Promise<void>;
   fetchOrder: (id: string) => Promise<void>;
   createOrder: (orderData: {
-    items: CartItem[];
+    items: {
+      productId: string | undefined;
+      name: string;
+      price: number;
+      quantity: number;
+      image: string;
+      size?: string;
+      color?: string;
+    }[];
     subtotal: number;
     shipping: number;
     tax: number;
@@ -31,6 +39,8 @@ interface OrderStore {
     shippingAddress: any;
     billingAddress: any;
     paymentMethod: string;
+    paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+    paymentIntentId?: string;
   }) => Promise<Order>;
   updateOrder: (id: string, updates: Partial<Order>) => Promise<void>;
   clearError: () => void;

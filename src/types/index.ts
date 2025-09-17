@@ -1,5 +1,5 @@
 export interface Product {
-  _id: string;
+  _id?: string;
   id?: string; // For backward compatibility
   name: string;
   description: string;
@@ -125,6 +125,8 @@ export interface Order {
   tax?: number;
   total: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+  paymentIntentId?: string;
   shippingAddress: Address;
   billingAddress: Address;
   paymentMethod: string;

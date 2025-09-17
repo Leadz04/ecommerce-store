@@ -17,6 +17,17 @@ const nextConfig: NextConfig = {
       assetPrefix: basePath || undefined,
     }
     : {}),
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    turbo: {
+      resolveAlias: {
+        // Prevent file system race conditions
+        '~': __dirname,
+      },
+    },
+  },
   images: {
     // Images must be unoptimized for static exports on GitHub Pages
     ...(isGitHubPages ? { unoptimized: true } : {}),

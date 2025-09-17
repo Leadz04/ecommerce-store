@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 // Email configuration
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER || 'testleadz04@gmail.com',

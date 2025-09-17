@@ -226,7 +226,7 @@ export default function CheckoutPage() {
             phone: formData.phone
           },
           paymentMethod: 'card',
-          paymentStatus: 'pending'
+          paymentStatus: 'pending' as const
         };
 
         console.log('Creating order with data:', orderData);

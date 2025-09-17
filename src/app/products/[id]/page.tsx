@@ -40,7 +40,7 @@ export default function ProductPage() {
     fetchProducts();
   }, [fetchProducts]);
   
-  if (isLoading) {
+  if (isLoading || !currentProduct) {
     return <ProductDetailSkeleton />;
   }
   
@@ -75,7 +75,7 @@ export default function ProductPage() {
     router.push(`/products/${productId}`);
   };
 
-  const images = product.images || [product.image];
+  const images = product.images && product.images.length > 0 ? product.images : [product.image];
   const sizes = ['XS', 'S', 'M', 'L', 'XL'];
   const colors = ['Black', 'White', 'Blue', 'Red'];
 
@@ -298,8 +298,8 @@ export default function ProductPage() {
                   .slice(0, 4)
                   .map((relatedProduct) => (
               <div 
-                key={relatedProduct._id} 
-                onClick={() => handleRelatedProductClick(relatedProduct._id)}
+                key={(relatedProduct._id || relatedProduct.id) as string} 
+                onClick={() => handleRelatedProductClick((relatedProduct._id || relatedProduct.id) as string)}
                 className="bg-white  rounded-xl shadow-lg border border-gray-200  overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
               >
                 <div className="aspect-square overflow-hidden bg-gray-100 ">

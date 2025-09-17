@@ -296,7 +296,11 @@ export default function Header() {
       {/* Cart Sidebar */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setIsCartOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+            onClick={() => setIsCartOpen(false)}
+            aria-hidden="true"
+          />
           <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl">
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b">

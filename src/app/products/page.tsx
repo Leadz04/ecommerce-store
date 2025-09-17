@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, Grid, List, SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { LoadingSkeleton, ProductCardSkeleton } from '@/components/LoadingSkeleton';
+import { ProductCardSkeleton } from '@/components/LoadingSkeleton';
 import { useProductStore } from '@/store/productStore';
 
 export default function ProductsPage() {

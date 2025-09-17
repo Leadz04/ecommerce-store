@@ -21,14 +21,7 @@ import { useWishlistStore } from '@/store/wishlistStore';
 import { useCartStore } from '@/store/cartStore';
 import toast from 'react-hot-toast';
 
-interface Order {
-  _id: string;
-  orderNumber: string;
-  status: string;
-  total: number;
-  items: any[];
-  createdAt: string;
-}
+import type { Order } from '@/types';
 
 export default function CustomerDashboard() {
   const router = useRouter();

@@ -89,7 +89,8 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       }
       
       if (params.inStock !== undefined || filters.inStock !== null) {
-        searchParams.set('inStock', (params.inStock !== undefined ? params.inStock : filters.inStock).toString());
+        const inStockValue = (params.inStock !== undefined ? params.inStock : filters.inStock) ?? false;
+        searchParams.set('inStock', String(inStockValue));
       }
 
       const response = await fetch(`${API_BASE_URL}/api/products?${searchParams.toString()}`);

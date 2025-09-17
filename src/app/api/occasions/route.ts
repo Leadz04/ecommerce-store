@@ -8,8 +8,7 @@ export async function GET() {
     
     // Get all active occasions from database
     const occasions = await Occasion.find({ isActive: true })
-      .sort({ date: 1 })
-      .lean();
+      .sort({ date: 1 });
     
     // Transform to match the expected format
     const transformedOccasions = occasions.map(occasion => {

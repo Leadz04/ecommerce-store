@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 import Occasion from '@/models/Occasion';
 
 // GET /api/admin/occasions - Get all occasions
@@ -8,8 +9,8 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     
-    // Require SUPER_ADMIN permission
-    const userId = await requirePermission(request, 'SUPER_ADMIN');
+    // Require content management permission
+    await requirePermission(PERMISSIONS.CONTENT_MANAGE)(request);
     
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -76,8 +77,8 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     
-    // Require SUPER_ADMIN permission
-    const userId = await requirePermission(request, 'SUPER_ADMIN');
+    // Require content management permission
+    const user = await requirePermission(PERMISSIONS.CONTENT_MANAGE)(request);
     
     const body = await request.json();
     const { name, description, date, orderDaysBefore, image, link, isActive } = body;
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
       image: image || 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=500&h=500&fit=crop',
       link: link || '/products?category=gifts',
       isActive: isActive !== false,
-      createdBy: userId
+      createdBy: user.userId
     });
     
     await occasion.save();
