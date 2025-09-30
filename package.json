@@ -26,7 +26,8 @@
     "update:men": "node scripts/update-men-category.js",
     "ensure:men": "node scripts/ensure-men-products.js",
     "import:men": "node scripts/import-men-from-scraped.js",
-    "categorize:all": "node scripts/categorize-all-products.js"
+    "categorize:all": "node scripts/categorize-all-products.js",
+    "rss": "echo RSS available at /rss.xml"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^4.0.1",
@@ -35,7 +36,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/nodemailer": "^7.0.1",
     "@types/uuid": "^10.0.0",
+    "axios": "^1.12.2",
     "bcryptjs": "^3.0.2",
+    "cheerio": "^1.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "csv-parser": "^3.2.0",
@@ -47,6 +50,8 @@
     "next": "15.5.2",
     "next-auth": "^4.24.11",
     "nodemailer": "^6.10.1",
+    "open-graph-scraper": "^6.10.0",
+    "psi": "^4.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hot-toast": "^2.4.1",

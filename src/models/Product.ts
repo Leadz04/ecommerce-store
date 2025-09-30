@@ -4,6 +4,7 @@ export interface IProduct extends Document {
   _id: string;
   name: string;
   description: string;
+  descriptionHtml?: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -19,6 +20,8 @@ export interface IProduct extends Document {
   isActive: boolean;
   sourceUrl?: string;
   productType?: string;
+  status?: 'draft' | 'published' | 'archived';
+  publishAt?: Date | null;
   variants?: Array<{
     title?: string;
     sku?: string;
@@ -43,6 +46,11 @@ const ProductSchema = new Schema<IProduct>({
     required: [true, 'Product description is required'],
     trim: true,
     maxlength: [5000, 'Description cannot be more than 5000 characters']
+  },
+  descriptionHtml: {
+    type: String,
+    required: false,
+    maxlength: [20000, 'HTML description too long']
   },
   price: {
     type: Number,
@@ -110,6 +118,17 @@ const ProductSchema = new Schema<IProduct>({
   },
   productType: {
     type: String,
+  },
+  status: {
+    type: String,
+    enum: ['draft', 'published', 'archived'],
+    default: 'draft',
+    index: true,
+  },
+  publishAt: {
+    type: Date,
+    default: null,
+    index: true,
   },
   variants: [{
     title: { type: String },

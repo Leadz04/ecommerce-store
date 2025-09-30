@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Script from 'next/script';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
 import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
@@ -35,6 +37,18 @@ export default function ProductPage() {
     }
   }, [productId, fetchProduct]);
 
+  // Log product view
+  useEffect(() => {
+    if (!productId) return;
+    try {
+      fetch('/api/analytics/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'product_view', productId })
+      });
+    } catch {}
+  }, [productId]);
+
   // Fetch all products for related products
   useEffect(() => {
     fetchProducts();
@@ -65,10 +79,18 @@ export default function ProductPage() {
     );
   }
   
-  const product = currentProduct;
+  const product = currentProduct as any;
 
   const handleAddToCart = () => {
     addItem(product, quantity, selectedSize, selectedColor);
+    // Fire analytics event
+    try {
+      fetch('/api/analytics/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'add_to_cart', productId: product._id || product.id }),
+      });
+    } catch {}
   };
 
   const handleRelatedProductClick = (productId: string) => {
@@ -92,6 +114,7 @@ export default function ProductPage() {
                 alt={product.name}
                 width={600}
                 height={600}
+                loader={cdnImageLoader}
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
               />
             </div>
@@ -99,7 +122,7 @@ export default function ProductPage() {
             {/* Thumbnail Images */}
             {images.length > 1 && (
               <div className="grid grid-cols-4 gap-3">
-                {images.map((image, index) => (
+                {images.map((image: string, index: number) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -114,6 +137,7 @@ export default function ProductPage() {
                       alt={`${product.name} ${index + 1}`}
                       width={150}
                       height={150}
+                      loader={cdnImageLoader}
                       className="w-full h-full object-cover"
                     />
                   </button>
@@ -166,6 +190,9 @@ export default function ProductPage() {
           <div>
             <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Description</h3>
             <p className="text-gray-600  leading-relaxed">{product.description}</p>
+            {product.descriptionHtml && (
+              <div className="prose max-w-none mt-4" dangerouslySetInnerHTML={{ __html: product.descriptionHtml }} />
+            )}
           </div>
 
           {/* Size Selection */}
@@ -192,7 +219,7 @@ export default function ProductPage() {
           <div>
             <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Color</h3>
             <div className="flex flex-wrap gap-2">
-              {colors.map((color) => (
+              {['Black','White','Blue','Red'].map((color) => (
                 <button
                   key={color}
                   onClick={() => setSelectedColor(color)}
@@ -278,7 +305,7 @@ export default function ProductPage() {
           <h2 className="text-2xl font-bold text-gray-900  mb-6">Specifications</h2>
           <div className="bg-white  rounded-xl p-6 shadow-lg border border-gray-200 ">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.entries(product.specifications).map(([key, value]) => (
+              {Object.entries(product.specifications).map(([key, value]: any) => (
                 <div key={key} className="flex justify-between py-3 border-b border-gray-200  last:border-b-0">
                   <span className="font-semibold text-gray-700 ">{key}</span>
                   <span className="text-gray-600  font-medium">{value}</span>
@@ -296,7 +323,7 @@ export default function ProductPage() {
                 {products
                   .filter(p => p._id !== product._id && p.category === product.category)
                   .slice(0, 4)
-                  .map((relatedProduct) => (
+                  .map((relatedProduct: any) => (
               <div 
                 key={(relatedProduct._id || relatedProduct.id) as string} 
                 onClick={() => handleRelatedProductClick((relatedProduct._id || relatedProduct.id) as string)}
@@ -308,6 +335,7 @@ export default function ProductPage() {
                     alt={relatedProduct.name}
                     width={300}
                     height={300}
+                    loader={cdnImageLoader}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -346,6 +374,24 @@ export default function ProductPage() {
         </div>
       </div>
       </div>
+
+      {/* Structured Data: Product JSON-LD */}
+      <Script id="product-jsonld" type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.name,
+          description: product.description,
+          image: images,
+          sku: product.sku || product._id,
+          brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "USD",
+            price: product.price,
+            availability: product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
+          }
+        }) }} />
     </div>
   );
 }

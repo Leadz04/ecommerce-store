@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye } from 'lucide-react';
+import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye, Calendar as CalendarIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -18,6 +18,8 @@ interface Product {
   tags: string[];
   specifications: Record<string, string>;
   isActive: boolean;
+  status?: 'draft' | 'published' | 'archived';
+  publishAt?: string | null;
 }
 
 interface ProductFormProps {
@@ -61,7 +63,9 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
     stockCount: '',
     tags: [] as string[],
     specifications: {} as Record<string, string>,
-    isActive: true
+    isActive: true,
+    status: 'draft' as 'draft' | 'published' | 'archived',
+    publishAt: '' as string,
   });
   const [newTag, setNewTag] = useState('');
   const [newSpecKey, setNewSpecKey] = useState('');
@@ -82,7 +86,9 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
         stockCount: product.stockCount?.toString() || '',
         tags: product.tags || [],
         specifications: product.specifications || {},
-        isActive: product.isActive ?? true
+        isActive: product.isActive ?? true,
+        status: (product.status as any) || 'draft',
+        publishAt: product.publishAt ? new Date(product.publishAt).toISOString().slice(0,16) : '',
       });
     } else {
       setFormData({
@@ -97,7 +103,9 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
         stockCount: '',
         tags: [],
         specifications: {},
-        isActive: true
+        isActive: true,
+        status: 'draft',
+        publishAt: '',
       });
     }
   }, [product]);
@@ -115,8 +123,9 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
         ...formData,
         price: parseFloat(formData.price),
         originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
-        stockCount: parseInt(formData.stockCount)
-      };
+        stockCount: parseInt(formData.stockCount),
+        publishAt: formData.publishAt ? new Date(formData.publishAt).toISOString() : null,
+      } as any;
 
       const response = await fetch(url, {
         method,
@@ -346,6 +355,35 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
               </div>
             </div>
 
+            {/* Publication */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+                <p className="text-xs text-gray-500">Published items are visible when publish date is now or past.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <CalendarIcon className="h-4 w-4 inline mr-2" /> Publish At (optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.publishAt}
+                  onChange={(e) => handleInputChange('publishAt', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500">Leave empty to publish immediately.</p>
+              </div>
+            </div>
+
             {/* Images */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -358,7 +396,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                 <label className="block text-sm font-medium text-gray-600 mb-2">
                   Main Image URL *
                 </label>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                   <input
                     type="url"
                     required
@@ -367,6 +405,14 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                     className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter main image URL"
                   />
+                  {formData.image && (
+                    <img
+                      src={formData.image}
+                      alt="preview"
+                      className="w-12 h-12 rounded border object-cover"
+                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={addImage}
@@ -397,6 +443,14 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                           className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           placeholder="Enter image URL"
                         />
+                        {image && (
+                          <img
+                            src={image}
+                            alt={`preview-${index}`}
+                            className="w-10 h-10 rounded border object-cover"
+                            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => removeImage(image)}

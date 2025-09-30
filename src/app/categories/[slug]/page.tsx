@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
 import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
@@ -553,6 +554,23 @@ export default function CategoryPage() {
     }, 0);
   }, [setFilters, setPagination, searchParams, categorySlug, fetchProducts, categoryName]);
 
+  // Log search analytics when searchInput changes and request returns
+  useEffect(() => {
+    if (!isInitialized) return;
+    const t = setTimeout(async () => {
+      const q = searchInput.trim();
+      if (q.length === 0) return;
+      try {
+        // Use current list length as a proxy of results
+        await fetch('/api/analytics/search', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, resultsCount: products.length })
+        });
+      } catch {}
+    }, 700);
+    return () => clearTimeout(t);
+  }, [searchInput, products.length, isInitialized]);
+
   const clearSearch = useCallback(() => {
     setSearchInput('');
     setFilters({ search: '' });
@@ -678,6 +696,7 @@ export default function CategoryPage() {
                 alt={currentCategoryInfo.title}
                 width={600}
                 height={300}
+                loader={cdnImageLoader}
                 className="rounded-lg shadow-2xl"
               />
             </div>

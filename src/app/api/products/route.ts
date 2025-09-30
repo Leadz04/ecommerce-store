@@ -15,16 +15,25 @@ export async function GET(request: NextRequest) {
     const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
     const inStock = searchParams.get('inStock');
+    const brand = searchParams.get('brand');
+    const minRating = searchParams.get('minRating');
+    const collection = (searchParams.get('collection') || '').toLowerCase();
 
-    // Build query
+    // Build query - include legacy products without status/publishAt
+    const now = new Date();
     const query: any = { isActive: true };
+
+    // Status/publish window
+    query.$and = [
+      { $or: [ { status: 'published' }, { status: { $exists: false } }, { status: null } ] },
+      { $or: [ { publishAt: null }, { publishAt: { $lte: now } }, { publishAt: { $exists: false } } ] },
+    ];
     
     if (category && category !== 'all') {
       query.category = category;
     }
     
     if (search) {
-      // Use regex for partial matching instead of text search
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
@@ -42,26 +51,54 @@ export async function GET(request: NextRequest) {
       query.inStock = true;
     }
 
-    // Build sort
-    let sort: any = {};
-    switch (sortBy) {
-      case 'price-low':
-        sort.price = 1;
-        break;
-      case 'price-high':
-        sort.price = -1;
-        break;
-      case 'rating':
-        sort.rating = -1;
-        break;
-      case 'newest':
-        sort.createdAt = -1;
-        break;
-      default:
-        sort.name = 1;
+    if (brand) {
+      query.brand = { $regex: brand, $options: 'i' };
     }
 
-    // Execute query
+    if (minRating) {
+      const parsed = parseFloat(minRating);
+      if (!Number.isNaN(parsed)) {
+        query.rating = { $gte: parsed };
+      }
+    }
+
+    // Collections can influence query and sort
+    let sort: any = {};
+    if (collection === 'new' || collection === 'new-arrivals') {
+      sort.createdAt = -1; // newest first
+    } else if (collection === 'best' || collection === 'best-sellers') {
+      sort.rating = -1;
+      sort.reviewCount = -1;
+    } else if (collection === 'seasonal' || collection === 'season') {
+      query.$or = [
+        ...(query.$or || []),
+        { tags: { $in: [/season/i] } },
+        { productType: { $regex: 'season', $options: 'i' } }
+      ];
+      if (!sortBy || sortBy === 'name') {
+        sort.createdAt = -1;
+      }
+    }
+
+    if (Object.keys(sort).length === 0) {
+      switch (sortBy) {
+        case 'price-low':
+          sort.price = 1;
+          break;
+        case 'price-high':
+          sort.price = -1;
+          break;
+        case 'rating':
+          sort.rating = -1;
+          break;
+        case 'newest':
+          sort.createdAt = -1;
+          break;
+        default:
+          sort.name = 1;
+      }
+    }
+
     const products = await Product.find(query)
       .sort(sort)
       .limit(limit * 1)
@@ -70,6 +107,11 @@ export async function GET(request: NextRequest) {
 
     const total = await Product.countDocuments(query);
 
+    const [categories, brands] = await Promise.all([
+      Product.distinct('category', { isActive: true }),
+      Product.distinct('brand', { isActive: true })
+    ]);
+
     return NextResponse.json({
       products,
       pagination: {
@@ -77,7 +119,8 @@ export async function GET(request: NextRequest) {
         limit,
         total,
         pages: Math.ceil(total / limit)
-      }
+      },
+      filters: { categories, brands }
     });
 
   } catch (error) {

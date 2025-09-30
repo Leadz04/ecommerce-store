@@ -194,6 +194,19 @@ export async function POST(request: NextRequest) {
     
     const order = new Order(orderDataWithMapping);
 
+    // Attach referral/UTM attribution from headers or cookies forwarded by middleware
+    const attribKeys = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref','aff'];
+    const attribution: Record<string, string> = {};
+    for (const key of attribKeys) {
+      const headerKey = `x-attrib-${key}`;
+      const headerVal = request.headers.get(headerKey) as string | null;
+      if (headerVal) attribution[key] = headerVal;
+    }
+    if (Object.keys(attribution).length > 0) {
+      // @ts-ignore - extend document with dynamic field without changing schema
+      order.set('attribution', attribution, { strict: false });
+    }
+
     // Validate the order before saving
     const validationError = order.validateSync();
     if (validationError) {
@@ -206,6 +219,15 @@ export async function POST(request: NextRequest) {
     }
 
     await order.save();
+
+    // Fire server-side analytics purchase event (without blocking)
+    try {
+      fetch(process.env.NEXT_PUBLIC_SITE_URL ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/analytics/events` : 'http://localhost:3000/api/analytics/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'purchase', orderId: order._id, userId, value: order.total, currency: 'USD' })
+      }).catch(() => {});
+    } catch {}
 
     console.log('Order saved successfully:', {
       _id: order._id,

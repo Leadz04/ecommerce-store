@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -31,7 +31,8 @@ import {
   Truck,
   AlertCircle,
   Calendar,
-  Gift
+  Gift,
+  Loader2
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
@@ -156,7 +157,192 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview'>('overview');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo'>('overview');
+  const [campaignSubject, setCampaignSubject] = useState('');
+  const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
+  const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
+  const [segmentPurchased, setSegmentPurchased] = useState(false);
+  const [segmentMinOrders, setSegmentMinOrders] = useState<number | ''>('');
+  const [segmentDaysSinceLogin, setSegmentDaysSinceLogin] = useState<number | ''>('');
+  const [segmentCategory, setSegmentCategory] = useState('');
+  const [sendingCampaign, setSendingCampaign] = useState(false);
+  
+  // SEO Research (SerpAPI) state
+  const [keywordQuery, setKeywordQuery] = useState('');
+  const [seoSelectedCategory, setSeoSelectedCategory] = useState('');
+  const [keywords, setKeywords] = useState<any[]>([]);
+  const [productsSeo, setProductsSeo] = useState<any[]>([]);
+  const [seoLoading, setSeoLoading] = useState<{ [key: string]: boolean }>({});
+  const seoLoadedOnceRef = useRef(false);
+  const [seoAudit, setSeoAudit] = useState<any>(null);
+  const [seoHistory, setSeoHistory] = useState<any[]>([]);
+  const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
+  const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
+
+  // Dynamic insights for Decision Helper
+  const seoInsights = useMemo(() => {
+    const k = keywords || [];
+    const p = productsSeo || [];
+
+    const vols = k.map((x: any) => Number(x.searchVolume) || 0).filter((n: number) => n > 0);
+    const diffs = k.map((x: any) => Number(x.difficulty) || 0).filter((n: number) => n > 0);
+    const compHighRatio = k.length ? k.filter((x: any) => x.competition === 'high').length / k.length : 0;
+    const avgVolume = vols.length ? Math.round(vols.reduce((a: number, b: number) => a + b, 0) / vols.length) : 0;
+    const avgDifficulty = diffs.length ? Math.round(diffs.reduce((a: number, b: number) => a + b, 0) / diffs.length) : 0;
+
+    const prices = p.map((x: any) => Number(x.price)).filter((n: number) => !Number.isNaN(n) && n > 0);
+    const ratings = p.map((x: any) => Number(x.rating)).filter((n: number) => !Number.isNaN(n) && n > 0);
+    const reviews = p.map((x: any) => Number(x.reviews)).filter((n: number) => !Number.isNaN(n) && n >= 0);
+    const discountCount = p.filter((x: any) => Number(x.originalPrice) && Number(x.price) && Number(x.originalPrice) > Number(x.price)).length;
+    const avgPrice = prices.length ? +(prices.reduce((a: number, b: number) => a + b, 0) / prices.length).toFixed(2) : undefined;
+    const avgRating = ratings.length ? +(ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length).toFixed(2) : undefined;
+    const avgReviews = reviews.length ? Math.round(reviews.reduce((a: number, b: number) => a + b, 0) / reviews.length) : undefined;
+
+    const signals: string[] = [];
+    const cautions: string[] = [];
+
+    if (avgVolume && avgVolume > 10000) signals.push(`Healthy search volume (~${avgVolume.toLocaleString()})`);
+    if (avgDifficulty && avgDifficulty < 40) signals.push(`Manageable keyword difficulty (~${avgDifficulty})`);
+    if (avgPrice && avgPrice >= 120 && avgPrice <= 300) signals.push(`Market price aligns to $120–$300 band (avg ~$${avgPrice})`);
+    if (avgRating && avgRating >= 4.5) signals.push(`Strong average rating (★ ${avgRating})`);
+    if (avgReviews && avgReviews >= 50) signals.push(`Meaningful social proof (avg ${avgReviews} reviews)`);
+    if (discountCount > 0) signals.push(`Discounted competitors detected (${discountCount} with strikethrough price)`);
+
+    if (!avgVolume || avgVolume < 3000) cautions.push('Low average search volume');
+    if (avgDifficulty && avgDifficulty > 70) cautions.push(`High keyword difficulty (~${avgDifficulty})`);
+    if (compHighRatio > 0.5) cautions.push(`High-competition share (${Math.round(compHighRatio * 100)}%)`);
+    if (!prices.length) cautions.push('Few/no product prices found');
+    if (!ratings.length) cautions.push('Few/no ratings present');
+
+    // Simple score (0-100)
+    let score = 50;
+    score += Math.min(20, Math.max(-20, Math.round((avgVolume - 5000) / 1000)));
+    score += avgDifficulty ? Math.round((40 - avgDifficulty) / 2) : 0;
+    score += avgRating ? Math.round((avgRating - 4) * 8) : 0;
+    score += avgReviews ? Math.min(10, Math.round(avgReviews / 20)) : 0;
+    score = Math.max(0, Math.min(100, score));
+
+    const action = score >= 70
+      ? 'Proceed: create 2–3 listings targeting long-tail variations; emphasize quality and value.'
+      : score >= 50
+        ? 'Cautious test: publish 1–2 listings; differentiate on materials, fit, or personalization.'
+        : 'Hold: gather more ideas, broaden the seed terms, or target seasonal angles.';
+
+    return {
+      query: keywordQuery,
+      score,
+      metrics: { avgVolume, avgDifficulty, avgPrice, avgRating, avgReviews, products: p.length, keywords: k.length },
+      signals,
+      cautions,
+      action
+    };
+  }, [keywordQuery, keywords, productsSeo]);
+  
+  // SEO Research functions
+  const searchKeywords = async () => {
+    if (!keywordQuery.trim()) return;
+    
+    setSeoLoading(prev => ({ ...prev, keywords: true }));
+    try {
+      const response = await fetch(`/api/seo/keywords?q=${encodeURIComponent(keywordQuery)}&limit=20`);
+      const data = await response.json();
+      if (data.success) {
+        setKeywords(data.keywords);
+        toast.success(`Found ${data.keywords.length} keywords`);
+      } else {
+        toast.error('Failed to search keywords');
+      }
+    } catch (error) {
+      toast.error('Error searching keywords');
+    } finally {
+      setSeoLoading(prev => ({ ...prev, keywords: false }));
+    }
+  };
+
+  const searchProducts = async () => {
+    if (!keywordQuery.trim()) return;
+    setSeoLoading(prev => ({ ...prev, products: true }));
+    try {
+      const res = await fetch(`/api/seo/products?q=${encodeURIComponent(keywordQuery)}&limit=20`);
+      const data = await res.json();
+      if (data.success) {
+        setProductsSeo(data.products);
+        toast.success(`Loaded ${data.products.length} products`);
+      } else {
+        toast.error('Failed to load products');
+      }
+    } catch (e) {
+      toast.error('Error loading products');
+    } finally {
+      setSeoLoading(prev => ({ ...prev, products: false }));
+    }
+  };
+
+  const saveSeoData = async () => {
+    try {
+      const res = await fetch('/api/seo/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: keywordQuery, keywords, products: productsSeo })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Saved SEO data to DB');
+      } else {
+        toast.error('Failed to save SEO data');
+      }
+    } catch (e) {
+      toast.error('Error saving SEO data');
+    }
+  };
+
+  const fetchSeoHistory = async () => {
+    setSeoHistoryLoading(true);
+    try {
+      const res = await fetch('/api/seo/history?limit=20&kw=5&pr=3');
+      const data = await res.json();
+      if (data.success) {
+        setSeoHistory(data.history || []);
+        toast.success(`Loaded ${data.history?.length || 0} past searches`);
+      } else {
+        toast.error('Failed to fetch search history');
+        setSeoHistory([]);
+      }
+    } catch (e) {
+      toast.error('Error fetching search history');
+      setSeoHistory([]);
+    } finally {
+      setSeoHistoryLoading(false);
+    }
+  };
+
+  const loadHistoryMore = async (query: string, type: 'keywords' | 'products', step: number) => {
+    const key = `${query}`;
+    const current = seoHistoryExpanded[key] || { kw: 5, pr: 3 };
+    const nextKw = type === 'keywords' ? current.kw + step : current.kw;
+    const nextPr = type === 'products' ? current.pr + step : current.pr;
+    try {
+      const res = await fetch(`/api/seo/history/details?query=${encodeURIComponent(query)}&kwLimit=${nextKw}&prLimit=${nextPr}`);
+      const data = await res.json();
+      if (data.success) {
+        setSeoHistory(h => h.map(item => item.query === query ? { ...item, keywords: data.keywords.items, products: data.products.items } : item));
+        setSeoHistoryExpanded(prev => ({ ...prev, [key]: { kw: nextKw, pr: nextPr } }));
+      } else {
+        toast.error('Failed to load more');
+      }
+    } catch (e) {
+      toast.error('Error loading more');
+    }
+  };
+
+  // Auto-load once when SEO tab becomes active
+  useEffect(() => {
+    if ((activeTab as any) === 'seo' && !seoLoadedOnceRef.current) {
+      seoLoadedOnceRef.current = true;
+      // no auto fetch to conserve SerpAPI quota; just keep ready
+    }
+  }, [activeTab]);
+
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -184,6 +370,275 @@ export default function AdminDashboard() {
   const [deletingRole, setDeletingRole] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
+
+  // New: metrics state
+  const [metrics, setMetrics] = useState<{
+    kpis: { totalRevenue: number; totalOrders: number; avgOrderValue: number };
+    revenueByDay: Array<{ _id: string; revenue: number; orders: number }>;
+    topProducts: Array<{ productId: string; name?: string; image?: string; revenue: number; units: number }>;
+  } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsDays, setMetricsDays] = useState<7 | 30 | 90>(30);
+
+  const fetchMetrics = async (days = metricsDays) => {
+    try {
+      setMetricsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/metrics?days=${days}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch metrics');
+      setMetrics(data);
+    } catch (e) {
+      console.error('Metrics fetch error', e);
+      toast.error(e instanceof Error ? e.message : 'Failed to fetch metrics');
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
+  // Normalize and memo revenue points for chart
+  const chartPoints = useMemo(() => {
+    const series = metrics?.revenueByDay || [];
+    if (!series.length) return [] as { x: number; y: number; label: string }[];
+    const maxRevenue = Math.max(...series.map(d => d.revenue), 1);
+    const width = 600;
+    const height = 140;
+    const padding = 20;
+    const stepX = series.length > 1 ? (width - padding * 2) / (series.length - 1) : 0;
+    return series.map((d, i) => ({
+      x: padding + i * stepX,
+      y: height - padding - (d.revenue / maxRevenue) * (height - padding * 2),
+      label: d._id,
+    }));
+  }, [metrics]);
+
+  const [analytics, setAnalytics] = useState<{ funnel: any[]; search: any[]; cohorts: Record<string, { users: number; revenue: number }>; ltv: number } | null>(null);
+  const [analyticsDays, setAnalyticsDays] = useState<7 | 30 | 90>(30);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const lastAnalyticsKeyRef = useRef<string | null>(null);
+
+  const fetchAnalytics = async (days = analyticsDays) => {
+    try {
+      setAnalyticsLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/admin/analytics?days=${days}` , { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch analytics');
+      setAnalytics(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to fetch analytics');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  // Fetch analytics only when Analytics tab becomes active OR range changes.
+  // It will not refetch on unrelated re-renders.
+  useEffect(() => {
+    if ((activeTab as any) !== 'analytics') return;
+    const key = `days:${analyticsDays}`;
+    if (lastAnalyticsKeyRef.current === key) return;
+    lastAnalyticsKeyRef.current = key;
+    fetchAnalytics(analyticsDays);
+  }, [activeTab, analyticsDays]);
+
+  function AnalyticsFunnel() {
+    const map: Record<string, number> = {};
+    (analytics?.funnel || []).forEach((f: any) => { map[f._id] = f.count; });
+    const steps = [
+      { key: 'product_view', label: 'Product Views' },
+      { key: 'add_to_cart', label: 'Add to Cart' },
+      { key: 'checkout_start', label: 'Checkout Start' },
+      { key: 'purchase', label: 'Purchases' },
+    ];
+    return (
+      <div className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm text-gray-600">Range:</span>
+          <div className="inline-flex rounded-md border bg-white shadow-sm overflow-hidden">
+            {[7,30,90].map(d => (
+              <button key={d} onClick={() => { lastAnalyticsKeyRef.current = null; setAnalyticsDays(d as 7|30|90); }} className={`px-3 py-1.5 text-sm ${analyticsDays===d?'bg-blue-600 text-white':'text-gray-700 hover:bg-gray-50'}`}>{d}d</button>
+            ))}
+          </div>
+        </div>
+        {analyticsLoading ? <p className="text-gray-500">Loading...</p> : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity duration-200" style={{ opacity: analyticsLoading ? 0.6 : 1 }}>
+            {steps.map(s => (
+              <div key={s.key} className="p-4 border border-blue-100 bg-blue-50/20 rounded-lg">
+                <div className="text-sm text-blue-900 font-medium">{s.label}</div>
+                <div className="text-2xl font-bold text-blue-700">{map[s.key] || 0}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function SearchAnalytics() {
+    return (
+      <div className="p-6">
+        {analyticsLoading ? <p className="text-gray-500">Loading...</p> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4">
+              <div className="font-medium text-gray-900 mb-2">Top Searches</div>
+              <div className="space-y-2">
+                {(analytics?.search || []).map((s: any) => (
+                  <div key={s._id} className="flex items-center justify-between text-sm">
+                    <span className="truncate max-w-[70%]">{s._id}</span>
+                    <span className="font-mono">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border rounded-lg p-4">
+              <div className="font-medium text-gray-900 mb-2">No-results Queries</div>
+              <div className="space-y-2">
+                {(analytics?.search || []).filter((s: any) => s.noResults>0).map((s: any) => (
+                  <div key={s._id} className="flex items-center justify-between text-sm">
+                    <span className="truncate max-w-[70%]">{s._id}</span>
+                    <span className="font-mono">{s.noResults}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function CohortAnalytics() {
+    const entries = Object.entries(analytics?.cohorts || {}).sort(([a],[b]) => a.localeCompare(b));
+    return (
+      <div className="p-6">
+        <div className="mb-4 text-gray-700">Estimated average LTV: <span className="font-semibold">${(analytics?.ltv || 0).toFixed(2)}</span></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {entries.map(([month, val]: any) => (
+            <div key={month} className="p-4 border border-blue-100 bg-blue-50/20 rounded-lg">
+              <div className="text-sm text-blue-900 font-medium">{month}</div>
+              <div className="text-sm text-gray-700">Users: <span className="font-medium">{val.users}</span></div>
+              <div className="text-sm text-gray-700">Revenue: <span className="font-medium">${val.revenue.toFixed(2)}</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function EventTester() {
+    const [type, setType] = useState<'product_view'|'add_to_cart'|'checkout_start'|'purchase'|'page_view'>('page_view');
+    const [productId, setProductId] = useState('');
+    const [orderId, setOrderId] = useState('');
+    const [value, setValue] = useState('');
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState('0');
+    const [loading, setLoading] = useState(false);
+
+    const sendEvent = async () => {
+      try {
+        setLoading(true);
+        const payload: any = { type };
+        if (productId) payload.productId = productId;
+        if (orderId) payload.orderId = orderId;
+        if (value) payload.value = Number(value);
+        const res = await fetch('/api/analytics/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        toast.success('Event sent');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const sendSearch = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/analytics/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, resultsCount: Number(results) }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        toast.success('Search recorded');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="text-sm font-semibold text-blue-900">Send Event</div>
+          <div className="grid grid-cols-2 gap-3">
+            <select 
+              value={type} 
+              onChange={(e) => setType(e.target.value as any)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            >
+              <option value="page_view">page_view</option>
+              <option value="product_view">product_view</option>
+              <option value="add_to_cart">add_to_cart</option>
+              <option value="checkout_start">checkout_start</option>
+              <option value="purchase">purchase</option>
+            </select>
+            <input 
+              placeholder="value (optional)" 
+              value={value} 
+              onChange={(e)=>setValue(e.target.value)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+            />
+            <input 
+              placeholder="productId" 
+              value={productId} 
+              onChange={(e)=>setProductId(e.target.value)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+            />
+            <input 
+              placeholder="orderId" 
+              value={orderId} 
+              onChange={(e)=>setOrderId(e.target.value)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+            />
+          </div>
+          <button 
+            onClick={sendEvent} 
+            disabled={loading} 
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 w-fit transition-all duration-200 shadow-sm hover:shadow-md"
+          >
+            {loading ? 'Sending...' : 'Send'}
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div className="text-sm font-semibold text-blue-900">Record Search</div>
+          <div className="grid grid-cols-2 gap-3">
+            <input 
+              placeholder="query" 
+              value={query} 
+              onChange={(e)=>setQuery(e.target.value)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+            />
+            <input 
+              placeholder="results count" 
+              value={results} 
+              onChange={(e)=>setResults(e.target.value)} 
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+            />
+          </div>
+          <button 
+            onClick={sendSearch} 
+            disabled={loading} 
+            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 w-fit transition-all duration-200 shadow-sm hover:shadow-md"
+          >
+            {loading ? 'Recording...' : 'Record'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Navigation helpers for Overview clickable cards
   const goToUsers = () => {
@@ -249,6 +704,49 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, user, router, activeTab]);
 
+  const getAttributionCookies = () => {
+    if (typeof document === 'undefined') return [] as Array<{ key: string; value: string }>; 
+    const keys = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref','aff'];
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    const map: Record<string, string> = {};
+    for (const c of cookies) {
+      const [k, ...rest] = c.split('=');
+      if (!k) continue;
+      map[k] = decodeURIComponent(rest.join('='));
+    }
+    return keys
+      .filter(k => map[k])
+      .map(k => ({ key: k, value: map[k] }));
+  };
+
+  const handleSendCampaign = async () => {
+    try {
+      setSendingCampaign(true);
+      const token = localStorage.getItem('token');
+      const segment: any = {};
+      if (segmentPurchased) segment.purchased = true;
+      if (segmentMinOrders !== '') segment.minOrders = Number(segmentMinOrders);
+      if (segmentDaysSinceLogin !== '') segment.daysSinceLastLoginGt = Number(segmentDaysSinceLogin);
+      if (segmentCategory) segment.categoryInterest = segmentCategory;
+
+      const res = await fetch('/api/email/campaign', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subject: campaignSubject, html: campaignHtml, text: campaignText, segment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send campaign');
+      toast.success(`Campaign sent to ${data.sent} of ${data.recipients}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send campaign');
+    } finally {
+      setSendingCampaign(false);
+    }
+  };
+
   // Deep-link: set tab/status from URL
   useEffect(() => {
     const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | null;
@@ -309,22 +807,26 @@ export default function AdminDashboard() {
   // Fetch roles
   const fetchRoles = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/roles', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('/api/admin/roles', { headers });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch roles');
+        const text = await response.text().catch(() => '');
+        console.error('Fetch roles failed', { status: response.status, body: text });
+        toast.error(`Failed to fetch roles (${response.status})`);
+        setRoles([]);
+        return;
       }
 
-      const data = await response.json();
-      setRoles(data.roles);
+      const data = await response.json().catch(() => ({}));
+      setRoles(Array.isArray(data.roles) ? data.roles : []);
     } catch (error) {
       console.error('Error fetching roles:', error);
       toast.error('Failed to fetch roles');
+      setRoles([]);
     }
   };
 
@@ -722,6 +1224,7 @@ export default function AdminDashboard() {
       fetchProducts();
       fetchOrders();
       fetchOccasions();
+      fetchMetrics(metricsDays);
     }
   }, [isAuthenticated, user]);
 
@@ -761,6 +1264,24 @@ export default function AdminDashboard() {
               >
                 Seed Roles
               </button>
+              <Link
+                href="/admin/audit-logs"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Audit Logs
+              </Link>
+              <Link
+                href="/admin/product-versions"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Product Changes
+              </Link>
+              <Link
+                href="/admin/tools"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Admin Tools
+              </Link>
               <Link
                 href="/"
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -844,12 +1365,159 @@ export default function AdminDashboard() {
                 Occasions
               </button>
             )}
+            <button
+              onClick={() => setActiveTab('marketing')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'marketing'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Gift className="h-5 w-5 inline mr-2" />
+              Marketing
+            </button>
+            <button
+              onClick={() => setActiveTab('performance')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                (activeTab as any) === 'performance'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 inline mr-2" />
+              Performance
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                (activeTab as any) === 'analytics'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 inline mr-2" />
+              Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('etsy')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                (activeTab as any) === 'etsy'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Package className="h-5 w-5 inline mr-2" />
+              Etsy Integration
+            </button>
+            <button
+              onClick={() => setActiveTab('seo')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                (activeTab as any) === 'seo'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Search className="h-5 w-5 inline mr-2" />
+              SEO Research
+            </button>
           </nav>
         </div>
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
+            {/* Controls for metrics */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Metrics Range:</span>
+                <div className="inline-flex rounded-md border bg-white shadow-sm overflow-hidden">
+                  {[7, 30, 90].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => { setMetricsDays(d as 7 | 30 | 90); fetchMetrics(d as 7 | 30 | 90); }}
+                      className={`px-3 py-1.5 text-sm ${metricsDays === d ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      {d}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => fetchMetrics(metricsDays)} className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded-md">
+                <RefreshCw className="h-4 w-4" /> Refresh
+              </button>
+            </div>
+
+            {/* New KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <p className="text-sm font-medium text-gray-600">Total Revenue ({metricsDays}d)</p>
+                <p className="text-3xl font-bold text-green-600 mt-2">
+                  ${metrics?.kpis.totalRevenue?.toFixed(2) || '0.00'}
+                </p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <p className="text-sm font-medium text-gray-600">Total Orders ({metricsDays}d)</p>
+                <p className="text-3xl font-bold text-blue-600 mt-2">
+                  {metrics?.kpis.totalOrders ?? 0}
+                </p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <p className="text-sm font-medium text-gray-600">Average Order Value</p>
+                <p className="text-3xl font-bold text-purple-600 mt-2">
+                  ${metrics?.kpis.avgOrderValue?.toFixed(2) || '0.00'}
+                </p>
+              </div>
+            </div>
+
+            {/* Inline SVG Revenue Chart */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue (last {metricsDays} days)</h3>
+              {metricsLoading ? (
+                <p className="text-gray-500">Loading metrics...</p>
+              ) : chartPoints.length ? (
+                <div className="overflow-x-auto">
+                  <svg width={640} height={180} className="min-w-[640px]">
+                    {/* Axes */}
+                    <line x1="20" y1="160" x2="620" y2="160" stroke="#e5e7eb" />
+                    <line x1="20" y1="20" x2="20" y2="160" stroke="#e5e7eb" />
+                    {/* Path */}
+                    <polyline
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="2"
+                      points={chartPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                    />
+                    {/* Points */}
+                    {chartPoints.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={3} fill="#2563eb" />
+                    ))}
+                  </svg>
+                </div>
+              ) : (
+                <p className="text-gray-500">No data</p>
+              )}
+            </div>
+
+            {/* Top Products */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Products (by revenue)</h3>
+              {metrics?.topProducts?.length ? (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {metrics.topProducts.map((p) => (
+                    <div key={p.productId} className="flex items-center gap-4 border rounded-lg p-3">
+                      <img src={p.image || '/vercel.svg'} alt={p.name || 'Product'} className="w-14 h-14 rounded object-cover border" />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 truncate">{p.name || p.productId}</div>
+                        <div className="text-sm text-gray-600">${p.revenue.toFixed(2)} · {p.units} units</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No top products yet.</p>
+              )}
+            </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div onClick={goToUsers} className="bg-white p-6 rounded-lg shadow-sm border cursor-pointer hover:border-blue-300 hover:shadow transition-colors">
@@ -993,6 +1661,862 @@ export default function AdminDashboard() {
                     }).length}
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Performance Tab */}
+        {(activeTab as any) === 'performance' && (
+          <div className="space-y-8">
+            {/* Image Optimization */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Image Optimization</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Using Next/Image with optional CDN loader.</p>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-3 border border-blue-100 rounded-lg bg-blue-50/20">
+                    <span className="text-blue-900">CDN Origin</span>
+                    <code className="text-blue-800">{process.env.NEXT_PUBLIC_IMAGE_CDN || 'Not set'}</code>
+                  </div>
+                  <p className="text-gray-700">Set <code className="px-1 py-0.5 bg-blue-50 border border-blue-100 rounded">NEXT_PUBLIC_IMAGE_CDN</code> to proxy images via your CDN.</p>
+                </div>
+                <div className="space-y-2">
+                  <a className="inline-block px-4 py-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/categories/men" target="_blank">Open Category (optimized hero)</a>
+                  <a className="ml-3 inline-block px-4 py-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/products" target="_blank">Open Products</a>
+                </div>
+              </div>
+            </div>
+
+            {/* ISR */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Incremental Static Regeneration</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">ISR enabled for product and category routes.</p>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="p-3 border border-blue-100 rounded-lg bg-blue-50/20">
+                  <div className="text-blue-900 font-medium">Categories</div>
+                  <div className="text-blue-800">revalidate: 300s</div>
+                  <code className="text-xs">src/app/categories/[slug]/layout.tsx</code>
+                </div>
+                <div className="p-3 border border-blue-100 rounded-lg bg-blue-50/20">
+                  <div className="text-blue-900 font-medium">Products</div>
+                  <div className="text-blue-800">revalidate: 600s</div>
+                  <code className="text-xs">src/app/products/[id]/layout.tsx</code>
+                </div>
+                <div className="p-3 border border-blue-100 rounded-lg bg-blue-50/20">
+                  <div className="text-blue-900 font-medium">Hint</div>
+                  <div className="text-blue-800">Update content → first request regenerates in background.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {(activeTab as any) === 'analytics' && (
+          <div className="space-y-8">
+            {/* API Helpers */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Quick Event Tester</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Send test events to validate analytics pipeline.</p>
+              </div>
+              <EventTester />
+            </div>
+            {/* Funnel */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Product Funnel</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Events collected server-side from key actions.</p>
+              </div>
+              <AnalyticsFunnel />
+            </div>
+
+            {/* Search */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Search Analytics</h2>
+              </div>
+              <SearchAnalytics />
+            </div>
+
+            {/* Cohorts */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Cohort Retention & LTV</h2>
+              </div>
+              <CohortAnalytics />
+            </div>
+          </div>
+        )}
+
+        {/* Etsy Integration Tab */}
+        {(activeTab as any) === 'etsy' && (
+          <div className="space-y-8">
+            {/* Etsy Connection */}
+            <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+              <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                <h2 className="text-xl font-semibold text-purple-900">Etsy Shop Connection</h2>
+                <p className="text-purple-700/80 mt-1 text-sm">Connect your Etsy shop to sync products, orders, and inventory.</p>
+              </div>
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Connect to Etsy</h3>
+                    <p className="text-gray-600 mt-1">Authorize access to your Etsy shop to enable product and order synchronization.</p>
+                  </div>
+                  <a
+                    href="/api/etsy/auth"
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    Connect Etsy Shop
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync Controls */}
+            <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+              <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                <h2 className="text-xl font-semibold text-purple-900">Sync Controls</h2>
+                <p className="text-purple-700/80 mt-1 text-sm">Manually trigger synchronization between your store and Etsy.</p>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/etsy/sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type: 'listings', shopId: 'your-shop-id' })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          toast.success('Listings synced successfully');
+                        } else {
+                          toast.error('Failed to sync listings');
+                        }
+                      } catch (error) {
+                        toast.error('Sync failed');
+                      }
+                    }}
+                    className="p-4 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    <Package className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <h3 className="font-medium text-gray-900">Sync Listings</h3>
+                    <p className="text-sm text-gray-600 mt-1">Sync products from Etsy to your store</p>
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/etsy/sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type: 'orders', shopId: 'your-shop-id' })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          toast.success('Orders synced successfully');
+                        } else {
+                          toast.error('Failed to sync orders');
+                        }
+                      } catch (error) {
+                        toast.error('Sync failed');
+                      }
+                    }}
+                    className="p-4 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    <ShoppingCart className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <h3 className="font-medium text-gray-900">Sync Orders</h3>
+                    <p className="text-sm text-gray-600 mt-1">Import orders from Etsy to your store</p>
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/etsy/sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type: 'inventory', shopId: 'your-shop-id' })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          toast.success('Inventory synced successfully');
+                        } else {
+                          toast.error('Failed to sync inventory');
+                        }
+                      } catch (error) {
+                        toast.error('Sync failed');
+                      }
+                    }}
+                    className="p-4 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+                  >
+                    <RefreshCw className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <h3 className="font-medium text-gray-900">Sync Inventory</h3>
+                    <p className="text-sm text-gray-600 mt-1">Update stock levels across platforms</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Sync */}
+            <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+              <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                <h2 className="text-xl font-semibold text-purple-900">Product Sync to Etsy</h2>
+                <p className="text-purple-700/80 mt-1 text-sm">Sync your store products to Etsy listings.</p>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4">
+                    <select className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                      <option value="">Select a product to sync</option>
+                      {/* Products would be populated here */}
+                    </select>
+                    <select className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                      <option value="create">Create New Listing</option>
+                      <option value="update">Update Existing</option>
+                      <option value="delete">Delete Listing</option>
+                    </select>
+                    <button className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md">
+                      Sync to Etsy
+                    </button>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    <p>• <strong>Create:</strong> Upload a new product to Etsy</p>
+                    <p>• <strong>Update:</strong> Modify an existing Etsy listing</p>
+                    <p>• <strong>Delete:</strong> Remove a product from Etsy</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync Status */}
+            <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+              <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                <h2 className="text-xl font-semibold text-purple-900">Sync Status</h2>
+                <p className="text-purple-700/80 mt-1 text-sm">Monitor the status of your Etsy integration.</p>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-green-900">Shop Connected</p>
+                          <p className="text-sm text-green-700">Etsy shop is connected and active</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <Package className="h-5 w-5 text-blue-600" />
+                        <div>
+                          <p className="font-medium text-blue-900">Listings Synced</p>
+                          <p className="text-sm text-blue-700">12 products synced to Etsy</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <Clock className="h-5 w-5 text-yellow-600" />
+                        <div>
+                          <p className="font-medium text-yellow-900">Last Sync</p>
+                          <p className="text-sm text-yellow-700">2 hours ago</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <ShoppingCart className="h-5 w-5 text-purple-600" />
+                        <div>
+                          <p className="font-medium text-purple-900">Orders Pending</p>
+                          <p className="text-sm text-purple-700">3 orders to sync</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Marketing Tab */}
+        {activeTab === 'marketing' && (
+          <div className="space-y-8">
+            {/* Email Campaigns */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Email Campaigns</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Send a one-off campaign to a segment using the built-in mailer.</p>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">Subject</label>
+                    <input value={campaignSubject} onChange={(e) => setCampaignSubject(e.target.value)}
+                      className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Spring Sale starts now" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">Plain Text</label>
+                    <textarea value={campaignText} onChange={(e) => setCampaignText(e.target.value)} rows={3}
+                      className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">HTML</label>
+                    <textarea value={campaignHtml} onChange={(e) => setCampaignHtml(e.target.value)} rows={8}
+                      className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <button onClick={handleSendCampaign} disabled={sendingCampaign || !campaignSubject || !campaignHtml}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    {sendingCampaign ? 'Sending…' : 'Send Campaign'}
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-blue-900">Segment Filters</h3>
+                  <label className="flex items-center space-x-2">
+                    <input type="checkbox" checked={segmentPurchased} onChange={(e) => setSegmentPurchased(e.target.checked)} />
+                    <span className="text-sm text-blue-800">Has purchased before</span>
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Min orders</label>
+                      <input type="number" min={0} value={segmentMinOrders} onChange={(e) => setSegmentMinOrders(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">Days since last login</label>
+                      <input type="number" min={0} value={segmentDaysSinceLogin} onChange={(e) => setSegmentDaysSinceLogin(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">Category interest (contains)</label>
+                    <input value={segmentCategory} onChange={(e) => setSegmentCategory(e.target.value)} placeholder="e.g. leather"
+                      className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Referral & UTM */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Referral & UTM</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Captured from URL and persisted to cookies for 90 days.</p>
+              </div>
+              <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2">Current Attribution Cookies</h3>
+                  <div className="border border-blue-100 rounded-lg divide-y divide-blue-100 bg-blue-50/20">
+                    {getAttributionCookies().length ? getAttributionCookies().map(c => (
+                      <div key={c.key} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-blue-800">{c.key}</span>
+                        <span className="font-mono text-blue-900">{c.value}</span>
+                      </div>
+                    )) : (
+                      <div className="px-3 py-2 text-sm text-blue-700/80">No attribution cookies set yet.</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900 mb-2">Sample Referral Links</h3>
+                  <div className="space-y-2 text-sm">
+                    <a className="text-blue-700 hover:text-blue-800 underline break-all" href={`/?utm_source=newsletter&utm_medium=email&utm_campaign=spring`}>/?utm_source=newsletter&utm_medium=email&utm_campaign=spring</a>
+                    <a className="text-blue-700 hover:text-blue-800 underline break-all" href={`/?ref=aff123&aff=partnerA`}>/?ref=aff123&aff=partnerA</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SEO */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">SEO</h2>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/sitemap.xml" target="_blank" rel="noreferrer">View Sitemap</a>
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/robots.txt" target="_blank" rel="noreferrer">View robots.txt</a>
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/" target="_blank" rel="noreferrer">Open Homepage</a>
+              </div>
+            </div>
+
+            {/* Blog */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">Blog</h2>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/blog" target="_blank" rel="noreferrer">Open Blog</a>
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/blog/hello-world" target="_blank" rel="noreferrer">Sample Post</a>
+                <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/rss.xml" target="_blank" rel="noreferrer">RSS Feed</a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SEO Research Tab (SerpAPI) */}
+        {(activeTab as any) === 'seo' && (
+          <div className="space-y-8">
+            {/* Keyword Research */}
+            <div className="bg-white rounded-lg shadow-sm border border-green-100">
+              <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900">SEO Research (SerpAPI)</h2>
+                    <p className="text-green-700/80 mt-1 text-sm">Run live keyword lookups powered by SerpAPI. Your plan allows ~250 searches/month.</p>
+                  </div>
+                  <a href="/admin/seo-history" className="text-sm text-green-700 underline">Open SEO History</a>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-green-800 mb-2">Search Keywords</label>
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. handmade jewelry, minimalist necklace, vintage ring"
+                          value={keywordQuery}
+                          onChange={(e) => setKeywordQuery(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-green-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <button 
+                          onClick={searchKeywords}
+                          disabled={seoLoading.keywords}
+                          className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50"
+                        >
+                          {seoLoading.keywords ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </button>
+                        <button 
+                          onClick={searchProducts}
+                          disabled={seoLoading.products}
+                          className="px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition-all duration-200 disabled:opacity-50"
+                          title="Fetch product cards from SerpAPI"
+                        >
+                          {seoLoading.products ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Products'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h3 className="font-medium text-green-900 mb-3">Results</h3>
+                      <div className="space-y-2 text-sm max-h-72 overflow-y-auto">
+                        {keywords.length > 0 ? (
+                          keywords.map((k, idx) => (
+                            <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center p-2 rounded border border-green-100 bg-white">
+                              <div className="text-green-900 font-medium truncate">{k.keyword}</div>
+                              <div className="text-green-700">Vol: {k.searchVolume?.toLocaleString?.() || k.searchVolume}</div>
+                              <div className="text-green-700 capitalize">Comp: {k.competition}</div>
+                              <div className="text-green-700">Diff: {k.difficulty}</div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-green-700">Enter a keyword and click search to see suggestions.</div>
+                        )}
+                      </div>
+                      <div className="mt-3">
+                        <button 
+                          onClick={() => {
+                            if (keywords.length > 0) {
+                              const csvContent = keywords.map((k: any) => `${k.keyword},${k.searchVolume},${k.competition},${k.difficulty}`).join('\n');
+                              const blob = new Blob([`keyword,searchVolume,competition,difficulty\n${csvContent}`], { type: 'text/csv' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = 'serpapi_keywords.csv';
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast.success('Exported keywords.csv');
+                            } else {
+                              toast.error('No keywords to export');
+                            }
+                          }}
+                          className="px-3 py-2 text-sm border border-green-200 text-green-700 rounded-lg hover:bg-green-50"
+                        >
+                          Export CSV
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Usage Tips */}
+                  <div className="p-4 bg-white border border-green-200 rounded-lg">
+                    <h3 className="font-semibold text-green-900 mb-2">How to use SerpAPI effectively</h3>
+                    <ul className="list-disc pl-5 text-sm space-y-2 text-green-800">
+                      <li><b>Start broad, then niche down</b>: try "handmade jewelry" → "minimalist gold necklace".</li>
+                      <li><b>Use buyer intent terms</b>: include words like "custom", "personalized", "gift", "for women".</li>
+                      <li><b>Mix seasonal terms</b>: "valentine necklace", "christmas ornament", "wedding favor".</li>
+                      <li><b>Test synonyms</b>: "vintage" vs "retro", "eco-friendly" vs "sustainable".</li>
+                      <li><b>Mind your quota</b>: you have ~250 searches/month; batch your research sessions.</li>
+                      <li><b>Export and compare</b>: export CSV, sort by volume/difficulty to prioritize.</li>
+                    </ul>
+                    <div className="mt-4 text-xs text-green-700">
+                      Tip: use 3–5 seed queries per session and iterate based on results to conserve quota.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Results */}
+            <div className="bg-white rounded-lg shadow-sm border border-green-100">
+              <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+                <h2 className="text-xl font-semibold text-green-900">Product Results</h2>
+                <p className="text-green-700/80 mt-1 text-sm">Live cards from SerpAPI immersive products for your query.</p>
+              </div>
+              <div className="p-6">
+                {productsSeo.length === 0 ? (
+                  <div className="text-green-700">Click Products to fetch product cards.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {productsSeo.map((p, i) => (
+                      <div key={i} className="border border-green-200 rounded-lg overflow-hidden bg-white">
+                        {p.thumbnail ? (
+                          <img src={p.thumbnail} alt={p.title} className="w-full h-40 object-cover" />
+                        ) : null}
+                        <div className="p-3 space-y-1">
+                          <div className="font-semibold text-green-900 line-clamp-2" title={p.title}>{p.title}</div>
+                          <div className="text-sm text-green-700 flex items-center gap-2">
+                            {p.source ? <span className="px-2 py-0.5 bg-green-50 border border-green-200 rounded">{p.source}</span> : null}
+                            {typeof p.rating === 'number' ? <span>★ {p.rating}</span> : null}
+                            {typeof p.reviews === 'number' ? <span>({p.reviews})</span> : null}
+                          </div>
+                          <div className="text-sm text-green-800">
+                            {typeof p.price === 'number' ? `$${p.price.toFixed(2)}` : '—'}
+                            {typeof p.originalPrice === 'number' ? <span className="ml-2 line-through text-green-600/70">${p.originalPrice.toFixed(2)}</span> : null}
+                          </div>
+                          {p.productApiUrl ? (
+                            <a className="text-xs text-green-700 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">Product API</a>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Free SEO Audit (OG + PSI) */}
+            <div className="bg-white rounded-lg shadow-sm border border-green-100">
+              <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+                <h2 className="text-xl font-semibold text-green-900">Free SEO Audit</h2>
+                <p className="text-green-700/80 mt-1 text-sm">Check a URL for Open Graph meta and PageSpeed Insights (mobile) scores.</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://yourdomain.com/product/123"
+                    className="flex-1 px-3 py-2 border border-green-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    value={keywordQuery}
+                    onChange={(e) => setKeywordQuery(e.target.value)}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!keywordQuery.trim()) return;
+                      setSeoLoading(prev => ({ ...prev, audit: true }));
+                      try {
+                        const res = await fetch(`/api/seo/audit?url=${encodeURIComponent(keywordQuery)}`);
+                        const data = await res.json();
+                        if (data.success) {
+                          toast.success('Audit complete');
+                          setSeoAudit(data);
+                        } else {
+                          toast.error('Audit failed');
+                          setSeoAudit(null);
+                        }
+                      } catch (e) {
+                        toast.error('Audit error');
+                        setSeoAudit(null);
+                      } finally {
+                        setSeoLoading(prev => ({ ...prev, audit: false }));
+                      }
+                    }}
+                    disabled={seoLoading.audit}
+                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50"
+                  >
+                    {seoLoading.audit ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Audit'}
+                  </button>
+                </div>
+                <div className="text-xs text-green-700">Tip: audit your top landing pages and best-selling product URLs.</div>
+
+                {seoAudit && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 border border-green-200 rounded-lg bg-green-50">
+                      <div className="font-semibold text-green-900 mb-2">Open Graph</div>
+                      <div className="text-sm text-green-800"><span className="font-medium">Title:</span> {seoAudit.og?.title || '—'}</div>
+                      <div className="text-sm text-green-800"><span className="font-medium">Description:</span> {seoAudit.og?.description || '—'}</div>
+                      {seoAudit.og?.image ? (
+                        <img src={seoAudit.og.image} alt="og" className="mt-2 w-full h-28 object-cover rounded" />
+                      ) : null}
+                    </div>
+                    <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                      <div className="font-semibold text-blue-900 mb-2">Lighthouse (Mobile)</div>
+                      <div className="text-sm text-blue-800">SEO: {seoAudit.psi?.seo ?? '—'}</div>
+                      <div className="text-sm text-blue-800">Performance: {seoAudit.psi?.performance ?? '—'}</div>
+                      <div className="text-sm text-blue-800">Accessibility: {seoAudit.psi?.accessibility ?? '—'}</div>
+                      <div className="text-sm text-blue-800">Best Practices: {seoAudit.psi?.bestPractices ?? '—'}</div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="font-semibold text-gray-900 mb-2">Notes</div>
+                      <div className="text-sm text-gray-700">Some marketplaces block PSI/OG. We apply a desktop user agent and HTML fallback for title/description. Use results directionally.</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          {/* How this SEO page works */}
+          <div className="bg-white rounded-lg shadow-sm border border-green-100">
+            <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+              <h2 className="text-xl font-semibold text-green-900">How this SEO page works</h2>
+              <p className="text-green-700/80 mt-1 text-sm">Understand each section and the recommended workflow.</p>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+              <div className="space-y-2">
+                <div className="font-semibold text-green-900">1) Keyword Research</div>
+                <ul className="list-disc pl-5 space-y-1 text-green-800">
+                  <li>Enter a seed term and click <b>Search</b>.</li>
+                  <li>We call SerpAPI to fetch related searches.</li>
+                  <li>Columns show volume, competition, and difficulty.</li>
+                  <li>Export CSV to prioritize offline.</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <div className="font-semibold text-green-900">2) Product Results</div>
+                <ul className="list-disc pl-5 space-y-1 text-green-800">
+                  <li>Click <b>Products</b> to fetch product cards.</li>
+                  <li>We try <b>google_shopping</b> first, then fallback.</li>
+                  <li>Cards show title, source, price, rating, reviews.</li>
+                  <li>If empty, broaden the query and try again.</li>
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <div className="font-semibold text-green-900">3) Decide & Save</div>
+                <ul className="list-disc pl-5 space-y-1 text-green-800">
+                  <li>Use <b>Decision Helper</b> signals/cautions.</li>
+                  <li>Click <b>Save Keywords & Products to DB</b>.</li>
+                  <li>Check server logs for [SerpAPI] and [API] lines.</li>
+                  <li>Quota tip: ~250 searches/month—batch sessions.</li>
+                </ul>
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <a href="/admin/seo-help" className="px-4 py-2 border border-green-200 text-green-700 rounded-lg hover:bg-green-50">Open Help Page</a>
+              <a href="/docs/SEO_RESEARCH_SERPAPI.md" className="px-4 py-2 border border-green-200 text-green-700 rounded-lg hover:bg-green-50">Read Full Docs</a>
+            </div>
+          </div>
+
+            {/* Decision Helper */}
+            <div className="bg-white rounded-lg shadow-sm border border-green-100">
+              <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900">Decision Helper</h2>
+                    <p className="text-green-700/80 mt-1 text-sm">Assess which product niches to add and why.</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-green-700">Query</div>
+                    <div className="text-sm font-medium text-green-900">{seoInsights.query || '—'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded">
+                    <div className="text-xs text-green-700">Avg Volume</div>
+                    <div className="text-lg font-semibold text-green-900">{seoInsights.metrics.avgVolume ? seoInsights.metrics.avgVolume.toLocaleString() : '—'}</div>
+                  </div>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded">
+                    <div className="text-xs text-green-700">Avg Difficulty</div>
+                    <div className="text-lg font-semibold text-green-900">{seoInsights.metrics.avgDifficulty ?? '—'}</div>
+                  </div>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded">
+                    <div className="text-xs text-green-700">Avg Price</div>
+                    <div className="text-lg font-semibold text-green-900">{seoInsights.metrics.avgPrice ? `$${seoInsights.metrics.avgPrice}` : '—'}</div>
+                  </div>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded">
+                    <div className="text-xs text-green-700">Score</div>
+                    <div className="text-lg font-semibold text-green-900">{seoInsights.score}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 border border-green-200 rounded-lg bg-green-50">
+                    <div className="font-semibold text-green-900 mb-1">Signals We Like</div>
+                    <ul className="list-disc text-sm text-green-800 pl-5 space-y-1">
+                      {seoInsights.signals.length ? seoInsights.signals.map((s: string, i: number) => (
+                        <li key={i}>{s}</li>
+                      )) : <li>No strong signals yet. Try broader seeds.</li>}
+                    </ul>
+                  </div>
+                  <div className="p-4 border border-yellow-200 rounded-lg bg-yellow-50">
+                    <div className="font-semibold text-yellow-900 mb-1">Caution Flags</div>
+                    <ul className="list-disc text-sm text-yellow-800 pl-5 space-y-1">
+                      {seoInsights.cautions.length ? seoInsights.cautions.map((s: string, i: number) => (
+                        <li key={i}>{s}</li>
+                      )) : <li>None detected. Validate with more searches.</li>}
+                    </ul>
+                  </div>
+                  <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                    <div className="font-semibold text-blue-900 mb-1">Recommended Action</div>
+                    <div className="text-sm text-blue-800">{seoInsights.action}</div>
+                  </div>
+                </div>
+                <div>
+                  <button onClick={saveSeoData} className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md">
+                    Save Keywords & Products to DB
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Past Searches */}
+            <div className="bg-white rounded-lg shadow-sm border border-green-100">
+              <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900">Past Searches</h2>
+                    <p className="text-green-700/80 mt-1 text-sm">View your previous keyword and product research sessions.</p>
+                  </div>
+                  <button
+                    onClick={fetchSeoHistory}
+                    disabled={seoHistoryLoading}
+                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50"
+                  >
+                    {seoHistoryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    {seoHistoryLoading ? 'Loading...' : 'Load History'}
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                {seoHistory.length === 0 ? (
+                  <div className="text-center py-8 text-green-700">
+                    <Clock className="h-12 w-12 mx-auto mb-4 text-green-400" />
+                    <p>No past searches found. Start researching keywords to see your history here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {seoHistory.map((search, index) => (
+                      <div key={index} className="border border-green-200 rounded-lg p-4 bg-green-50/30">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-semibold text-green-900">{search.query}</h3>
+                            <div className="text-sm text-green-700">
+                              {search.type === 'keywords' ? 'Keywords Research' : 'Products Research'} • 
+                              {new Date(search.createdAt).toLocaleDateString()} • 
+                              {search.resultsCount} results
+                            </div>
+                          </div>
+                          <div className="text-xs text-green-600">
+                            {new Date(search.createdAt).toLocaleTimeString()}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Keywords */}
+                          {search.keywords && search.keywords.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-green-800 mb-2">Keywords ({search.keywords.length})</h4>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {search.keywords.slice(0, 5).map((keyword: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-green-700 flex justify-between">
+                                    <span className="truncate">{keyword.keyword}</span>
+                                    <span className="ml-2 text-green-600">
+                                      {keyword.searchVolume ? keyword.searchVolume.toLocaleString() : '—'} vol
+                                    </span>
+                                  </div>
+                                ))}
+                                <div className="pt-2">
+                                  <button
+                                    onClick={() => loadHistoryMore(search.query, 'keywords', 10)}
+                                    className="text-xs text-green-700 underline"
+                                  >
+                                    Load more keywords
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Products */}
+                          {search.products && search.products.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-green-800 mb-2">Products ({search.products.length})</h4>
+                              <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {search.products.slice(0, 3).map((product: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-green-700 flex items-center gap-2">
+                                    {product.thumbnail && (
+                                      <img src={product.thumbnail} alt={product.title} className="w-8 h-8 object-cover rounded" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{product.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {product.source} • {product.price ? `$${product.price}` : '—'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                <div className="pt-2">
+                                  <button
+                                    onClick={() => loadHistoryMore(search.query, 'products', 6)}
+                                    className="text-xs text-green-700 underline"
+                                  >
+                                    Load more products
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => {
+                              setKeywordQuery(search.query);
+                              setKeywords(search.keywords || []);
+                              setProductsSeo(search.products || []);
+                              toast.success(`Loaded ${search.query} results`);
+                            }}
+                            className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                          >
+                            Load Results
+                          </button>
+                          <button
+                            onClick={() => {
+                              const csvContent = search.keywords?.map((k: any) => 
+                                `${k.keyword},${k.searchVolume},${k.competition},${k.difficulty}`
+                              ).join('\n') || '';
+                              if (csvContent) {
+                                const blob = new Blob([`keyword,searchVolume,competition,difficulty\n${csvContent}`], { type: 'text/csv' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `keywords_${search.query.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                toast.success('Exported keywords.csv');
+                              }
+                            }}
+                            className="px-3 py-1 text-xs bg-white text-green-700 border border-green-200 rounded hover:bg-green-50 transition-colors"
+                          >
+                            Export CSV
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1277,6 +2801,18 @@ export default function AdminDashboard() {
                   <option value="Adidas">Adidas</option>
                   <option value="Generic">Generic</option>
                 </select>
+                <select
+                  value={selectedOrderStatus}
+                  onChange={(e) => { setSelectedOrderStatus(e.target.value); setProductPage(1); }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Product Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="live">Live</option>
+                </select>
                 <button
                   onClick={fetchProducts}
                   className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -1284,6 +2820,71 @@ export default function AdminDashboard() {
                   <RefreshCw className="h-4 w-4" />
                   <span>Refresh</span>
                 </button>
+                
+                
+                {/* CSV Export */}
+                <a
+                  href="/api/admin/products/export-csv"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Export CSV
+                </a>
+                <a
+                  href="/api/admin/products/sample-csv"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Sample CSV
+                </a>
+                {/* CSV Import */}
+                <label className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  Import CSV
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const token = localStorage.getItem('token');
+                        const text = await file.text();
+                        // First do a dry-run to validate mapping
+                        let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
+                          method: 'POST',
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'text/csv',
+                          },
+                          body: text,
+                        });
+                        let data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Validation failed');
+                        if (data.warnings?.length) {
+                          toast((t) => (
+                            <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
+                          ));
+                        }
+                        // Proceed actual import
+                        res = await fetch('/api/admin/products/import-csv', {
+                          method: 'POST',
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'text/csv',
+                          },
+                          body: text,
+                        });
+                        data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Import failed');
+                        toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+                        fetchProducts();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Import failed');
+                      } finally {
+                        e.currentTarget.value = '';
+                      }
+                    }}
+                  />
+                </label>
               </div>
             </div>
 
@@ -1383,13 +2984,25 @@ export default function AdminDashboard() {
                             }`}>
                               {product.isActive ? 'Active' : 'Inactive'}
                             </span>
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                              product.inStock 
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                                : 'bg-amber-100 text-amber-800 border border-amber-200'
-                            }`}>
-                              {product.inStock ? 'In Stock' : 'Out of Stock'}
-                            </span>
+                            {(() => {
+                              const status = (product as any).status || 'draft';
+                              const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
+                              const isScheduled = status === 'published' && publishAt && publishAt > new Date();
+                              const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
+                              const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
+                              const badgeClass = isScheduled
+                                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                : isLive
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : status === 'archived'
+                                ? 'bg-gray-100 text-gray-700 border border-gray-200'
+                                : 'bg-purple-100 text-purple-800 border border-purple-200';
+                              return (
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+                                  {badgeText}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
@@ -1908,3 +3521,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

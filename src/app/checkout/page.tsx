@@ -98,6 +98,14 @@ export default function CheckoutPage() {
     }
     
     setCurrentStep('payment');
+    // Fire checkout_start when entering payment step
+    try {
+      fetch('/api/analytics/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'checkout_start' })
+      });
+    } catch {}
   };
 
   const handlePaymentSuccess = async (paymentIntent: any) => {
@@ -254,6 +262,14 @@ export default function CheckoutPage() {
       const secret = await createPaymentIntent(orderToUse._id);
       console.log('Payment intent created, client secret:', secret);
       setClientSecret(secret);
+      // Ensure checkout_start is tracked if not already
+      try {
+        fetch('/api/analytics/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'checkout_start', orderId: orderToUse._id })
+        });
+      } catch {}
       
     } catch (error) {
       console.error('Payment intent creation error:', error);

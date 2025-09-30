@@ -20,6 +20,9 @@ interface ProductStore {
     sortBy: string;
     priceRange: [number, number];
     inStock: boolean | null;
+    brand?: string;
+    minRating?: number;
+    collection?: string;
   };
   fetchProducts: (params?: {
     page?: number;
@@ -30,6 +33,9 @@ interface ProductStore {
     minPrice?: number;
     maxPrice?: number;
     inStock?: boolean;
+    brand?: string;
+    minRating?: number;
+    collection?: string;
   }) => Promise<void>;
   fetchProduct: (id: string) => Promise<void>;
   setFilters: (filters: Partial<ProductStore['filters']>) => void;
@@ -55,7 +61,10 @@ export const useProductStore = create<ProductStore>((set, get) => ({
     category: 'all',
     sortBy: 'name',
     priceRange: [0, 1000],
-    inStock: null
+    inStock: null,
+    brand: undefined,
+    minRating: undefined,
+    collection: undefined,
   },
 
   fetchProducts: async (params = {}) => {
@@ -89,9 +98,25 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         searchParams.set('maxPrice', (params.maxPrice || filters.priceRange[1]).toString());
       }
       
-      if (params.inStock !== undefined || filters.inStock !== null) {
-        const inStockValue = (params.inStock !== undefined ? params.inStock : filters.inStock) ?? false;
-        searchParams.set('inStock', String(inStockValue));
+      // Only send inStock when true to avoid filtering out items by default
+      const effectiveInStock = (params.inStock !== undefined ? params.inStock : filters.inStock);
+      if (effectiveInStock === true) {
+        searchParams.set('inStock', 'true');
+      }
+
+      const effectiveBrand = params.brand ?? filters.brand;
+      if (effectiveBrand) {
+        searchParams.set('brand', effectiveBrand);
+      }
+
+      const effectiveMinRating = params.minRating ?? filters.minRating;
+      if (typeof effectiveMinRating === 'number') {
+        searchParams.set('minRating', String(effectiveMinRating));
+      }
+
+      const effectiveCollection = (params.collection ?? filters.collection)?.toLowerCase();
+      if (effectiveCollection) {
+        searchParams.set('collection', effectiveCollection);
       }
 
       const response = await fetch(`${API_BASE_URL}/api/products?${searchParams.toString()}`);

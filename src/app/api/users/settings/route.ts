@@ -16,7 +16,17 @@ export async function GET(request: NextRequest) {
     const userId = await verifyToken(request);
     const user = await User.findById(userId).select('settings');
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    return NextResponse.json({ settings: user.settings });
+
+    // Include attribution for client awareness (captured by middleware)
+    const attribKeys = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref','aff'];
+    const attribution: Record<string, string> = {};
+    for (const key of attribKeys) {
+      const headerKey = `x-attrib-${key}`;
+      const headerVal = request.headers.get(headerKey) as string | null;
+      if (headerVal) attribution[key] = headerVal;
+    }
+
+    return NextResponse.json({ settings: user.settings, attribution });
   } catch (error) {
     if (error instanceof Error && error.message === 'No token provided') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

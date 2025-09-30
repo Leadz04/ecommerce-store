@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import { AuditLog } from '@/models';
 
 // GET /api/admin/products - Get all products with pagination and filtering
 export async function GET(request: NextRequest) {
@@ -39,15 +40,17 @@ export async function GET(request: NextRequest) {
     if (brand) {
       query.brand = { $regex: brand, $options: 'i' };
     }
-    
-    if (status === 'active') {
-      query.isActive = true;
-    } else if (status === 'inactive') {
-      query.isActive = false;
-    } else if (status === 'out-of-stock') {
-      query.stockCount = 0;
-    } else if (status === 'low-stock') {
-      query.stockCount = { $gt: 0, $lte: 10 };
+
+    if (status) {
+      if (['draft', 'published', 'archived'].includes(status)) {
+        query.status = status;
+      } else if (status === 'scheduled') {
+        query.status = 'published';
+        query.publishAt = { $gt: new Date() };
+      } else if (status === 'live') {
+        query.status = 'published';
+        query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
+      }
     }
 
     // Build sort object
@@ -59,7 +62,8 @@ export async function GET(request: NextRequest) {
     const products = await Product.find(query)
       .sort(sort)
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     const total = await Product.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
@@ -121,7 +125,9 @@ export async function POST(request: NextRequest) {
       isActive = true,
       productType,
       sourceUrl,
-      variants
+      variants,
+      status = 'draft',
+      publishAt = null
     } = body;
 
     // Validate required fields
@@ -150,6 +156,7 @@ export async function POST(request: NextRequest) {
 
     // Create new product
     const normalizedStock = typeof stockCount === 'number' ? stockCount : 0;
+    const normalizedBrand = (brand && brand !== 'Other') ? brand : 'Wolveyes';
     const product = new Product({
       name,
       description,
@@ -158,7 +165,7 @@ export async function POST(request: NextRequest) {
       image,
       images: images || [],
       category,
-      brand,
+      brand: normalizedBrand,
       stockCount: normalizedStock,
       inStock: normalizedStock > 0,
       tags: tags || [],
@@ -166,10 +173,27 @@ export async function POST(request: NextRequest) {
       isActive,
       productType,
       sourceUrl,
-      variants
+      variants,
+      status,
+      publishAt: publishAt ? new Date(publishAt) : null,
     });
 
     await product.save();
+
+    // Audit log
+    try {
+      const ip = request.headers.get('x-forwarded-for') || request.ip || '' as any;
+      const userAgent = request.headers.get('user-agent') || '';
+      await AuditLog.create({
+        userId: user.userId,
+        action: 'product:create',
+        resourceType: 'Product',
+        resourceId: String(product._id),
+        metadata: { name: product.name, status: product.status },
+        ip,
+        userAgent,
+      });
+    } catch {}
 
     return NextResponse.json({
       message: 'Product created successfully',

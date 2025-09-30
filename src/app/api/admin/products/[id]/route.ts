@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import { AuditLog } from '@/models';
 
 // GET /api/admin/products/[id] - Get specific product
 export async function GET(
@@ -66,7 +67,9 @@ export async function PUT(
       isActive,
       productType,
       sourceUrl,
-      variants
+      variants,
+      status,
+      publishAt
     } = body;
 
     const product = await Product.findById(id);
@@ -93,6 +96,8 @@ export async function PUT(
       );
     }
 
+    const before = product.toObject();
+
     // Update product fields
     if (name !== undefined) product.name = name;
     if (description !== undefined) product.description = description;
@@ -112,8 +117,25 @@ export async function PUT(
     if (productType !== undefined) (product as any).productType = productType;
     if (sourceUrl !== undefined) (product as any).sourceUrl = sourceUrl;
     if (variants !== undefined) (product as any).variants = variants;
+    if (status !== undefined) (product as any).status = status;
+    if (publishAt !== undefined) (product as any).publishAt = publishAt ? new Date(publishAt) : null;
 
     await product.save();
+
+    // Audit log
+    try {
+      const ip = request.headers.get('x-forwarded-for') || (request as any).ip || '';
+      const userAgent = request.headers.get('user-agent') || '';
+      await AuditLog.create({
+        userId: user.userId,
+        action: 'product:update',
+        resourceType: 'Product',
+        resourceId: String(product._id),
+        metadata: { before, after: product.toObject() },
+        ip,
+        userAgent,
+      });
+    } catch {}
 
     return NextResponse.json({
       message: 'Product updated successfully',
@@ -156,6 +178,21 @@ export async function DELETE(
     }
 
     await Product.findByIdAndDelete(id);
+
+    // Audit log
+    try {
+      const ip = request.headers.get('x-forwarded-for') || (request as any).ip || '';
+      const userAgent = request.headers.get('user-agent') || '';
+      await AuditLog.create({
+        userId: user.userId,
+        action: 'product:delete',
+        resourceType: 'Product',
+        resourceId: String(product._id),
+        metadata: { name: product.name },
+        ip,
+        userAgent,
+      });
+    } catch {}
 
     return NextResponse.json({
       message: 'Product deleted successfully'
