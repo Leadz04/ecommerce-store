@@ -4,6 +4,18 @@ import { requireAnyPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import Product from '@/models/Product';
 
+async function updateProgress(operationId: string, current: number, total: number, status: string) {
+  try {
+    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/admin/products/sync-progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operationId, current, total, status }),
+    });
+  } catch (error) {
+    console.error('Failed to update progress:', error);
+  }
+}
+
 function stripHtml(html?: string) {
   if (!html) return '';
   return String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -30,31 +42,75 @@ function inferSpecifications(name: string, descriptionPlain: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const operationId = `backfill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
   try {
     await requireAnyPermission([PERMISSIONS.PRODUCT_UPDATE, PERMISSIONS.PRODUCT_MANAGE_INVENTORY])(request);
     await connectDB();
 
     const { limit = 200 } = await request.json().catch(() => ({}));
-    const products = await Product.find({}).limit(Math.min(limit, 1000));
+    const actualLimit = Math.min(limit, 1000);
 
-    let updated = 0;
-    for (const p of products) {
-      const html = (p as any).descriptionHtml as string | undefined;
-      const plain = stripHtml(html) || p.description || '';
-      const specs = inferSpecifications(p.name, plain);
-      if (Object.keys(specs).length) {
-        const existingObj = p.specifications instanceof Map
-          ? Object.fromEntries((p.specifications as any).entries())
-          : (p.specifications as any) || {};
-        const merged = { ...existingObj, ...specs };
-        p.set('specifications', merged);
-        await p.save();
-        updated++;
+    console.log(`[backfill] Starting backfill specs (limit=${actualLimit})`);
+    
+    // Return operationId immediately
+    const response = NextResponse.json({ 
+      operationId,
+      message: 'Backfill started, progress will be tracked',
+      limit: actualLimit
+    });
+    
+    // Do the actual backfill processing asynchronously
+    (async () => {
+      try {
+        await updateProgress(operationId, 0, 0, 'Loading products...');
+        
+        const products = await Product.find({}).limit(actualLimit);
+        console.log(`[backfill] Found ${products.length} products to process`);
+        
+        await updateProgress(operationId, 0, products.length, 'Processing specifications...');
+
+        let updated = 0;
+        for (let i = 0; i < products.length; i++) {
+          const p = products[i];
+          
+          // Update progress every 10 items or at the end
+          if (i % 10 === 0 || i === products.length - 1) {
+            console.log(`[backfill] Processing ${i + 1}/${products.length}...`);
+            await updateProgress(operationId, i + 1, products.length, `Processing ${i + 1}/${products.length}...`);
+            // Small delay to make progress visible
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          
+          const html = (p as any).descriptionHtml as string | undefined;
+          const plain = stripHtml(html) || p.description || '';
+          const specs = inferSpecifications(p.name, plain);
+          if (Object.keys(specs).length) {
+            const existingObj = p.specifications instanceof Map
+              ? Object.fromEntries((p.specifications as any).entries())
+              : (p.specifications as any) || {};
+            const merged = { ...existingObj, ...specs };
+            p.set('specifications', merged);
+            await p.save();
+            updated++;
+          }
+        }
+
+        console.log(`[backfill] Complete. updated=${updated} products`);
+        await updateProgress(operationId, products.length, products.length, 'Complete');
+        
+        console.log(`[backfill] Backfill completed for operationId: ${operationId}`);
+      } catch (error) {
+        console.error(`[backfill] Error in async backfill processing:`, error);
+        await updateProgress(operationId, 0, 0, 'Error occurred');
       }
-    }
+    })();
 
-    return NextResponse.json({ updated });
+    console.log(`[backfill] Returning response with operationId: ${operationId}`);
+    return response;
   } catch (error) {
+    await updateProgress(operationId, 0, 0, 'Error occurred');
+    
     if (error instanceof Error && error.message.includes('Insufficient permissions')) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }

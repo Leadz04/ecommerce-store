@@ -108,7 +108,21 @@ function computeDiff(before: any, after: any) {
   return diff;
 }
 
+async function updateProgress(operationId: string, current: number, total: number, status: string) {
+  try {
+    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/admin/products/sync-progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operationId, current, total, status }),
+    });
+  } catch (error) {
+    console.error('Failed to update progress:', error);
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const operationId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
   try {
     const user = await requireAnyPermission([PERMISSIONS.PRODUCT_CREATE, PERMISSIONS.PRODUCT_UPDATE])(request);
     await connectDB();
@@ -121,101 +135,133 @@ export async function POST(request: NextRequest) {
     const endpoint = `https://wolveyes.com/collections/all/products.json?limit=${limit}`;
 
     console.log(`[sync] Starting external sync from ${source} (limit=${limit}, dryRun=${dryRun})`);
+    
+    // Return operationId immediately
+    const response = NextResponse.json({ 
+      source, 
+      endpoint, 
+      fetchedAt: new Date(), 
+      operationId,
+      message: 'Sync started, progress will be tracked'
+    });
+    
+    // Do the actual sync processing asynchronously
+    (async () => {
+      try {
+        await updateProgress(operationId, 0, 0, 'Fetching products...');
 
-    // fetch with timeout to avoid hanging requests
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    const res = await fetch(endpoint, { cache: 'no-store', signal: controller.signal } as any).finally(() => clearTimeout(timeout));
-    if (!res.ok) {
-      console.error('[sync] Upstream fetch failed with status', res.status);
-      return NextResponse.json({ error: `Failed to fetch external products: ${res.status}` }, { status: 502 });
-    }
-    const data = await res.json();
-    const extProducts = Array.isArray(data.products) ? data.products.slice(0, limit) : [];
-
-    console.log(`[sync] Fetched ${extProducts.length} external products`);
-
-    const mappedAll = extProducts.map(mapExternalProduct);
-
-    if (dryRun) {
-      console.log('[sync] Dry run complete');
-      return NextResponse.json({ source, endpoint, fetchedAt: new Date(), sample: mappedAll.slice(0, 3), count: mappedAll.length });
-    }
-
-    const fetchedAt = new Date();
-    let created = 0, updated = 0, unchanged = 0;
-    const changes: any[] = [];
-
-    for (let i = 0; i < mappedAll.length; i++) {
-      const mapped = mappedAll[i];
-      if (i % 20 === 0) {
-        console.log(`[sync] Processing ${i + 1}/${mappedAll.length}...`);
-      }
-      const existing = await Product.findOne({ sourceUrl: mapped.sourceUrl }) || await Product.findOne({ name: mapped.name, brand: mapped.brand });
-
-      if (!existing) {
-        const createdDoc = new Product(mapped);
-        await createdDoc.save();
-        created++;
-        await ProductVersion.create({
-          productId: String(createdDoc._id),
-          action: 'created',
-          externalId: mapped.externalId,
-          source,
-          before: null,
-          after: mapped,
-          diff: computeDiff(null, mapped),
-          fetchedAt,
-        });
-        changes.push({ action: 'created', name: mapped.name, productId: String(createdDoc._id) });
-      } else {
-        const before = existing.toObject();
-        Object.assign(existing, mapped);
-        const diff = computeDiff(before, mapped);
-        if (diff.length > 0) {
-          await existing.save();
-          updated++;
-          await ProductVersion.create({
-            productId: String(existing._id),
-            action: 'updated',
-            externalId: mapped.externalId,
-            source,
-            before,
-            after: mapped,
-            diff,
-            fetchedAt,
-          });
-          changes.push({ action: 'updated', name: mapped.name, productId: String(existing._id), diff });
-        } else {
-          unchanged++;
-          await ProductVersion.create({
-            productId: String(existing._id),
-            action: 'unchanged',
-            externalId: mapped.externalId,
-            source,
-            before,
-            after: mapped,
-            diff: [],
-            fetchedAt,
-          });
+        // fetch with timeout to avoid hanging requests
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        const res = await fetch(endpoint, { cache: 'no-store', signal: controller.signal } as any).finally(() => clearTimeout(timeout));
+        if (!res.ok) {
+          console.error('[sync] Upstream fetch failed with status', res.status);
+          await updateProgress(operationId, 0, 0, 'Failed to fetch products');
+          return;
         }
+        const data = await res.json();
+        const extProducts = Array.isArray(data.products) ? data.products.slice(0, limit) : [];
+
+        console.log(`[sync] Fetched ${extProducts.length} external products`);
+        await updateProgress(operationId, 0, extProducts.length, 'Processing products...');
+
+        const mappedAll = extProducts.map(mapExternalProduct);
+
+        if (dryRun) {
+          console.log('[sync] Dry run complete');
+          await updateProgress(operationId, extProducts.length, extProducts.length, 'Dry run complete');
+          return;
+        }
+
+        const fetchedAt = new Date();
+        let created = 0, updated = 0, unchanged = 0;
+        const changes: any[] = [];
+
+        for (let i = 0; i < mappedAll.length; i++) {
+          const mapped = mappedAll[i];
+          // Update progress more frequently for better real-time feedback
+          if (i % 5 === 0 || i === mappedAll.length - 1) {
+            console.log(`[sync] Processing ${i + 1}/${mappedAll.length}...`);
+            await updateProgress(operationId, i + 1, mappedAll.length, `Processing ${i + 1}/${mappedAll.length}...`);
+            // Small delay to make progress visible
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          const existing = await Product.findOne({ sourceUrl: mapped.sourceUrl }) || await Product.findOne({ name: mapped.name, brand: mapped.brand });
+
+          if (!existing) {
+            const createdDoc = new Product(mapped);
+            await createdDoc.save();
+            created++;
+            await ProductVersion.create({
+              productId: String(createdDoc._id),
+              action: 'created',
+              externalId: mapped.externalId,
+              source,
+              before: null,
+              after: mapped,
+              diff: computeDiff(null, mapped),
+              fetchedAt,
+            });
+            changes.push({ action: 'created', name: mapped.name, productId: String(createdDoc._id) });
+          } else {
+            const before = existing.toObject();
+            Object.assign(existing, mapped);
+            const diff = computeDiff(before, mapped);
+            if (diff.length > 0) {
+              await existing.save();
+              updated++;
+              await ProductVersion.create({
+                productId: String(existing._id),
+                action: 'updated',
+                externalId: mapped.externalId,
+                source,
+                before,
+                after: mapped,
+                diff,
+                fetchedAt,
+              });
+              changes.push({ action: 'updated', name: mapped.name, productId: String(existing._id), diff });
+            } else {
+              unchanged++;
+              await ProductVersion.create({
+                productId: String(existing._id),
+                action: 'unchanged',
+                externalId: mapped.externalId,
+                source,
+                before,
+                after: mapped,
+                diff: [],
+                fetchedAt,
+              });
+            }
+          }
+        }
+
+        console.log(`[sync] Complete. created=${created} updated=${updated} unchanged=${unchanged}`);
+        await updateProgress(operationId, mappedAll.length, mappedAll.length, 'Complete');
+
+        // Audit log (best effort)
+        try {
+          await AuditLog.create({
+            userId: user.userId,
+            action: 'product:sync',
+            resourceType: 'Product',
+            metadata: { source, endpoint, created, updated, unchanged },
+          });
+        } catch {}
+
+        console.log(`[sync] Sync completed for operationId: ${operationId}`);
+      } catch (error) {
+        console.error(`[sync] Error in async sync processing:`, error);
+        await updateProgress(operationId, 0, 0, 'Error occurred');
       }
-    }
+    })();
 
-    console.log(`[sync] Complete. created=${created} updated=${updated} unchanged=${unchanged}`);
-
-    // Audit log (best effort)
-    try {
-      await AuditLog.create({
-        userId: user.userId,
-        action: 'product:sync',
-        resourceType: 'Product',
-        metadata: { source, endpoint, created, updated, unchanged },
-      });
-    } catch {}
-
-    return NextResponse.json({ source, endpoint, fetchedAt, counts: { created, updated, unchanged }, changes });
+    console.log(`[sync] Returning response with operationId: ${operationId}`);
+    return response;
   } catch (error) {
+    await updateProgress(operationId, 0, 0, 'Error occurred');
+    
     if ((error as any)?.name === 'AbortError') {
       console.error('[sync] Upstream request timed out');
       return NextResponse.json({ error: 'Upstream request timed out' }, { status: 504 });

@@ -2950,7 +2950,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-6 py-5 text-gray-700 whitespace-nowrap">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
                             {product.category}
                           </span>

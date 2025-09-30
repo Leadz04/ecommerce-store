@@ -188,12 +188,17 @@ export default function ProductPage() {
 
           {/* Description */}
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Description</h3>
-            <p className="text-gray-600  leading-relaxed">{product.description}</p>
-            {product.descriptionHtml && (
-              <div className="prose max-w-none mt-4" dangerouslySetInnerHTML={{ __html: product.descriptionHtml }} />
-            )}
-          </div>
+  <h3 className="text-lg font-semibold mb-3 text-gray-900">Description</h3>
+
+  {product.descriptionHtml && product.descriptionHtml.trim() !== "" ? (
+    <div
+      className="prose max-w-none mt-4 text-gray-600"
+      dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
+    />
+  ) : (
+    <p className="text-gray-600 leading-relaxed">{product.description}</p>
+  )}
+</div>
 
           {/* Size Selection */}
           <div>
