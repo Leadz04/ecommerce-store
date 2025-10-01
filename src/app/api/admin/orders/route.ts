@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import { Order, User } from '@/models';
 import { requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import { applyDeduplication } from '@/lib/deduplication';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,10 +32,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get orders
-    const orders = await Order.find(query)
+    const ordersRaw = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
+
+    // Apply deduplication to ensure unique orders
+    const orders = applyDeduplication(ordersRaw, 'orders');
 
     // Fetch related users (batch to avoid N+1 lookups)
     const uniqueUserIds = Array.from(new Set(orders.map(o => o.userId).filter(Boolean)));
@@ -74,16 +78,15 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Admin orders fetch error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch orders' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to fetch orders' }, { status: 500 });
   }
 }
 
@@ -109,15 +112,14 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     console.error('Admin order delete error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to delete order' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to delete order' }, { status: 500 });
   }
 }

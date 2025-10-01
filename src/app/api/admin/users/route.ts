@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Role from '@/models/Role';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import { applyDeduplication } from '@/lib/deduplication';
 
 // GET /api/admin/users - Get all users with pagination and filtering
 export async function GET(request: NextRequest) {
@@ -43,12 +44,15 @@ export async function GET(request: NextRequest) {
 
     // Get users with pagination
     const skip = (page - 1) * limit;
-    const users = await User.find(query)
+    const usersRaw = await User.find(query)
       .populate('role', 'name description')
       .select('-password')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    // Apply deduplication to ensure unique users
+    const users = applyDeduplication(usersRaw, 'users');
 
     const total = await User.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
@@ -67,16 +71,15 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Get users error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -146,15 +149,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Create user error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { SeoKeyword, SeoProduct } from '@/models';
+import { SeoKeyword, SeoProduct, SeoQuery } from '@/models';
+import { applyDeduplication } from '@/lib/deduplication';
 
 // Returns stored keywords/products for a given query from DB only (no SerpAPI)
 export async function GET(request: NextRequest) {
@@ -18,21 +19,35 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    const [kwTotal, prTotal] = await Promise.all([
+    const [kwTotal, prTotal, latestQuery] = await Promise.all([
       SeoKeyword.countDocuments({ query }),
       SeoProduct.countDocuments({ query }),
+      // Prefer the most recent entry that actually has a rawResponse snapshot
+      (async () => {
+        const withRaw = await SeoQuery.findOne({ query, type: 'products', rawResponse: { $exists: true } })
+          .sort({ createdAt: -1 })
+          .select('rawResponse')
+          .lean();
+        if (withRaw) return withRaw;
+        return SeoQuery.findOne({ query, type: 'products' }).sort({ createdAt: -1 }).select('rawResponse').lean();
+      })()
     ]);
 
-    const [keywords, products] = await Promise.all([
+    const [keywordsRaw, productsRaw] = await Promise.all([
       kwLimit > 0 ? SeoKeyword.find({ query }).sort({ createdAt: -1 }).skip(kwOffset).limit(kwLimit).lean() : [],
       prLimit > 0 ? SeoProduct.find({ query }).sort({ createdAt: -1 }).skip(prOffset).limit(prLimit).lean() : [],
     ]);
+
+    // Apply deduplication to ensure unique keywords and products
+    const keywords = applyDeduplication(keywordsRaw, 'seoQueries');
+    const products = applyDeduplication(productsRaw, 'seoProducts');
 
     return NextResponse.json({
       success: true,
       query,
       keywords: { total: kwTotal, items: keywords },
       products: { total: prTotal, items: products },
+      rawResponse: latestQuery?.rawResponse || null,
     });
   } catch (error) {
     console.error('[API] /api/seo/history/details error', error);

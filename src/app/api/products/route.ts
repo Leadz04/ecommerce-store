@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
+import { applyDeduplication } from '@/lib/deduplication';
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,11 +100,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const products = await Product.find(query)
+    const productsRaw = await Product.find(query)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .lean();
+
+    // Apply deduplication to ensure unique products
+    const products = applyDeduplication(productsRaw, 'products');
 
     const total = await Product.countDocuments(query);
 

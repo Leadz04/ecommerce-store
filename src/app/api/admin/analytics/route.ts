@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { AnalyticsEvent, Order, SearchEvent, User } from '@/models';
+import { applyDeduplication } from '@/lib/deduplication';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,22 +11,27 @@ export async function GET(request: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const funnel = await AnalyticsEvent.aggregate([
+    const funnelRaw = await AnalyticsEvent.aggregate([
       { $match: { createdAt: { $gte: since } } },
       { $group: { _id: '$type', count: { $sum: 1 }, value: { $sum: { $ifNull: ['$value', 0] } } } },
     ]);
 
-    const searchAgg = await SearchEvent.aggregate([
+    const searchAggRaw = await SearchEvent.aggregate([
       { $match: { createdAt: { $gte: since } } },
       { $group: { _id: '$query', count: { $sum: 1 }, noResults: { $sum: { $cond: [{ $eq: ['$resultsCount', 0] }, 1, 0] } } } },
       { $sort: { count: -1 } },
       { $limit: 20 },
     ]);
 
-    const orders = await Order.aggregate([
+    const ordersRaw = await Order.aggregate([
       { $match: { createdAt: { $gte: since } } },
       { $group: { _id: '$userId', revenue: { $sum: '$total' }, orders: { $sum: 1 }, first: { $min: '$createdAt' } } },
     ]);
+
+    // Apply deduplication to ensure unique analytics data
+    const funnel = applyDeduplication(funnelRaw, 'analyticsEvents');
+    const searchAgg = applyDeduplication(searchAggRaw, 'analyticsEvents');
+    const orders = applyDeduplication(ordersRaw, 'analyticsEvents');
 
     // Simple cohort: group by month of first order
     const cohorts = orders.reduce((acc: Record<string, { users: number; revenue: number }>, o: any) => {

@@ -5,6 +5,7 @@ export interface ISeoQuery extends Document {
   type: 'keywords' | 'products';
   resultsCount: number;
   metadata?: any;
+  rawResponse?: any;
   createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -15,6 +16,7 @@ const SeoQuerySchema = new Schema<ISeoQuery>({
   type: { type: String, enum: ['keywords', 'products'], required: true },
   resultsCount: { type: Number, default: 0 },
   metadata: { type: Schema.Types.Mixed },
+  rawResponse: { type: Schema.Types.Mixed },
   createdBy: { type: String }
 }, { timestamps: true });
 

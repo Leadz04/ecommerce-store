@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useEffect, useRef, useState, useCallback, memo, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
@@ -9,6 +9,52 @@ import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search } fro
 import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton, CategoryDetailSkeleton } from '@/components/LoadingSkeleton';
 import { useProductStore } from '@/store/productStore';
+
+// Pure, memoized header to avoid re-render during search/filter updates
+const CategoryHeader = memo(({ info, productsCount }: { info: { title: string; description: string; image: string }; productsCount: number }) => {
+  return (
+    <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+      <div className="absolute inset-0 bg-black bg-opacity-30" />
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center mb-4">
+          <Link
+            href="/categories"
+            className="flex items-center text-blue-100 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Back to Categories
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">{info.title}</h1>
+            <p className="text-xl text-blue-100 mb-6">{info.description}</p>
+            <div className="flex items-center space-x-4">
+              <span className="bg-white bg-opacity-20 px-4 py-2 rounded-full">
+                {productsCount} Products
+              </span>
+              <div className="flex items-center">
+                <Star className="h-5 w-5 text-yellow-400 fill-current mr-1" />
+                <span>4.5 Average Rating</span>
+              </div>
+            </div>
+          </div>
+          <div className="relative">
+            <Image
+              src={info.image}
+              alt={info.title}
+              width={600}
+              height={300}
+              loader={cdnImageLoader}
+              className="rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+});
+CategoryHeader.displayName = 'CategoryHeader';
 
 // Memoized Search and Controls Component
 const SearchAndControls = memo(({ 
@@ -111,7 +157,8 @@ const SidebarFilters = memo(({
   fetchProducts, 
   categoryName, 
   clearAllFilters, 
-  priceDebounceRef 
+  priceDebounceRef,
+  updateURL
 }: {
   filters: any;
   setFilters: (filters: any) => void;
@@ -122,6 +169,7 @@ const SidebarFilters = memo(({
   categoryName: string;
   clearAllFilters: () => void;
   priceDebounceRef: React.MutableRefObject<number | null>;
+  updateURL: (newParams: Record<string, string>) => void;
 }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -141,17 +189,7 @@ const SidebarFilters = memo(({
               const nextInStock = e.target.checked ? true : null;
               setFilters({ inStock: nextInStock });
               setPagination({ page: 1 });
-              // Update URL without causing re-render
-              const params = new URLSearchParams(searchParams);
-              if (e.target.checked) {
-                params.set('inStock', 'true');
-              } else {
-                params.delete('inStock');
-              }
-              params.set('page', '1');
-              const query = params.toString();
-              const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
-              window.history.replaceState(null, '', newURL);
+              updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
               fetchProducts({ 
                 category: categoryName, 
                 inStock: e.target.checked ? true : undefined, 
@@ -166,7 +204,7 @@ const SidebarFilters = memo(({
 
       {/* Price Range */}
       <div className="mb-6">
-        <h4 className="font-medium mb-3 text-gray-900">Price Range</h4>
+        <h4 className="font-medium mb-3 text-gray-900">Max Price</h4>
         <div className="space-y-2">
           <input
             type="range"
@@ -185,22 +223,12 @@ const SidebarFilters = memo(({
               // Set new timeout for debounced fetch
               priceDebounceRef.current = window.setTimeout(() => {
                 setPagination({ page: 1 });
-                // Update URL without causing re-render
-                const params = new URLSearchParams(searchParams);
-                if (nextRange[0] > 0) {
-                  params.set('minPrice', nextRange[0].toString());
-                } else {
-                  params.delete('minPrice');
-                }
-                if (nextRange[1] < 1000) {
-                  params.set('maxPrice', nextRange[1].toString());
-                } else {
-                  params.delete('maxPrice');
-                }
-                params.set('page', '1');
-                const query = params.toString();
-                const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
-                window.history.replaceState(null, '', newURL);
+                const urlParams: Record<string, string> = { page: '1' };
+                if (nextRange[0] > 0) urlParams.minPrice = nextRange[0].toString();
+                if (nextRange[1] < 1000) urlParams.maxPrice = nextRange[1].toString();
+                if (!(nextRange[0] > 0)) urlParams.minPrice = '' as any;
+                if (!(nextRange[1] < 1000)) urlParams.maxPrice = '' as any;
+                updateURL(urlParams);
                 fetchProducts({ 
                   category: categoryName, 
                   minPrice: nextRange[0], 
@@ -243,7 +271,8 @@ const ProductsGrid = memo(({
   fetchProducts, 
   setPagination,
   clearSearch, 
-  clearAllFilters 
+  clearAllFilters,
+  updateURL
 }: {
   products: any[];
   viewMode: 'grid' | 'list';
@@ -256,7 +285,18 @@ const ProductsGrid = memo(({
   setPagination: (pagination: any) => void;
   clearSearch: () => void;
   clearAllFilters: () => void;
+  updateURL: (newParams: Record<string, string>) => void;
 }) => {
+  const hasActiveFilters = (
+    (filters?.inStock === true) ||
+    (Array.isArray(filters?.priceRange) && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000)) ||
+    (filters?.sortBy && filters.sortBy !== 'name') ||
+    (filters?.category && filters.category !== 'all') ||
+    !!filters?.brand ||
+    typeof filters?.minRating === 'number' ||
+    !!filters?.collection ||
+    !!filters?.search
+  );
   return (
     <div className="flex-1">
       <div className="mb-4">
@@ -320,12 +360,14 @@ const ProductsGrid = memo(({
           ) : (
             <>
               <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
-              <button
-                onClick={clearAllFilters}
-                className="mt-4 text-blue-600 hover:text-blue-700 font-medium transition-colors"
-              >
-                Clear filters
-              </button>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearAllFilters}
+                  className="mt-4 text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                >
+                  Clear filters
+                </button>
+              )}
             </>
           )}
         </div>
@@ -378,6 +420,7 @@ const ProductsGrid = memo(({
                 const newPage = pagination.page - 1;
                 setPagination({ page: newPage });
                 fetchProducts({ category: categoryName, page: newPage });
+                updateURL({ page: newPage.toString() });
               }}
               disabled={pagination.page === 1 || isLoading}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
@@ -394,6 +437,7 @@ const ProductsGrid = memo(({
                     onClick={() => {
                       setPagination({ page });
                       fetchProducts({ category: categoryName, page });
+                      updateURL({ page: page.toString() });
                     }}
                     disabled={isLoading}
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -413,6 +457,7 @@ const ProductsGrid = memo(({
                 const newPage = pagination.page + 1;
                 setPagination({ page: newPage });
                 fetchProducts({ category: categoryName, page: newPage });
+                updateURL({ page: newPage.toString() });
               }}
               disabled={pagination.page === pagination.pages || isLoading}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
@@ -462,10 +507,14 @@ export default function CategoryPage() {
   const [isInitialized, setIsInitialized] = useState(false);
   const priceDebounceRef = useRef<number | null>(null);
   const initializationRef = useRef(false);
+  const [stableTotal, setStableTotal] = useState(0);
+
+  const isUnknownCategory = !categoryMap[categorySlug as keyof typeof categoryMap];
 
   // Initialize from URL params only once
   useEffect(() => {
     if (initializationRef.current) return;
+    if (isUnknownCategory) return;
     
     const search = searchParams.get('search') || '';
     const sortBy = searchParams.get('sortBy') || 'name';
@@ -489,7 +538,7 @@ export default function CategoryPage() {
     
     initializationRef.current = true;
     setIsInitialized(true);
-  }, [categoryName, setFilters, fetchProducts, searchParams]);
+  }, [categoryName, setFilters, fetchProducts, searchParams, isUnknownCategory]);
 
   // Update URL when filters change
   const updateURL = useCallback((newParams: Record<string, string>) => {
@@ -511,6 +560,7 @@ export default function CategoryPage() {
   // Debounced search
   useEffect(() => {
     if (!isInitialized) return;
+    if (isUnknownCategory) return;
     
     const t = setTimeout(() => {
       if (searchInput !== filters.search) {
@@ -519,21 +569,19 @@ export default function CategoryPage() {
         fetchProducts({ category: categoryName, search: searchInput, page: 1 });
         // Update URL after state changes to avoid triggering effects
         setTimeout(() => {
-          const params = new URLSearchParams(searchParams);
-          if (searchInput) {
-            params.set('search', searchInput);
-          } else {
-            params.delete('search');
-          }
-          params.set('page', '1');
-          const query = params.toString();
-          const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
-          window.history.replaceState(null, '', newURL);
+          updateURL({ search: searchInput || '', page: '1' });
         }, 0);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, setPagination, searchParams, categorySlug, isInitialized]);
+  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, setPagination, updateURL, isInitialized, isUnknownCategory]);
+
+  // Keep header count stable during loading; update after fetch completes
+  useEffect(() => {
+    if (!isLoading && pagination?.total >= 0) {
+      setStableTotal(pagination.total);
+    }
+  }, [isLoading, pagination.total]);
 
   const handleSortChange = useCallback((sortBy: string) => {
     setFilters({ sortBy });
@@ -541,18 +589,9 @@ export default function CategoryPage() {
     fetchProducts({ category: categoryName, sortBy, page: 1 });
     // Update URL after state changes to avoid triggering effects
     setTimeout(() => {
-      const params = new URLSearchParams(searchParams);
-      if (sortBy !== 'name') {
-        params.set('sortBy', sortBy);
-      } else {
-        params.delete('sortBy');
-      }
-      params.set('page', '1');
-      const query = params.toString();
-      const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
-      window.history.replaceState(null, '', newURL);
+      updateURL({ sortBy, page: '1' });
     }, 0);
-  }, [setFilters, setPagination, searchParams, categorySlug, fetchProducts, categoryName]);
+  }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
 
   // Log search analytics when searchInput changes and request returns
   useEffect(() => {
@@ -578,26 +617,20 @@ export default function CategoryPage() {
     fetchProducts({ category: categoryName, search: '', page: 1 });
     // Update URL after state changes to avoid triggering effects
     setTimeout(() => {
-      const params = new URLSearchParams(searchParams);
-      params.delete('search');
-      params.set('page', '1');
-      const query = params.toString();
-      const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
-      window.history.replaceState(null, '', newURL);
+      updateURL({ search: '', page: '1' });
     }, 0);
-  }, [setFilters, setPagination, searchParams, categorySlug, fetchProducts, categoryName]);
+  }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
 
   const clearAllFilters = useCallback(() => {
     setSearchInput('');
-    setFilters({ search: '', priceRange: [0, 1000], inStock: null });
+    setFilters({ search: '', priceRange: [0, 1000], inStock: null, sortBy: 'name', brand: undefined, minRating: undefined, collection: undefined });
     setPagination({ page: 1 });
     fetchProducts({ category: categoryName, search: '', minPrice: 0, maxPrice: 1000, page: 1 });
     // Update URL after state changes to avoid triggering effects
     setTimeout(() => {
-      const newURL = `/categories/${categorySlug}`;
-      window.history.replaceState(null, '', newURL);
+      updateURL({ search: '', minPrice: '', maxPrice: '', inStock: '', sortBy: '', page: '' });
     }, 0);
-  }, [setFilters, setPagination, categorySlug, fetchProducts, categoryName]);
+  }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
 
   const categoryInfo = {
     'Electronics': {
@@ -632,19 +665,21 @@ export default function CategoryPage() {
     }
   };
 
-  const currentCategoryInfo = categoryInfo[categoryName as keyof typeof categoryInfo] || {
-    title: categoryName,
-    description: 'Browse our collection of products in this category.',
-    image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=400&fit=crop'
-  };
+  const currentCategoryInfo = useMemo(() => (
+    categoryInfo[categoryName as keyof typeof categoryInfo] || {
+      title: categoryName,
+      description: 'Browse our collection of products in this category.',
+      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=400&fit=crop'
+    }
+  ), [categoryName]);
 
-  // Show full-page skeleton only on initial load
-  if (isLoading && products.length === 0) {
+  // Show full-page skeleton only on the very first load
+  if (!isInitialized && isLoading) {
     return <CategoryDetailSkeleton />;
   }
 
   // Only show "Category Not Found" if the category doesn't exist in our mapping
-  if (!categoryMap[categorySlug as keyof typeof categoryMap]) {
+  if (isUnknownCategory) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center">
@@ -663,46 +698,8 @@ export default function CategoryPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Category Header */}
-      <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
-        <div className="absolute inset-0 bg-black bg-opacity-30" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center mb-4">
-            <Link
-              href="/categories"
-              className="flex items-center text-blue-100 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Back to Categories
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            <div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-4">{currentCategoryInfo.title}</h1>
-              <p className="text-xl text-blue-100 mb-6">{currentCategoryInfo.description}</p>
-              <div className="flex items-center space-x-4">
-                <span className="bg-white bg-opacity-20 px-4 py-2 rounded-full">
-                  {products.length} Products
-                </span>
-                <div className="flex items-center">
-                  <Star className="h-5 w-5 text-yellow-400 fill-current mr-1" />
-                  <span>4.5 Average Rating</span>
-                </div>
-              </div>
-            </div>
-            <div className="relative">
-              <Image
-                src={currentCategoryInfo.image}
-                alt={currentCategoryInfo.title}
-                width={600}
-                height={300}
-                loader={cdnImageLoader}
-                className="rounded-lg shadow-2xl"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Category Header (memoized) */}
+      <CategoryHeader info={currentCategoryInfo} productsCount={stableTotal} />
 
       {/* Products Section */}
       <section className="py-8 bg-gray-50">
@@ -740,7 +737,8 @@ export default function CategoryPage() {
                 fetchProducts={fetchProducts}
                 categoryName={categoryName}
                 clearAllFilters={clearAllFilters}
-                priceDebounceRef={priceDebounceRef}
+            priceDebounceRef={priceDebounceRef}
+            updateURL={updateURL}
               />
             </div>
 
@@ -756,7 +754,8 @@ export default function CategoryPage() {
               fetchProducts={fetchProducts}
               setPagination={setPagination}
               clearSearch={clearSearch}
-              clearAllFilters={clearAllFilters}
+            clearAllFilters={clearAllFilters}
+            updateURL={updateURL}
             />
           </div>
         </div>

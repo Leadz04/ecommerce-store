@@ -4,6 +4,7 @@ import Product from '@/models/Product';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import { AuditLog } from '@/models';
+import { applyDeduplication } from '@/lib/deduplication';
 
 // GET /api/admin/products - Get all products with pagination and filtering
 export async function GET(request: NextRequest) {
@@ -59,11 +60,14 @@ export async function GET(request: NextRequest) {
 
     // Get products with pagination
     const skip = (page - 1) * limit;
-    const products = await Product.find(query)
+    const productsRaw = await Product.find(query)
       .sort(sort)
       .skip(skip)
       .limit(limit)
       .lean();
+
+    // Apply deduplication to ensure unique products
+    const products = applyDeduplication(productsRaw, 'products');
 
     const total = await Product.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
@@ -90,16 +94,15 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Get products error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -202,11 +205,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Create product error:', error);
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
     // Surface validation details when possible
     const err: any = error;

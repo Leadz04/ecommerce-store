@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     const seo = new SEOAPIs();
     const results = await seo.searchKeywordsSerpAPI(q, Math.min(limit, 50));
 
-    // Save query and keywords to DB
-    await SeoQuery.create({ query: q, type: 'keywords', resultsCount: results.length });
+    // Save query and keywords to DB with raw response snapshot
+    await SeoQuery.create({ query: q, type: 'keywords', resultsCount: results.length, rawResponse: { provider: 'serpapi', query: q, timestamp: Date.now(), results } });
     for (const k of results) {
       await SeoKeyword.findOneAndUpdate(
         { query: q, keyword: k.keyword },

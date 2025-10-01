@@ -65,10 +65,15 @@ export async function GET(request: NextRequest) {
     
   } catch (error) {
     console.error('Error fetching occasions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch occasions' },
-      { status: 500 }
-    );
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
+    }
+    return NextResponse.json({ error: 'Failed to fetch occasions' }, { status: 500 });
   }
 }
 

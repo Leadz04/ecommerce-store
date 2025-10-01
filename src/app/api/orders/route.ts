@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 
 // Import all models to ensure proper schema registration
 import { Order, Product, OrderCounter } from '@/models';
+import { applyDeduplication } from '@/lib/deduplication';
 
 // Helper function to verify JWT token
 async function verifyToken(request: NextRequest) {
@@ -70,11 +71,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Execute query
-    const orders = await Order.find(query)
+    const ordersRaw = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .lean();
+
+    // Apply deduplication to ensure unique orders
+    const orders = applyDeduplication(ordersRaw, 'orders');
 
     const total = await Order.countDocuments(query);
 

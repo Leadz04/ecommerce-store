@@ -14,10 +14,33 @@ export async function verifyToken(request: NextRequest): Promise<AuthUser> {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
   
   if (!token) {
+    // Dev bypass: allow admin access without token when explicitly enabled
+    if (process.env.ALLOW_DEV_ADMIN === '1') {
+      return {
+        userId: 'dev-user',
+        email: 'dev@local',
+        role: 'SUPER_ADMIN',
+        permissions: Object.values(PERMISSIONS as any)
+      } as AuthUser;
+    }
     throw new Error('No token provided');
   }
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+  let decoded: any;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET!);
+  } catch {
+    // Dev bypass on invalid token
+    if (process.env.ALLOW_DEV_ADMIN === '1') {
+      return {
+        userId: 'dev-user',
+        email: 'dev@local',
+        role: 'SUPER_ADMIN',
+        permissions: Object.values(PERMISSIONS as any)
+      } as AuthUser;
+    }
+    throw new Error('Invalid token');
+  }
   
   return {
     userId: decoded.userId,

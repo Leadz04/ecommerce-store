@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { SeoQuery, SeoKeyword, SeoProduct } from '@/models';
+import { applyDeduplication } from '@/lib/deduplication';
 
 // Returns unique recent searches (grouped by query+type), with small previews
 export async function GET(request: NextRequest) {
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
           type: { $first: '$type' },
           createdAt: { $first: '$createdAt' },
           resultsCount: { $first: '$resultsCount' },
+          rawResponse: { $first: '$rawResponse' },
         }
       },
       { $sort: { createdAt: -1 } },
@@ -37,13 +39,16 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Attach small previews without heavy payloads
-    const history = await Promise.all(groups.map(async (g: any) => {
+    const historyRaw = await Promise.all(groups.map(async (g: any) => {
       const [kws, prods] = await Promise.all([
         previewKeywords > 0 ? SeoKeyword.find({ query: g.query }).sort({ createdAt: -1 }).limit(previewKeywords).lean() : [],
         previewProducts > 0 ? SeoProduct.find({ query: g.query }).sort({ createdAt: -1 }).limit(previewProducts).lean() : [],
       ]);
       return { ...g, keywords: kws, products: prods };
     }));
+
+    // Apply deduplication to ensure unique history entries
+    const history = applyDeduplication(historyRaw, 'seoQueries');
 
     console.log('[API] /api/seo/history success', { count: history.length });
     return NextResponse.json({ success: true, history, total: history.length });

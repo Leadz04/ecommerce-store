@@ -157,7 +157,7 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo'>('overview');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo'>('overview');
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -178,6 +178,15 @@ export default function AdminDashboard() {
   const [seoHistory, setSeoHistory] = useState<any[]>([]);
   const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
+  const [seoRawSnapshot, setSeoRawSnapshot] = useState<any>(null);
+  const [rawSearchItems, setRawSearchItems] = useState<any[]>([]);
+  
+  // Google & Google Shopping Analytics state
+  const [analyticsSearchQuery, setAnalyticsSearchQuery] = useState('');
+  const [analyticsResults, setAnalyticsResults] = useState<any[]>([]);
+  const [analyticsSeoLoading, setAnalyticsSeoLoading] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   // Dynamic insights for Decision Helper
   const seoInsights = useMemo(() => {
@@ -267,6 +276,7 @@ export default function AdminDashboard() {
       const data = await res.json();
       if (data.success) {
         setProductsSeo(data.products);
+        if (data.rawResponse) setSeoRawSnapshot(data.rawResponse);
         toast.success(`Loaded ${data.products.length} products`);
       } else {
         toast.error('Failed to load products');
@@ -335,6 +345,35 @@ export default function AdminDashboard() {
     }
   };
 
+  // Google & Google Shopping Analytics functions
+  const searchAnalytics = async () => {
+    if (!analyticsSearchQuery.trim()) return;
+    
+    setAnalyticsSeoLoading(true);
+    try {
+      const response = await fetch(`/api/seo/raw-search?q=${encodeURIComponent(analyticsSearchQuery)}&limit=10`);
+      const data = await response.json();
+      if (data.success) {
+        setAnalyticsResults(data.items);
+        toast.success(`Found ${data.total} analytics results`);
+      } else {
+        toast.error('Search failed');
+      }
+    } catch (error) {
+      console.error('Analytics search error:', error);
+      toast.error('Search failed');
+    } finally {
+      setAnalyticsSeoLoading(false);
+    }
+  };
+
+  const toggleSection = (sectionKey: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  };
+
   // Auto-load once when SEO tab becomes active
   useEffect(() => {
     if ((activeTab as any) === 'seo' && !seoLoadedOnceRef.current) {
@@ -379,6 +418,44 @@ export default function AdminDashboard() {
   } | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsDays, setMetricsDays] = useState<7 | 30 | 90>(30);
+
+  // Reusable collapsible JSON tree viewer
+  const JsonTree: React.FC<{ data: any; defaultOpen?: boolean; label?: string }> = ({ data, defaultOpen = false }) => {
+    if (data === null || typeof data !== 'object') {
+      return (
+        <span className="font-mono text-black">{typeof data === 'string' ? JSON.stringify(data) : String(data)}</span>
+      );
+    }
+    if (Array.isArray(data)) {
+      return (
+        <details className="ml-3" open={defaultOpen}>
+          <summary className="cursor-pointer font-mono text-sm text-green-800">[Array] ({data.length})</summary>
+          <div className="mt-2 space-y-1">
+            {data.map((item, idx) => (
+              <div key={idx} className="pl-3 border-l border-green-100">
+                <div className="font-mono text-[11px] text-green-700">[{idx}]</div>
+                <JsonTree data={item} />
+              </div>
+            ))}
+          </div>
+        </details>
+      );
+    }
+    const entries = Object.entries(data as Record<string, any>);
+    return (
+      <details className="ml-3" open={defaultOpen}>
+        <summary className="cursor-pointer font-mono text-sm text-green-800">{`{Object} (${entries.length})`}</summary>
+        <div className="mt-2 space-y-1">
+          {entries.map(([key, value]) => (
+            <div key={key} className="pl-3 border-l border-green-100">
+              <div className="font-mono text-[11px] text-green-700">{key}</div>
+              <JsonTree data={value} />
+            </div>
+          ))}
+        </div>
+      </details>
+    );
+  };
 
   const fetchMetrics = async (days = metricsDays) => {
     try {
@@ -749,7 +826,7 @@ export default function AdminDashboard() {
 
   // Deep-link: set tab/status from URL
   useEffect(() => {
-    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | null;
+    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | null;
     if (tabParam) setActiveTab(tabParam);
     if (tabParam === 'orders') setSelectedOrderStatus(searchParams.get('status') || '');
   }, [searchParams]);
@@ -1298,7 +1375,7 @@ export default function AdminDashboard() {
         <div className="mb-8">
           <nav className="flex space-x-8">
             <button
-              onClick={() => setActiveTab('overview')}
+              onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'overview'
                   ? 'border-blue-500 text-blue-600'
@@ -1309,7 +1386,7 @@ export default function AdminDashboard() {
               Overview
             </button>
             <button
-              onClick={() => setActiveTab('users')}
+              onClick={() => { setActiveTab('users'); updateQuery({ tab: 'users' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'users'
                   ? 'border-blue-500 text-blue-600'
@@ -1320,7 +1397,7 @@ export default function AdminDashboard() {
               Users
             </button>
             <button
-              onClick={() => setActiveTab('roles')}
+              onClick={() => { setActiveTab('roles'); updateQuery({ tab: 'roles' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'roles'
                   ? 'border-blue-500 text-blue-600'
@@ -1331,7 +1408,7 @@ export default function AdminDashboard() {
               Roles & Permissions
             </button>
             <button
-              onClick={() => setActiveTab('products')}
+              onClick={() => { setActiveTab('products'); updateQuery({ tab: 'products' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'products'
                   ? 'border-blue-500 text-blue-600'
@@ -1342,7 +1419,7 @@ export default function AdminDashboard() {
               Products
             </button>
             <button
-              onClick={() => setActiveTab('orders')}
+              onClick={() => { setActiveTab('orders'); updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined } as any); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'orders'
                   ? 'border-blue-500 text-blue-600'
@@ -1352,65 +1429,19 @@ export default function AdminDashboard() {
               <ShoppingCart className="h-5 w-5 inline mr-2" />
               Orders
             </button>
-            {user?.role?.name === 'SUPER_ADMIN' && (
-              <button
-                onClick={() => setActiveTab('occasions')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'occasions'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Calendar className="h-5 w-5 inline mr-2" />
-                Occasions
-              </button>
-            )}
             <button
-              onClick={() => setActiveTab('marketing')}
+              onClick={() => { setActiveTab('marketing'); updateQuery({ tab: 'marketing' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'marketing'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Gift className="h-5 w-5 inline mr-2" />
-              Marketing
-            </button>
-            <button
-              onClick={() => setActiveTab('performance')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                (activeTab as any) === 'performance'
+                ['marketing','performance','analytics','etsy','occasions'].includes(activeTab as any)
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <BarChart3 className="h-5 w-5 inline mr-2" />
-              Performance
+              Marketing & Performance
             </button>
             <button
-              onClick={() => setActiveTab('analytics')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                (activeTab as any) === 'analytics'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="h-5 w-5 inline mr-2" />
-              Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab('etsy')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                (activeTab as any) === 'etsy'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Package className="h-5 w-5 inline mr-2" />
-              Etsy Integration
-            </button>
-            <button
-              onClick={() => setActiveTab('seo')}
+              onClick={() => { setActiveTab('seo'); updateQuery({ tab: 'seo' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 (activeTab as any) === 'seo'
                   ? 'border-green-500 text-green-600'
@@ -1420,6 +1451,17 @@ export default function AdminDashboard() {
               <Search className="h-5 w-5 inline mr-2" />
               SEO Research
             </button>
+          <button
+            onClick={() => { setActiveTab('seo-raw'); updateQuery({ tab: 'seo-raw' }); }}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              (activeTab as any) === 'seo-raw'
+                ? 'border-green-500 text-green-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Search className="h-5 w-5 inline mr-2" />
+            SEO Raw
+          </button>
           </nav>
         </div>
 
@@ -1950,9 +1992,26 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Marketing Tab */}
+        {/* Marketing & Performance Aggregated Tab */}
         {activeTab === 'marketing' && (
           <div className="space-y-8">
+            {/* Sub-navigation for grouped features (moved to top) */}
+            <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-blue-900">More tools</h2>
+                <p className="text-blue-700/80 mt-1 text-sm">Access performance, analytics, Etsy integration, occasions, and SEO research.</p>
+              </div>
+              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+                <button onClick={() => { setActiveTab('performance'); updateQuery({ tab: 'performance' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">Performance</button>
+                <button onClick={() => { setActiveTab('analytics'); updateQuery({ tab: 'analytics' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">Analytics</button>
+                <button onClick={() => { setActiveTab('etsy'); updateQuery({ tab: 'etsy' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">Etsy Integration</button>
+                <button onClick={() => { setActiveTab('occasions'); updateQuery({ tab: 'occasions' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">Occasions</button>
+                <button onClick={() => { setActiveTab('seo'); updateQuery({ tab: 'seo' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">SEO Research</button>
+                <button onClick={() => { setActiveTab('seo-raw'); updateQuery({ tab: 'seo-raw' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">SEO Raw</button>
+                <button onClick={() => { setActiveTab('analytics-seo' as any); updateQuery({ tab: 'analytics-seo' }); }} className="px-3 py-2 border rounded hover:bg-gray-50 text-gray-700">Google & Google Shopping Analytics</button>
+              </div>
+            </div>
+
             {/* Email Campaigns */}
             <div className="bg-white rounded-lg shadow-sm border border-blue-100">
               <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
@@ -2061,6 +2120,8 @@ export default function AdminDashboard() {
                 <a className="px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100" href="/rss.xml" target="_blank" rel="noreferrer">RSS Feed</a>
               </div>
             </div>
+
+            {/* End sub-navigation moved to top */}
           </div>
         )}
 
@@ -2172,8 +2233,34 @@ export default function AdminDashboard() {
             {/* Product Results */}
             <div className="bg-white rounded-lg shadow-sm border border-green-100">
               <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
-                <h2 className="text-xl font-semibold text-green-900">Product Results</h2>
-                <p className="text-green-700/80 mt-1 text-sm">Live cards from SerpAPI immersive products for your query.</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900">Product Results</h2>
+                    <p className="text-green-700/80 mt-1 text-sm">Live cards from SerpAPI immersive products for your query.</p>
+                  </div>
+                  {seoRawSnapshot ? (
+                    <div className="text-right space-y-2 max-w-full md:max-w-2xl">
+                      {seoRawSnapshot.engines?.google_shopping ? (
+                        <details>
+                          <summary className="cursor-pointer text-sm text-green-800">View raw SerpAPI (Google Shopping)</summary>
+                          <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">{JSON.stringify(seoRawSnapshot.engines.google_shopping, null, 2)}</pre>
+                        </details>
+                      ) : null}
+                      {seoRawSnapshot.engines?.google ? (
+                        <details>
+                          <summary className="cursor-pointer text-sm text-green-800">View raw SerpAPI (Google)</summary>
+                          <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">{JSON.stringify(seoRawSnapshot.engines.google, null, 2)}</pre>
+                        </details>
+                      ) : (
+                        // Fallback for older snapshots without engines
+                        <details>
+                          <summary className="cursor-pointer text-sm text-green-800">View raw SerpAPI snapshot</summary>
+                          <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">{JSON.stringify(seoRawSnapshot, null, 2)}</pre>
+                        </details>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <div className="p-6">
                 {productsSeo.length === 0 ? (
@@ -2196,12 +2283,28 @@ export default function AdminDashboard() {
                             {typeof p.price === 'number' ? `$${p.price.toFixed(2)}` : '—'}
                             {typeof p.originalPrice === 'number' ? <span className="ml-2 line-through text-green-600/70">${p.originalPrice.toFixed(2)}</span> : null}
                           </div>
-                          {p.productApiUrl ? (
-                            <a className="text-xs text-green-700 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">Product API</a>
-                          ) : null}
+                          <div className="text-xs text-gray-600 break-all">
+                            <strong>link:</strong> {p.link || 'null'}
+                          </div>
+                          <div className="flex gap-2 text-xs">
+                            {p.link ? (
+                              <a className="text-green-700 underline" href={p.link} target="_blank" rel="noreferrer">View Product</a>
+                            ) : null}
+                            {p.productApiUrl ? (
+                              <a className="text-green-600 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">Product API</a>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {seoRawSnapshot && (
+                  <div className="mt-6">
+                    <details className="bg-white border border-green-200 rounded-lg p-3">
+                      <summary className="cursor-pointer text-sm text-green-800">View raw SerpAPI snapshot</summary>
+                      <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">{JSON.stringify(seoRawSnapshot, null, 2)}</pre>
+                    </details>
                   </div>
                 )}
               </div>
@@ -2401,7 +2504,7 @@ export default function AdminDashboard() {
               </div>
               <div className="p-6">
                 {seoHistory.length === 0 ? (
-                  <div className="text-center py-8 text-green-700">
+                          <div className="text-center py-8 text-green-700">
                     <Clock className="h-12 w-12 mx-auto mb-4 text-green-400" />
                     <p>No past searches found. Start researching keywords to see your history here.</p>
                   </div>
@@ -2423,17 +2526,338 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                         
+        {(activeTab as any) === 'seo-raw' && (
+          <div className="bg-white rounded-lg shadow-sm border border-green-100">
+            <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+              <h2 className="text-xl font-semibold text-green-900">Search Saved SerpAPI Raw Data</h2>
+              <p className="text-green-700/80 mt-1 text-sm">Find stored raw responses by product title, source, link, or keyword. Useful for auditing.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col md:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Search term (product name, link, or keyword)"
+                  className="flex-1 px-3 py-2 border border-green-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  value={keywordQuery}
+                  onChange={(e) => setKeywordQuery(e.target.value)}
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      setSeoLoading(prev => ({ ...prev, rawSearch: true }));
+                      const res = await fetch(`/api/seo/raw-search?q=${encodeURIComponent(keywordQuery)}&limit=5`);
+                      const data = await res.json();
+                      if (data.success) {
+                        console.log('Raw search results:', data.items);
+                        console.log('First item allProducts:', data.items[0]?.allProducts?.slice(0, 3).map((p: any) => ({ title: p.title, link: p.link, productApiUrl: p.productApiUrl })));
+                        setSeoRawSnapshot(null); // reset header block; show per-result blocks
+                        setSeoHistory(h => h); // noop to trigger state usage
+                        (window as any).__rawSearchItems = data.items; // simple scratch area
+                        toast.success(`Found ${data.total} matching sessions`);
+                        setRawSearchItems(data.items || []);
+                      } else {
+                        toast.error('Search failed');
+                        setRawSearchItems([]);
+                      }
+                    } catch (e) {
+                      toast.error('Error searching raw data');
+                      setRawSearchItems([]);
+                    } finally {
+                      setSeoLoading(prev => ({ ...prev, rawSearch: false }));
+                    }
+                  }}
+                  disabled={seoLoading.rawSearch}
+                  className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50"
+                >
+                  {seoLoading.rawSearch ? 'Searching…' : 'Search Raw Data'}
+                </button>
+              </div>
+
+              {/* Results list */}
+              {rawSearchItems && rawSearchItems.length > 0 ? (
+                <div className="space-y-4">
+                  {rawSearchItems.map((item: any, idx: number) => (
+                    <div key={idx} className="border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm text-green-800">Query</div>
+                          <div className="font-medium text-green-900">{item.query}</div>
+                        </div>
+                        <div className="text-xs text-green-600">{new Date(item.createdAt).toLocaleString()}</div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">Shopping matches</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.shoppingCount}</div>
+                        </div>
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">Google matches</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.googleCount}</div>
+                        </div>
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">DB products</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.dbCount}</div>
+                        </div>
+                      </div>
+
+                      {/* Expandable raw JSON viewers */}
+                      <div className="mt-3 space-y-2">
+                        {item.rawResponse?.engines?.google_shopping && (
+                          <details>
+                            <summary className="cursor-pointer text-sm text-green-800">Raw JSON: Google Shopping</summary>
+                            <div className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">
+                              <JsonTree data={item.rawResponse.engines.google_shopping} />
+                            </div>
+                          </details>
+                        )}
+                        {item.rawResponse?.engines?.google && (
+                          <details>
+                            <summary className="cursor-pointer text-sm text-green-800">Raw JSON: Google</summary>
+                            <div className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">
+                              <JsonTree data={item.rawResponse.engines.google} />
+                            </div>
+                          </details>
+                        )}
+                      </div>
+
+                      {/* Deduplicated products from all sources */}
+                      {item.allProducts && item.allProducts.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-sm font-medium text-green-900 mb-2">All Products (Deduplicated) ({item.allProducts.length})</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                            {item.allProducts.slice(0, 12).map((p: any, i: number) => (
+                              <div key={i} className="border border-green-200 rounded-lg p-3 bg-white">
+                                <div className="flex items-start gap-2">
+                                  {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-12 h-12 object-cover rounded"/> : null}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-green-900 line-clamp-2">{p.title}</div>
+                                    <div className="text-xs text-green-600 mt-1">
+                                      {p.source} • {p.sourceType}
+                                      {p.price ? ` • $${p.price}` : ''}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-600 break-all">
+                                      <strong>link:</strong> {p.link || 'null'}
+                                    </div>
+                                    <div className="mt-1 flex gap-1">
+                                      {p.link ? (
+                                        <a className="text-xs text-green-700 underline" href={p.link} target="_blank" rel="noreferrer">View</a>
+                                      ) : p.productApiUrl ? (
+                                        <a className="text-xs text-green-700 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">View</a>
+                                      ) : (
+                                        <span className="text-xs text-gray-500">No link</span>
+                                      )}
+                                      {p.productApiUrl && p.link ? (
+                                        <a className="text-xs text-green-600 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">API</a>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Raw products from SerpAPI response */}
+                      {(item.rawProducts || item.rawResponse) && (
+                        <div className="mt-3 space-y-3">
+                          {/* Google Shopping Products */}
+                          {item.rawProducts.googleShopping && item.rawProducts.googleShopping.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Shopping Products ({item.rawProducts.googleShopping.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleShopping.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source} • ${p.price || 'N/A'}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Google Immersive Products */}
+                          {item.rawProducts.googleImmersive && item.rawProducts.googleImmersive.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Immersive Products ({item.rawProducts.googleImmersive.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleImmersive.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source} • ${p.price || 'N/A'}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Google Organic Results */}
+                          {item.rawProducts.googleOrganic && item.rawProducts.googleOrganic.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Organic Results ({item.rawProducts.googleOrganic.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleOrganic.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* DB Matches (fallback) */}
+                          {item.productsDb && item.productsDb.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">DB Matches ({item.productsDb.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.productsDb.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">{p.source} {p.link ? '• ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}</div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Fallback: Extract products directly from raw response if rawProducts not available */}
+                          {!item.rawProducts && item.rawResponse && (
+                            <>
+                              {/* Extract Google Shopping Products from raw response */}
+                              {item.rawResponse.engines?.google_shopping?.shopping_results && item.rawResponse.engines.google_shopping.shopping_results.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Shopping Products ({item.rawResponse.engines.google_shopping.shopping_results.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google_shopping.shopping_results.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source || p.store} • ${p.extracted_price || 'N/A'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Extract Google Immersive Products from raw response */}
+                              {item.rawResponse.engines?.google?.immersive_products && item.rawResponse.engines.google.immersive_products.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Immersive Products ({item.rawResponse.engines.google.immersive_products.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google.immersive_products.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source} • ${p.extracted_price || 'N/A'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Extract Google Organic Results from raw response */}
+                              {item.rawResponse.engines?.google?.organic_results && item.rawResponse.engines.google.organic_results.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Organic Results ({item.rawResponse.engines.google.organic_results.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google.organic_results.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source || 'Google'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-green-700">Enter a term and click Search Raw Data.</div>
+              )}
+            </div>
+          </div>
+        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Keywords */}
                           {search.keywords && search.keywords.length > 0 && (
                             <div>
                               <h4 className="font-medium text-green-800 mb-2">Keywords ({search.keywords.length})</h4>
                               <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {search.keywords.slice(0, 5).map((keyword: any, idx: number) => (
-                                  <div key={idx} className="text-sm text-green-700 flex justify-between">
+                                {(search.keywords || []).slice(0, (seoHistoryExpanded[search.query]?.kw || 5)).map((keyword: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-green-700 flex items-center justify-between gap-2">
                                     <span className="truncate">{keyword.keyword}</span>
-                                    <span className="ml-2 text-green-600">
-                                      {keyword.searchVolume ? keyword.searchVolume.toLocaleString() : '—'} vol
+                                    <span className="ml-2 whitespace-nowrap text-green-600">
+                                      Vol: {keyword.searchVolume ? keyword.searchVolume.toLocaleString() : '—'}
+                                      {typeof keyword.competition !== 'undefined' && (
+                                        <>
+                                          {' '}• Comp: <span className="capitalize">{keyword.competition}</span>
+                                        </>
+                                      )}
+                                      {typeof keyword.difficulty !== 'undefined' && (
+                                        <>
+                                          {' '}• Diff: {keyword.difficulty}
+                                        </>
+                                      )}
                                     </span>
                                   </div>
                                 ))}
@@ -2454,18 +2878,23 @@ export default function AdminDashboard() {
                             <div>
                               <h4 className="font-medium text-green-800 mb-2">Products ({search.products.length})</h4>
                               <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {search.products.slice(0, 3).map((product: any, idx: number) => (
-                                  <div key={idx} className="text-sm text-green-700 flex items-center gap-2">
-                                    {product.thumbnail && (
-                                      <img src={product.thumbnail} alt={product.title} className="w-8 h-8 object-cover rounded" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="truncate font-medium">{product.title}</div>
-                                      <div className="text-xs text-green-600">
-                                        {product.source} • {product.price ? `$${product.price}` : '—'}
+                                {(search.products || []).slice(0, (seoHistoryExpanded[search.query]?.pr || 3)).map((product: any, idx: number) => (
+                                  <a key={idx} href={product.link} target="_blank" rel="noreferrer" className="block text-sm text-green-700 hover:text-green-800">
+                                    <div className="flex items-center gap-2">
+                                      {product.thumbnail && (
+                                        <img src={product.thumbnail} alt={product.title} className="w-8 h-8 object-cover rounded" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="truncate font-medium">{product.title}</div>
+                                        <div className="text-xs text-green-600">
+                                          {product.source} • {product.price ? `$${product.price}` : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-600 break-all">
+                                          <strong>link:</strong> {product.link || 'null'}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
+                                  </a>
                                 ))}
                                 <div className="pt-2">
                                   <button
@@ -2478,15 +2907,43 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                           )}
+                          {/* Raw snapshot */}
+                          {search.rawResponse && (
+                            <div className="md:col-span-2">
+                              <details className="bg-white border border-green-200 rounded-lg p-3">
+                                <summary className="cursor-pointer text-sm text-green-800">View raw SerpAPI snapshot</summary>
+                                <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">{JSON.stringify(search.rawResponse, null, 2)}</pre>
+                              </details>
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-3 flex gap-2">
                           <button
-                            onClick={() => {
-                              setKeywordQuery(search.query);
-                              setKeywords(search.keywords || []);
-                              setProductsSeo(search.products || []);
-                              toast.success(`Loaded ${search.query} results`);
+                            onClick={async () => {
+                              try {
+                                setKeywordQuery(search.query);
+                                // Load full saved results (not the preview-limited ones)
+                                const detailRes = await fetch(`/api/seo/history/details?query=${encodeURIComponent(search.query)}&kwLimit=200&prLimit=200`);
+                                const detail = await detailRes.json();
+                                if (detail.success) {
+                                  setKeywords(detail.keywords?.items || []);
+                                  setProductsSeo(detail.products?.items || []);
+                                  setSeoRawSnapshot(detail.rawResponse || search.rawResponse || null);
+                                  toast.success(`Loaded ${search.query} results (${detail.products?.total || 0} products)`);
+                                } else {
+                                  // fallback to preview data if details failed
+                                  setKeywords(search.keywords || []);
+                                  setProductsSeo(search.products || []);
+                                  setSeoRawSnapshot(search.rawResponse || null);
+                                  toast.error('Failed to load full results; showing preview');
+                                }
+                              } catch (err) {
+                                setKeywords(search.keywords || []);
+                                setProductsSeo(search.products || []);
+                                setSeoRawSnapshot(search.rawResponse || null);
+                                toast.error('Error loading full results; showing preview');
+                              }
                             }}
                             className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
                           >
@@ -2523,6 +2980,881 @@ export default function AdminDashboard() {
         )}
 
         {/* Users Tab */}
+        {(activeTab as any) === 'seo-raw' && (
+          <div className="bg-white rounded-lg shadow-sm border border-green-100">
+            <div className="p-6 border-b border-green-100 bg-gradient-to-r from-green-50/40 to-emerald-50/30">
+              <h2 className="text-xl font-semibold text-green-900">Search Saved SerpAPI Raw Data</h2>
+              <p className="text-green-700/80 mt-1 text-sm">Find stored raw responses by product title, source, link, or keyword. Useful for auditing.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col md:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Search term (product name, link, or keyword)"
+                  className="flex-1 px-3 py-2 border border-green-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  value={keywordQuery}
+                  onChange={(e) => setKeywordQuery(e.target.value)}
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      setSeoLoading(prev => ({ ...prev, rawSearch: true }));
+                      const res = await fetch(`/api/seo/raw-search?q=${encodeURIComponent(keywordQuery)}&limit=5`);
+                      const data = await res.json();
+                      if (data.success) {
+                        console.log('Raw search results (marketing):', data.items);
+                        console.log('First item allProducts (marketing):', data.items[0]?.allProducts?.slice(0, 3).map((p: any) => ({ title: p.title, link: p.link, productApiUrl: p.productApiUrl })));
+                        setSeoRawSnapshot(null);
+                        setRawSearchItems(data.items || []);
+                        toast.success(`Found ${data.total} matching sessions`);
+                      } else {
+                        toast.error('Search failed');
+                        setRawSearchItems([]);
+                      }
+                    } catch (e) {
+                      toast.error('Error searching raw data');
+                      setRawSearchItems([]);
+                    } finally {
+                      setSeoLoading(prev => ({ ...prev, rawSearch: false }));
+                    }
+                  }}
+                  disabled={seoLoading.rawSearch}
+                  className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50"
+                >
+                  {seoLoading.rawSearch ? 'Searching…' : 'Search Raw Data'}
+                </button>
+              </div>
+
+              {rawSearchItems && rawSearchItems.length > 0 ? (
+                <div className="space-y-4">
+                  {rawSearchItems.map((item: any, idx: number) => (
+                    <div key={idx} className="border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm text-green-800">Query</div>
+                          <div className="font-medium text-green-900">{item.query}</div>
+                        </div>
+                        <div className="text-xs text-green-600">{new Date(item.createdAt).toLocaleString()}</div>
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">Shopping matches</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.shoppingCount}</div>
+                        </div>
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">Google matches</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.googleCount}</div>
+                        </div>
+                        <div className="p-2 bg-green-50 border border-green-100 rounded">
+                          <div className="text-xs text-green-700">DB products</div>
+                          <div className="text-sm font-semibold text-green-900">{item.matches.dbCount}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {item.rawResponse?.engines?.google_shopping && (
+                          <details>
+                            <summary className="cursor-pointer text-sm text-green-800">Raw JSON: Google Shopping</summary>
+                            <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">{JSON.stringify(item.rawResponse.engines.google_shopping, null, 2)}</pre>
+                          </details>
+                        )}
+                        {item.rawResponse?.engines?.google && (
+                          <details>
+                            <summary className="cursor-pointer text-sm text-green-800">Raw JSON: Google</summary>
+                            <pre className="mt-2 p-3 bg-green-50 border border-green-100 rounded text-xs overflow-auto whitespace-pre-wrap break-all max-h-80 text-black w-full max-w-full font-mono">{JSON.stringify(item.rawResponse.engines.google, null, 2)}</pre>
+                          </details>
+                        )}
+                      </div>
+
+                      {/* Deduplicated products from all sources */}
+                      {item.allProducts && item.allProducts.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-sm font-medium text-green-900 mb-2">All Products (Deduplicated) ({item.allProducts.length})</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                            {item.allProducts.slice(0, 12).map((p: any, i: number) => (
+                              <div key={i} className="border border-green-200 rounded-lg p-3 bg-white">
+                                <div className="flex items-start gap-2">
+                                  {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-12 h-12 object-cover rounded"/> : null}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-green-900 line-clamp-2">{p.title}</div>
+                                    <div className="text-xs text-green-600 mt-1">
+                                      {p.source} • {p.sourceType}
+                                      {p.price ? ` • $${p.price}` : ''}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-600 break-all">
+                                      <strong>link:</strong> {p.link || 'null'}
+                                    </div>
+                                    <div className="mt-1 flex gap-1">
+                                      {p.link ? (
+                                        <a className="text-xs text-green-700 underline" href={p.link} target="_blank" rel="noreferrer">View</a>
+                                      ) : p.productApiUrl ? (
+                                        <a className="text-xs text-green-700 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">View</a>
+                                      ) : (
+                                        <span className="text-xs text-gray-500">No link</span>
+                                      )}
+                                      {p.productApiUrl && p.link ? (
+                                        <a className="text-xs text-green-600 underline" href={p.productApiUrl} target="_blank" rel="noreferrer">API</a>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Raw products from SerpAPI response */}
+                      {(item.rawProducts || item.rawResponse) && (
+                        <div className="mt-3 space-y-3">
+                          {/* Google Shopping Products */}
+                          {item.rawProducts.googleShopping && item.rawProducts.googleShopping.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Shopping Products ({item.rawProducts.googleShopping.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleShopping.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source} • ${p.price || 'N/A'}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Google Immersive Products */}
+                          {item.rawProducts.googleImmersive && item.rawProducts.googleImmersive.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Immersive Products ({item.rawProducts.googleImmersive.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleImmersive.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source} • ${p.price || 'N/A'}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Google Organic Results */}
+                          {item.rawProducts.googleOrganic && item.rawProducts.googleOrganic.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">Google Organic Results ({item.rawProducts.googleOrganic.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.rawProducts.googleOrganic.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">
+                                        {p.source}
+                                        {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}
+                                      </div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* DB Matches (fallback) */}
+                          {item.productsDb && item.productsDb.length > 0 && (
+                            <div>
+                              <div className="text-sm font-medium text-green-900 mb-1">DB Matches ({item.productsDb.length})</div>
+                              <div className="space-y-1 max-h-40 overflow-auto">
+                                {item.productsDb.map((p: any, i: number) => (
+                                  <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                    {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="truncate font-medium">{p.title}</div>
+                                      <div className="text-xs text-green-600">{p.source} {p.link ? '• ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : p.productApiUrl ? <a className="underline" href={p.productApiUrl} target="_blank" rel="noreferrer">open</a> : <span className="text-gray-500">no link</span>}</div>
+                                      <div className="text-xs text-gray-600 break-all">
+                                        <strong>link:</strong> {p.link || 'null'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Fallback: Extract products directly from raw response if rawProducts not available */}
+                          {!item.rawProducts && item.rawResponse && (
+                            <>
+                              {/* Extract Google Shopping Products from raw response */}
+                              {item.rawResponse.engines?.google_shopping?.shopping_results && item.rawResponse.engines.google_shopping.shopping_results.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Shopping Products ({item.rawResponse.engines.google_shopping.shopping_results.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google_shopping.shopping_results.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source || p.store} • ${p.extracted_price || 'N/A'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Extract Google Immersive Products from raw response */}
+                              {item.rawResponse.engines?.google?.immersive_products && item.rawResponse.engines.google.immersive_products.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Immersive Products ({item.rawResponse.engines.google.immersive_products.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google.immersive_products.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        {p.thumbnail ? <img src={p.thumbnail} alt={p.title} className="w-8 h-8 object-cover rounded"/> : null}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source} • ${p.extracted_price || 'N/A'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Extract Google Organic Results from raw response */}
+                              {item.rawResponse.engines?.google?.organic_results && item.rawResponse.engines.google.organic_results.length > 0 && (
+                                <div>
+                                  <div className="text-sm font-medium text-green-900 mb-1">
+                                    Google Organic Results ({item.rawResponse.engines.google.organic_results.length})
+                                  </div>
+                                  <div className="space-y-1 max-h-40 overflow-auto">
+                                    {item.rawResponse.engines.google.organic_results.slice(0, 10).map((p: any, i: number) => (
+                                      <div key={i} className="text-sm text-green-800 flex items-center gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="truncate font-medium">{p.title}</div>
+                                          <div className="text-xs text-green-600">
+                                            {p.source || 'Google'}
+                                            {p.link ? ' • ' : ''}{p.link ? <a className="underline" href={p.link} target="_blank" rel="noreferrer">open</a> : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-green-700">Enter a term and click Search Raw Data.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Google & Google Shopping Analytics Tab */}
+        {(activeTab as any) === 'analytics-seo' && (
+          <div className="space-y-6">
+            {/* Search Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+              <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-indigo-50/30">
+                <h2 className="text-xl font-semibold text-purple-900">Google & Google Shopping Analytics</h2>
+                <p className="text-purple-700/80 mt-1 text-sm">Search and analyze saved SerpAPI responses from Google Search and Google Shopping engines.</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search term (e.g., 'men leather jacket')"
+                    className="flex-1 px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    value={analyticsSearchQuery}
+                    onChange={(e) => setAnalyticsSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && searchAnalytics()}
+                  />
+                  <button
+                    onClick={searchAnalytics}
+                    disabled={analyticsSeoLoading}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {analyticsSeoLoading ? 'Searching...' : 'Search Analytics'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Section */}
+            {analyticsResults.length > 0 && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                  <div className="p-4 border-b border-purple-100">
+                    <h3 className="text-lg font-semibold text-purple-900">Search Results ({analyticsResults.length})</h3>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {analyticsResults.map((result, index) => (
+                      <div key={index} className="border border-purple-200 rounded-lg p-4 hover:bg-purple-50/30 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-purple-900">{result.query}</h4>
+                            <p className="text-sm text-purple-600">
+                              {new Date(result.createdAt).toLocaleString()} • 
+                              Google Shopping: {result.matches?.shoppingCount || 0} • 
+                              Google: {result.matches?.googleCount || 0} • 
+                              DB: {result.matches?.dbCount || 0}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedResult(selectedResult === result ? null : result)}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            {selectedResult === result ? 'Hide Details' : 'View Details'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selected Result Details */}
+                {selectedResult && (
+                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                    <div className="p-4 border-b border-purple-100">
+                      <h3 className="text-lg font-semibold text-purple-900">Analytics Details: {selectedResult.query}</h3>
+                      <p className="text-sm text-purple-600">
+                        Created: {new Date(selectedResult.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-4 space-y-6">
+                      {/* Google Search Response */}
+                      {selectedResult.rawResponse?.engines?.google && (
+                        <div className="border border-gray-200 rounded-lg">
+                          <div className="p-3 bg-blue-50 border-b border-blue-200">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium text-xs">Google Search</span>
+                              <h4 className="font-semibold text-gray-900">Search Response</h4>
+                            </div>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            {/* Search Metadata */}
+                            {selectedResult.rawResponse.engines.google.search_metadata && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-metadata')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-metadata'] ? '▼' : '▶'}</span>
+                                  Search Metadata
+                                </button>
+                                {expandedSections['google-metadata'] && (
+                                  <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                    <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                      {JSON.stringify(selectedResult.rawResponse.engines.google.search_metadata, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Search Parameters */}
+                            {selectedResult.rawResponse.engines.google.search_parameters && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-parameters')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-parameters'] ? '▼' : '▶'}</span>
+                                  Search Parameters
+                                </button>
+                                {expandedSections['google-parameters'] && (
+                                  <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                    <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                      {JSON.stringify(selectedResult.rawResponse.engines.google.search_parameters, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Immersive Products */}
+                            {selectedResult.rawResponse.engines.google.immersive_products && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-immersive')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-immersive'] ? '▼' : '▶'}</span>
+                                  Immersive Products ({selectedResult.rawResponse.engines.google.immersive_products.length} items)
+                                </button>
+                                {expandedSections['google-immersive'] && (
+                                  <div className="mt-2 space-y-4">
+                                    {/* Section Header */}
+                                    <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium text-xs">Google Search</span>
+                                      <span className="text-sm text-gray-700">Immersive Products - {selectedResult.rawResponse.engines.google.immersive_products.length} items</span>
+                                    </div>
+                                    {/* Product Cards UI */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                      {selectedResult.rawResponse.engines.google.immersive_products.slice(0, 12).map((product: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow">
+                                          <div className="flex items-start gap-3">
+                                            {product.thumbnail && (
+                                              <img 
+                                                src={product.thumbnail} 
+                                                alt={product.title} 
+                                                className="w-16 h-16 object-cover rounded"
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                              />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <h5 className="font-medium text-gray-900 line-clamp-2 text-sm">{product.title}</h5>
+                                              <div className="mt-1 space-y-1">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">Google Search</span>
+                                                  <span className="text-gray-600">{product.source || 'Unknown'}</span>
+                                                  {product.rating && (
+                                                    <span className="flex items-center gap-1 text-gray-600">
+                                                      ★ {product.rating}
+                                                      {product.reviews && <span>({product.reviews})</span>}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm">
+                                                  {product.extracted_price && (
+                                                    <span className="font-semibold text-green-600">${product.extracted_price}</span>
+                                                  )}
+                                                  {product.extracted_original_price && product.extracted_original_price !== product.extracted_price && (
+                                                    <span className="text-gray-500 line-through text-xs">${product.extracted_original_price}</span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  {product.link ? (
+                                                    <a 
+                                                      href={product.link} 
+                                                      target="_blank" 
+                                                      rel="noreferrer"
+                                                      className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+                                                    >
+                                                      View Product
+                                                    </a>
+                                                  ) : (
+                                                    <span className="text-xs text-gray-500">No link available</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {selectedResult.rawResponse.engines.google.immersive_products.length > 12 && (
+                                      <div className="text-center text-sm text-gray-500">
+                                        Showing first 12 of {selectedResult.rawResponse.engines.google.immersive_products.length} products
+                                      </div>
+                                    )}
+                                    {/* Raw JSON Toggle */}
+                                    <details className="mt-4">
+                                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                                        View Raw JSON
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                        <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                          {JSON.stringify(selectedResult.rawResponse.engines.google.immersive_products, null, 2)}
+                                        </pre>
+                                      </div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Organic Results */}
+                            {selectedResult.rawResponse.engines.google.organic_results && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-organic')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-organic'] ? '▼' : '▶'}</span>
+                                  Organic Results ({selectedResult.rawResponse.engines.google.organic_results.length} items)
+                                </button>
+                                {expandedSections['google-organic'] && (
+                                  <div className="mt-2 space-y-4">
+                                    {/* Organic Results UI */}
+                                    <div className="space-y-3">
+                                      {selectedResult.rawResponse.engines.google.organic_results.map((result: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow">
+                                          <div className="space-y-2">
+                                            <h5 className="font-medium text-blue-600 hover:text-blue-800">
+                                              {result.link ? (
+                                                <a href={result.link} target="_blank" rel="noreferrer" className="hover:underline">
+                                                  {result.title}
+                                                </a>
+                                              ) : (
+                                                result.title
+                                              )}
+                                            </h5>
+                                            {result.displayed_link && (
+                                              <p className="text-sm text-green-600">{result.displayed_link}</p>
+                                            )}
+                                            {result.snippet && (
+                                              <p className="text-sm text-gray-700 line-clamp-3">{result.snippet}</p>
+                                            )}
+                                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                                              {result.position && <span>Position: {result.position}</span>}
+                                              {result.date && <span>Date: {result.date}</span>}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {/* Raw JSON Toggle */}
+                                    <details className="mt-4">
+                                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                                        View Raw JSON
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                        <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                          {JSON.stringify(selectedResult.rawResponse.engines.google.organic_results, null, 2)}
+                                        </pre>
+                                      </div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Related Brands */}
+                            {selectedResult.rawResponse.engines.google.related_brands && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-brands')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-brands'] ? '▼' : '▶'}</span>
+                                  Related Brands ({selectedResult.rawResponse.engines.google.related_brands.length} items)
+                                </button>
+                                {expandedSections['google-brands'] && (
+                                  <div className="mt-2 space-y-4">
+                                    {/* Related Brands UI */}
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                      {selectedResult.rawResponse.engines.google.related_brands.map((brand: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white hover:shadow-md transition-shadow">
+                                          <div className="text-center space-y-2">
+                                            {brand.thumbnail && (
+                                              <img 
+                                                src={brand.thumbnail} 
+                                                alt={brand.name} 
+                                                className="w-12 h-12 object-cover rounded mx-auto"
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                              />
+                                            )}
+                                            <h6 className="font-medium text-gray-900 text-sm">{brand.name}</h6>
+                                            {brand.link && (
+                                              <a 
+                                                href={brand.link} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                              >
+                                                Visit Brand
+                                              </a>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {/* Raw JSON Toggle */}
+                                    <details className="mt-4">
+                                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                                        View Raw JSON
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                        <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                          {JSON.stringify(selectedResult.rawResponse.engines.google.related_brands, null, 2)}
+                                        </pre>
+                                      </div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Related Searches */}
+                            {selectedResult.rawResponse.engines.google.related_searches && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-related')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-related'] ? '▼' : '▶'}</span>
+                                  Related Searches ({selectedResult.rawResponse.engines.google.related_searches.length} items)
+                                </button>
+                                {expandedSections['google-related'] && (
+                                  <div className="mt-2 space-y-4">
+                                    {/* Related Searches UI */}
+                                    <div className="flex flex-wrap gap-2">
+                                      {selectedResult.rawResponse.engines.google.related_searches.map((search: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 rounded-full px-3 py-1 bg-white hover:shadow-md transition-shadow">
+                                          {search.query ? (
+                                            <a 
+                                              href={search.link || '#'} 
+                                              target="_blank" 
+                                              rel="noreferrer"
+                                              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                                            >
+                                              {search.query}
+                                            </a>
+                                          ) : (
+                                            <span className="text-sm text-gray-700">{search}</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {/* Raw JSON Toggle */}
+                                    <details className="mt-4">
+                                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                                        View Raw JSON
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                        <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                          {JSON.stringify(selectedResult.rawResponse.engines.google.related_searches, null, 2)}
+                                        </pre>
+                                      </div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Pagination */}
+                            {selectedResult.rawResponse.engines.google.serpapi_pagination && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('google-pagination')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['google-pagination'] ? '▼' : '▶'}</span>
+                                  Pagination
+                                </button>
+                                {expandedSections['google-pagination'] && (
+                                  <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                    <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                      {JSON.stringify(selectedResult.rawResponse.engines.google.serpapi_pagination, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Google Shopping Response */}
+                      {selectedResult.rawResponse?.engines?.google_shopping && (
+                        <div className="border border-gray-200 rounded-lg">
+                          <div className="p-3 bg-green-50 border-b border-green-200">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full font-medium text-xs">Google Shopping</span>
+                              <h4 className="font-semibold text-gray-900">Shopping Response</h4>
+                            </div>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            {/* Shopping Results */}
+                            {selectedResult.rawResponse.engines.google_shopping.shopping_results && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('shopping-results')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['shopping-results'] ? '▼' : '▶'}</span>
+                                  Shopping Results ({selectedResult.rawResponse.engines.google_shopping.shopping_results.length} items)
+                                </button>
+                                {expandedSections['shopping-results'] && (
+                                  <div className="mt-2 space-y-4">
+                                    {/* Section Header */}
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full font-medium text-xs">Google Shopping</span>
+                                      <span className="text-sm text-gray-700">Shopping Results - {selectedResult.rawResponse.engines.google_shopping.shopping_results.length} items</span>
+                                    </div>
+                                    {/* Shopping Results UI */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                      {selectedResult.rawResponse.engines.google_shopping.shopping_results.slice(0, 12).map((product: any, index: number) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow">
+                                          <div className="flex items-start gap-3">
+                                            {product.thumbnail && (
+                                              <img 
+                                                src={product.thumbnail} 
+                                                alt={product.title} 
+                                                className="w-16 h-16 object-cover rounded"
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                              />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <h5 className="font-medium text-gray-900 line-clamp-2 text-sm">{product.title}</h5>
+                                              <div className="mt-1 space-y-1">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full font-medium">Google Shopping</span>
+                                                  <span className="text-gray-600">{product.source || product.store || 'Unknown'}</span>
+                                                  {product.rating && (
+                                                    <span className="flex items-center gap-1 text-gray-600">
+                                                      ★ {product.rating}
+                                                      {product.reviews && <span>({product.reviews})</span>}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm">
+                                                  {product.extracted_price && (
+                                                    <span className="font-semibold text-green-600">${product.extracted_price}</span>
+                                                  )}
+                                                  {product.extracted_original_price && product.extracted_original_price !== product.extracted_price && (
+                                                    <span className="text-gray-500 line-through text-xs">${product.extracted_original_price}</span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  {product.link ? (
+                                                    <a 
+                                                      href={product.link} 
+                                                      target="_blank" 
+                                                      rel="noreferrer"
+                                                      className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
+                                                    >
+                                                      View Product
+                                                    </a>
+                                                  ) : (
+                                                    <span className="text-xs text-gray-500">No link available</span>
+                                                  )}
+                                                  {product.serpapi_product_api && (
+                                                    <a 
+                                                      href={product.serpapi_product_api} 
+                                                      target="_blank" 
+                                                      rel="noreferrer"
+                                                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                                    >
+                                                      API
+                                                    </a>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {selectedResult.rawResponse.engines.google_shopping.shopping_results.length > 12 && (
+                                      <div className="text-center text-sm text-gray-500">
+                                        Showing first 12 of {selectedResult.rawResponse.engines.google_shopping.shopping_results.length} products
+                                      </div>
+                                    )}
+                                    {/* Raw JSON Toggle */}
+                                    <details className="mt-4">
+                                      <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                                        View Raw JSON
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                        <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                          {JSON.stringify(selectedResult.rawResponse.engines.google_shopping.shopping_results, null, 2)}
+                                        </pre>
+                                      </div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Shopping Metadata */}
+                            {selectedResult.rawResponse.engines.google_shopping.search_metadata && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('shopping-metadata')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['shopping-metadata'] ? '▼' : '▶'}</span>
+                                  Shopping Metadata
+                                </button>
+                                {expandedSections['shopping-metadata'] && (
+                                  <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                    <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                      {JSON.stringify(selectedResult.rawResponse.engines.google_shopping.search_metadata, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Shopping Parameters */}
+                            {selectedResult.rawResponse.engines.google_shopping.search_parameters && (
+                              <div>
+                                <button
+                                  onClick={() => toggleSection('shopping-parameters')}
+                                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                >
+                                  <span>{expandedSections['shopping-parameters'] ? '▼' : '▶'}</span>
+                                  Shopping Parameters
+                                </button>
+                                {expandedSections['shopping-parameters'] && (
+                                  <div className="mt-2 p-3 bg-gray-50 rounded border">
+                                    <pre className="text-xs text-gray-700 overflow-auto max-h-60 whitespace-pre-wrap">
+                                      {JSON.stringify(selectedResult.rawResponse.engines.google_shopping.search_parameters, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* No Results */}
+            {analyticsResults.length === 0 && analyticsSearchQuery && !analyticsSeoLoading && (
+              <div className="bg-white rounded-lg shadow-sm border border-purple-100 p-6 text-center">
+                <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'users' && (
           <div className="bg-white rounded-lg shadow-sm border">
             <div className="p-6 border-b border-gray-200">

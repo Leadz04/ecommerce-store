@@ -93,8 +93,13 @@ export async function GET(request: NextRequest) {
       window: { since: since.toISOString(), until: now.toISOString(), days }
     });
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    if (error instanceof Error) {
+      if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.message.includes('Insufficient permissions')) {
+        return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      }
     }
     console.error('Metrics error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
