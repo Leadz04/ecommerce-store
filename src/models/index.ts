@@ -15,6 +15,7 @@ import EtsyOrder from './EtsyOrder';
 import SeoQuery from './SeoQuery';
 import SeoKeyword from './SeoKeyword';
 import SeoProduct from './SeoProduct';
+import Blog from './Blog';
 
 // Export all models for easy importing
 export { default as User } from './User';

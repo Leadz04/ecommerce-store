@@ -34,6 +34,7 @@ import {
   Gift,
   Loader2
 } from 'lucide-react';
+import BlogAdmin from '@/components/BlogAdmin';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -157,7 +158,10 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo'>('overview');
+  const allowedTabs = ['users','roles','products','orders','occasions','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs'] as const;
+  const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
+  const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs'>(initialTab);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -1295,15 +1299,34 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && user?.permissions?.includes('system:settings')) {
-      fetchUsers();
-      fetchRoles();
-      fetchProducts();
-      fetchOrders();
-      fetchOccasions();
-      fetchMetrics(metricsDays);
+    if (!isAuthenticated || !user?.permissions?.includes('system:settings')) return;
+
+    // Lazy-load only what the active tab needs
+    switch (activeTab as any) {
+      case 'overview':
+        fetchMetrics(metricsDays);
+        break;
+      case 'users':
+        fetchUsers();
+        fetchRoles();
+        break;
+      case 'roles':
+        fetchRoles();
+        break;
+      case 'products':
+        fetchProducts();
+        break;
+      case 'orders':
+        fetchOrders();
+        break;
+      case 'occasions':
+        fetchOccasions();
+        break;
+      default:
+        // For tabs like blogs/seo, their own components handle fetching
+        break;
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, activeTab, metricsDays]);
 
   // Filter users
   const filteredUsers = users.filter(user => {
@@ -1461,6 +1484,17 @@ export default function AdminDashboard() {
           >
             <Search className="h-5 w-5 inline mr-2" />
             SEO Raw
+          </button>
+          <button
+            onClick={() => { setActiveTab('blogs'); updateQuery({ tab: 'blogs' }); }}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              (activeTab as any) === 'blogs'
+                ? 'border-purple-500 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <FileText className="h-5 w-5 inline mr-2" />
+            Blogs
           </button>
           </nav>
         </div>
@@ -3852,6 +3886,12 @@ export default function AdminDashboard() {
                 <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'blogs' && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <BlogAdmin />
           </div>
         )}
 
