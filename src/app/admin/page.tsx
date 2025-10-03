@@ -35,6 +35,7 @@ import {
   Loader2
 } from 'lucide-react';
 import BlogAdmin from '@/components/BlogAdmin';
+import KeywordPlanner from '@/components/KeywordPlanner';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -158,10 +159,10 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const allowedTabs = ['users','roles','products','orders','occasions','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs'] as const;
+  const allowedTabs = ['users','roles','products','orders','occasions','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner'>(initialTab);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -1495,6 +1496,17 @@ export default function AdminDashboard() {
           >
             <FileText className="h-5 w-5 inline mr-2" />
             Blogs
+          </button>
+          <button
+            onClick={() => { setActiveTab('keyword-planner'); updateQuery({ tab: 'keyword-planner' }); }}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              (activeTab as any) === 'keyword-planner'
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Search className="h-5 w-5 inline mr-2" />
+            Keyword Planner
           </button>
           </nav>
         </div>
@@ -3892,6 +3904,12 @@ export default function AdminDashboard() {
         {activeTab === 'blogs' && (
           <div className="bg-white rounded-lg shadow-sm border">
             <BlogAdmin />
+          </div>
+        )}
+
+        {activeTab === 'keyword-planner' && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <KeywordPlanner />
           </div>
         )}
 

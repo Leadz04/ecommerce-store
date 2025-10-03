@@ -16,6 +16,7 @@ import SeoQuery from './SeoQuery';
 import SeoKeyword from './SeoKeyword';
 import SeoProduct from './SeoProduct';
 import Blog from './Blog';
+import KeywordResearch from './KeywordResearch';
 
 // Export all models for easy importing
 export { default as User } from './User';
@@ -35,6 +36,8 @@ export { default as EtsyOrder } from './EtsyOrder';
 export { default as SeoQuery } from './SeoQuery';
 export { default as SeoKeyword } from './SeoKeyword';
 export { default as SeoProduct } from './SeoProduct';
+export { default as Blog } from './Blog';
+export { default as KeywordResearch } from './KeywordResearch';
 
 // Export interfaces
 export type { IUser } from './User';
@@ -52,3 +55,4 @@ export type { IEtsyOrder } from './EtsyOrder';
 export type { ISeoQuery } from './SeoQuery';
 export type { ISeoKeyword } from './SeoKeyword';
 export type { ISeoProduct } from './SeoProduct';
+export type { IKeywordResearch } from './KeywordResearch';
