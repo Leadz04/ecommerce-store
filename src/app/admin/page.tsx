@@ -34,6 +34,7 @@ import {
   Gift,
   Loader2
 } from 'lucide-react';
+import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
 import KeywordPlanner from '@/components/KeywordPlanner';
 import { useAuthStore } from '@/store/authStore';
@@ -159,10 +160,10 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
-  const allowedTabs = ['users','roles','products','orders','occasions','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner'] as const;
+  const allowedTabs = ['users','roles','products','orders','occasions','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'occasions' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing'>(initialTab);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -1629,6 +1630,17 @@ export default function AdminDashboard() {
               Overview
             </button>
             <button
+              onClick={() => { setActiveTab('sourcing'); updateQuery({ tab: 'sourcing' }); }}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'sourcing'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Download className="h-5 w-5 inline mr-2" />
+              Sourcing
+            </button>
+            <button
               onClick={() => { setActiveTab('users'); updateQuery({ tab: 'users' }); }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'users'
@@ -1730,6 +1742,13 @@ export default function AdminDashboard() {
           </nav>
         </div>
 
+        {/* Sourcing Tab */}
+        {activeTab === 'sourcing' && (
+          <div className="space-y-6">
+            <SourcingPanel />
+          </div>
+        )}
+
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -1747,7 +1766,9 @@ export default function AdminDashboard() {
                       {d}d
                     </button>
                   ))}
-                </div>
+        </div>
+
+        
               </div>
               <button onClick={() => fetchMetrics(metricsDays)} className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded-md">
                 <RefreshCw className="h-4 w-4" /> Refresh
@@ -2272,16 +2293,13 @@ export default function AdminDashboard() {
                             a.href = url;
                             
                             // Set filename based on category and limit
-                            const selectedCategory = (document.getElementById('export-category') as HTMLSelectElement)?.value || 'all';
-                            const limit = (document.getElementById('export-limit') as HTMLSelectElement)?.value || '50';
-                            const customLimit = (document.getElementById('custom-limit') as HTMLInputElement)?.value;
-                            const finalLimit = customLimit && limit === 'custom' ? customLimit : limit;
+                            const exportFinalLimit = customLimit && limit === 'custom' ? customLimit : limit;
                             
                             let filename = 'etsy-products-export.csv';
                             if (selectedCategory === 'all') {
-                              filename = `etsy-products-export-${finalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
+                              filename = `etsy-products-export-${exportFinalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
                             } else {
-                              filename = `etsy-${selectedCategory}-products-${finalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
+                              filename = `etsy-${selectedCategory}-products-${exportFinalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
                             }
                             
                             a.download = filename;
@@ -2290,8 +2308,7 @@ export default function AdminDashboard() {
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
                             
-                            const exportCount = customLimit && limit === 'custom' ? customLimit : limit;
-                            toast.success(`CSV file downloaded successfully! Exported ${exportCount} products.`);
+                            toast.success(`CSV file downloaded successfully! Exported ${exportFinalLimit} products.`);
                           } catch (error) {
                             console.error('Export error:', error);
                             toast.error(error instanceof Error ? error.message : 'Failed to export products');

@@ -30,6 +30,8 @@
     "rss": "echo RSS available at /rss.xml"
   },
   "dependencies": {
+    "@google/genai": "^0.6.1",
+    "@google/generative-ai": "^0.20.0",
     "@stripe/react-stripe-js": "^4.0.1",
     "@stripe/stripe-js": "^7.9.0",
     "@types/bcryptjs": "^2.4.6",
@@ -45,6 +47,7 @@
     "dotenv": "^17.2.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.542.0",
+    "mime": "^4.1.0",
     "mongodb": "^6.19.0",
     "mongoose": "^8.18.0",
     "next": "15.5.2",
@@ -55,6 +58,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hot-toast": "^2.4.1",
+    "replicate": "^1.2.0",
     "stripe": "^18.5.0",
     "uuid": "^11.1.0",
     "zustand": "^5.0.8"
