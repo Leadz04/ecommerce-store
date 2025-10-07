@@ -22,69 +22,81 @@ export default function SourcingPanel() {
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchList = async () => {
-    try {
-      setRefreshing(true);
-      const res = await fetch(`/api/admin/sourcing/list?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch list');
-      setItems(data.items || []);
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to fetch');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { fetchList(); }, []);
-
-  const importUrl = async () => {
-    if (!url.trim()) {
-      toast.error('Enter a URL');
-      return;
-    }
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/sourcing/import-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, alsoCreateDraftProduct: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Import failed');
-      toast.success('Imported successfully');
-      setUrl('');
-      fetchList();
-    } catch (e: any) {
-      toast.error(e.message || 'Import failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const exportCsv = async () => {
-    try {
-      const ids = items.map(i => i._id).join(',');
-      const url = `/api/admin/sourcing/export-csv?ids=${encodeURIComponent(ids)}`;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '';
-      a.click();
-    } catch (e: any) {
-      toast.error('Export failed');
-    }
-  };
-
+  // Selected sourced item state (needed by filters below)
   const [selected, setSelected] = useState<ScrapedItem | null>(null);
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
-  useEffect(() => {
-    if (selected) setSelectedImageIdx(0);
-  }, [selected]);
+  useEffect(() => { if (selected) setSelectedImageIdx(0); }, [selected]);
   const [previewTab, setPreviewTab] = useState<'parsed' | 'original'>('parsed');
   const [enhanceIdx, setEnhanceIdx] = useState<number | null>(null);
   const [enhanceHint, setEnhanceHint] = useState('');
   const [enhanceLoading, setEnhanceLoading] = useState(false);
   const [enhanceErrorByIdx, setEnhanceErrorByIdx] = useState<{ [k: number]: string }>({});
+  const [selectedZoomIdx, setSelectedZoomIdx] = useState<number | null>(null);
+  // Lightbox state for immersive zoom view
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxScale, setLightboxScale] = useState(1);
+  const [lightboxPan, setLightboxPan] = useState<{x:number,y:number}>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{x:number,y:number}>({ x: 0, y: 0 });
+
+  // Category scrape UI state
+  type ScrapedCategoryProduct = { title: string; price: string | null; image: string | null; url: string };
+  const [categoryUrl, setCategoryUrl] = useState('');
+  const [categoryMaxPages, setCategoryMaxPages] = useState('1');
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryResults, setCategoryResults] = useState<ScrapedCategoryProduct[]>([]);
+  const [previewCrawled, setPreviewCrawled] = useState<ScrapedCategoryProduct | null>(null);
+
+  // Crawl main page UI state
+  type CrawlCategory = { section: string; label: string; url: string };
+  type CrawlResult = { countCategories: number; categories: CrawlCategory[]; results: Record<string, { label: string; url: string; products: ScrapedCategoryProduct[] }> };
+  const [crawlUrl, setCrawlUrl] = useState('https://www.angeljackets.com/');
+  const [crawlHtml, setCrawlHtml] = useState('');
+  const [crawlMaxPages, setCrawlMaxPages] = useState('1');
+  const [crawlLoading, setCrawlLoading] = useState(false);
+  const [crawlData, setCrawlData] = useState<CrawlResult | null>(null);
+  // Saved sourced list state
+  type SavedItem = { _id: string; title: string; sourceUrl: string; price?: number; images?: string[]; categoryGroup: string; description?: string; specs?: Record<string,string> };
+  const [savedQuery, setSavedQuery] = useState('');
+  const [savedPage, setSavedPage] = useState(1);
+  const [savedLimit, setSavedLimit] = useState(12);
+  const [savedTotal, setSavedTotal] = useState(0);
+  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [savedSelected, setSavedSelected] = useState<SavedItem | null>(null);
+  const [savedParsedRaw, setSavedParsedRaw] = useState<any | null>(null);
+  const [savedParsedLoading, setSavedParsedLoading] = useState(false);
+  const [savedRefreshLoading, setSavedRefreshLoading] = useState(false);
+  const [refreshLoading, setRefreshLoading] = useState(false);
+  const [savedZoomIdx, setSavedZoomIdx] = useState<number | null>(null);
+  const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
+
+  // Filters (must appear after selected/savedSelected exist)
+  const filteredSelectedImages = useMemo(
+    () => (selected?.images || []).filter(
+      (u) =>
+        u &&
+        !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) ||
+          /\/lib\/flags\//i.test(u) ||
+          /angellogo/i.test(u) ||
+          /images\/close/i.test(u)),
+    ),
+    [selected],
+  );
+
+  const filteredSavedImages = useMemo(
+    () => (savedSelected?.images || []).filter(
+      (u) =>
+        u &&
+        !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) ||
+          /\/lib\/flags\//i.test(u) ||
+          /angellogo/i.test(u) ||
+          /images\/close/i.test(u)),
+    ),
+    [savedSelected],
+  );
   // Etsy editable preview state
   const [etsyTitle, setEtsyTitle] = useState('');
   const [etsyTags, setEtsyTags] = useState('');
@@ -173,6 +185,171 @@ export default function SourcingPanel() {
     a.click();
   };
 
+  function openLightbox(images: string[], index: number) {
+    setLightboxImages(images);
+    setLightboxIndex(index);
+    setLightboxScale(1);
+    setLightboxPan({ x: 0, y: 0 });
+    setLightboxOpen(true);
+  }
+
+  function closeLightbox() {
+    setLightboxOpen(false);
+    setTimeout(() => {
+      setLightboxImages([]);
+      setLightboxIndex(0);
+      setLightboxScale(1);
+      setLightboxPan({ x: 0, y: 0 });
+    }, 150);
+  }
+
+  function onWheelZoom(e: React.WheelEvent) {
+    e.preventDefault();
+    const delta = -e.deltaY;
+    const factor = delta > 0 ? 0.1 : -0.1;
+    setLightboxScale((prev) => Math.max(1, Math.min(4, prev + factor)));
+  }
+
+  function onMouseDown(e: React.MouseEvent) {
+    if (lightboxScale <= 1) return;
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - lightboxPan.x, y: e.clientY - lightboxPan.y });
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!isPanning) return;
+    setLightboxPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+  }
+  function onMouseUp() { setIsPanning(false); }
+
+  // Handlers (must exist before JSX usage)
+  async function fetchList() {
+    try {
+      setRefreshing(true);
+      const res = await fetch(`/api/admin/sourcing/list?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch list');
+      setItems(data.items || []);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to fetch');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function importUrl() {
+    if (!url.trim()) { toast.error('Enter a URL'); return; }
+    try {
+      setLoading(true);
+      const res = await fetch('/api/admin/sourcing/import-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, alsoCreateDraftProduct: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      toast.success('Imported successfully');
+      setUrl('');
+      fetchList();
+    } catch (e: any) {
+      toast.error(e.message || 'Import failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function exportCsv() {
+    try {
+      const ids = items.map((i) => i._id).join(',');
+      const dl = document.createElement('a');
+      dl.href = `/api/admin/sourcing/export-csv?ids=${encodeURIComponent(ids)}`;
+      dl.download = '';
+      dl.click();
+    } catch {
+      toast.error('Export failed');
+    }
+  }
+
+  async function fetchSaved(page = 1) {
+    try {
+      setSavedLoading(true);
+      const res = await fetch(`/api/admin/sourcing/sourced/list?q=${encodeURIComponent(savedQuery)}&page=${page}&limit=${savedLimit}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load saved products');
+      setSavedItems(Array.isArray(data.items) ? data.items : []);
+      setSavedTotal(Number(data.total || 0));
+      setSavedPage(Number(data.page || page));
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load saved');
+    } finally {
+      setSavedLoading(false);
+    }
+  }
+
+  async function crawlAngel() {
+    const hasHtml = crawlHtml.trim().length > 0;
+    const hasUrl = crawlUrl.trim().length > 0;
+    if (!hasHtml && !hasUrl) { toast.error('Enter URL or paste HTML'); return; }
+    const mp = crawlMaxPages.trim() ? Math.max(1, Math.min(100, parseInt(crawlMaxPages))) : 100;
+    try {
+      setCrawlLoading(true);
+      const res = await fetch('/api/admin/sourcing/crawl-angel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: hasUrl ? crawlUrl : undefined, html: hasHtml ? crawlHtml : undefined, maxPagesPerCategory: mp, save: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to crawl');
+      setCrawlData(data);
+      const total = Object.values(data?.results || {}).reduce((acc: number, g: any) => acc + (Array.isArray((g as any).products) ? (g as any).products.length : 0), 0);
+      toast.success(`Found ${total} products across ${data?.countCategories ?? 0} categories`);
+      fetchSaved(1);
+    } catch (e: any) {
+      toast.error(e?.message || 'Crawl failed');
+    } finally {
+      setCrawlLoading(false);
+    }
+  }
+
+  async function scrapeCategory() {
+    if (!categoryUrl.trim()) { toast.error('Enter a category URL'); return; }
+    const mp = categoryMaxPages.trim() ? Math.max(1, Math.min(100, parseInt(categoryMaxPages))) : 100;
+    try {
+      setCategoryLoading(true);
+      const res = await fetch(`/api/admin/sourcing/scrape-category?url=${encodeURIComponent(categoryUrl)}&maxPages=${mp}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to scrape');
+      const arr: { url: string }[] = Array.isArray(data?.products) ? data.products : [];
+      const seen = new Set<string>();
+      const unique = arr.filter((p) => {
+        if (!p?.url) return false; if (seen.has(p.url)) return false; seen.add(p.url); return true;
+      });
+      setCategoryResults(unique as any);
+      toast.success(`Found ${data?.count ?? 0} products`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Scrape failed');
+    } finally {
+      setCategoryLoading(false);
+    }
+  }
+
+  // Load both sourced list and saved products on mount
+  useEffect(() => { fetchList(); }, []);
+  useEffect(() => { fetchSaved(1); }, []);
+
+  // When opening saved modal, re-fetch the latest from DB by sourceUrl to ensure description/images are current
+  useEffect(() => {
+    (async () => {
+      if (!savedSelected?.sourceUrl) return;
+      try {
+        const res = await fetch(`/api/admin/sourcing/sourced/list?sourceUrl=${encodeURIComponent(savedSelected.sourceUrl)}&limit=1&page=1`);
+        const data = await res.json();
+        if (res.ok && Array.isArray(data?.items) && data.items[0]) {
+          setSavedSelected((prev) => prev ? { ...prev, ...data.items[0] } : data.items[0]);
+        }
+      } catch {}
+    })();
+  }, [savedSelected?._id]);
+
   return (
     <div className="space-y-8">
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-sky-50 via-white to-indigo-50">
@@ -185,7 +362,7 @@ export default function SourcingPanel() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Source Products from a URL</h2>
-              <p className="text-sm text-gray-600">Paste a public product page URL. We’ll parse details, store them in the Sourcing DB, and create a draft product.</p>
+              <p className="text-sm text-gray-600">Paste a public product page URL. We'll parse details, store them in the Sourcing DB, and create a draft product.</p>
             </div>
           </div>
 
@@ -194,19 +371,19 @@ export default function SourcingPanel() {
               value={url}
               onChange={e => setUrl(e.target.value)}
               placeholder="https://www.angeljackets.com/products/reeves-black-vintage-leather-jacket.html"
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setUrl('https://www.angeljackets.com/products/reeves-black-vintage-leather-jacket.html')}
-                className="px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 shadow-sm"
+                className="px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               >
                 Paste Example
               </button>
               <button
                 onClick={importUrl}
                 disabled={loading}
-                className="px-5 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 shadow-sm"
+                className="px-5 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
               >
                 {loading ? 'Importing…' : 'Import URL'}
               </button>
@@ -215,24 +392,546 @@ export default function SourcingPanel() {
         </div>
       </div>
 
+      {/* Scrape Category Section */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-emerald-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-teal-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+              <Link2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Scrape Category Listing</h2>
+              <p className="text-sm text-gray-600">Enter a category URL (e.g., Men, Women) to fetch product cards for review.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 text-gray-700">
+            <input
+              value={categoryUrl}
+              onChange={e => setCategoryUrl(e.target.value)}
+              placeholder="https://www.angeljackets.com/categories/Mens-Leather-Jackets.html"
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+            <div className="flex gap-2 items-stretch">
+              <input
+                value={categoryMaxPages}
+                onChange={e => setCategoryMaxPages(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="Pages"
+                aria-label="Max pages"
+                className="w-28 border border-gray-200 rounded-xl px-3 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+              />
+              <button
+                onClick={scrapeCategory}
+                disabled={categoryLoading}
+                className="px-5 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+              >
+                {categoryLoading ? 'Fetching…' : 'Fetch Products'}
+              </button>
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="mt-5">
+            {categoryResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 border rounded-2xl bg-white">
+                <div className="text-gray-900 font-medium">No category results</div>
+                <div className="text-gray-500 text-sm mt-1">Enter a category URL and click Fetch.</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-gray-700">Found <span className="font-semibold text-gray-900">{categoryResults.length}</span> products</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {categoryResults.map((p, idx) => (
+                    <button key={idx} onClick={() => setPreviewCrawled(p)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow">
+                      <div className="aspect-[4/3] bg-gray-100">
+                        {p.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
+                        <div className="text-sm mt-2 font-semibold text-emerald-700">{p.price || '—'}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Crawl Men/Women from Main Page Section */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-amber-50 via-white to-rose-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-amber-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-rose-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-sm">
+              <Link2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Discover Categories (Men/Women) and Scrape</h2>
+              <p className="text-sm text-gray-600">Enter main page URL or paste HTML. We'll find Men/Women category links (e.g., View All) and scrape each.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-gray-700">
+            <input
+              value={crawlUrl}
+              onChange={e => setCrawlUrl(e.target.value)}
+              placeholder="https://www.angeljackets.com/"
+              className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+            <input
+              value={crawlMaxPages}
+              onChange={e => setCrawlMaxPages(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="Pages per category"
+              aria-label="Pages per category"
+              className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+            <button
+              onClick={crawlAngel}
+              disabled={crawlLoading}
+              className="px-5 py-3 rounded-xl bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
+            >
+              {crawlLoading ? 'Crawling…' : 'Crawl via URL'}
+            </button>
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs text-gray-500 mb-1">Or paste main page HTML</label>
+            <textarea
+              value={crawlHtml}
+              onChange={e => setCrawlHtml(e.target.value)}
+              rows={8}
+              placeholder="Paste the full HTML of the main page here"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={crawlAngel}
+                disabled={crawlLoading}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
+              >
+                {crawlLoading ? 'Crawling…' : 'Crawl via HTML'}
+              </button>
+            </div>
+          </div>
+
+          {/* Crawl Results */}
+          <div className="mt-5">
+            {!crawlData ? (
+              <div className="flex flex-col items-center justify-center h-32 border rounded-2xl bg-white">
+                <div className="text-gray-900 font-medium">No crawl results yet</div>
+                <div className="text-gray-500 text-sm mt-1">Use URL or paste HTML above and crawl.</div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="text-sm text-gray-700">Found <span className="font-semibold text-gray-900">{crawlData.countCategories}</span> categories</div>
+                {Object.entries(crawlData.results || {}).map(([key, group]) => (
+                  <div key={key} className="bg-white border rounded-2xl shadow-sm">
+                    <div className="px-4 py-3 border-b flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">{group.label}</div>
+                        <a href={group.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-600 hover:text-indigo-700 break-all">{group.url}</a>
+                      </div>
+                      <div className="text-xs text-gray-700">{group.products?.length || 0} products</div>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(group.products || []).map((p, idx) => (
+                        <button key={idx} onClick={() => setPreviewCrawled(p)} className="text-left rounded-xl border bg-white overflow-hidden hover:shadow-md transition-shadow">
+                          <div className="aspect-[4/3] bg-gray-100">
+                            {p.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                            )}
+                          </div>
+                          <div className="p-3">
+                            <div className="text-sm font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
+                            <div className="text-xs mt-1 font-semibold text-emerald-700">{p.price || '—'}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Saved Sourced Products */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-50 via-white to-zinc-50">
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Saved Sourced Products</h2>
+              <p className="text-sm text-gray-600">Search and paginate through products saved from the crawl.</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={savedQuery}
+                onChange={e => setSavedQuery(e.target.value)}
+                placeholder="Search title or URL"
+                className="border border-gray-200 rounded-xl px-4 py-2.5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+              />
+              <button onClick={() => fetchSaved(1)} className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Search</button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3 text-sm text-gray-700">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={savedItems.length > 0 && savedItems.every(i => savedSelectedIds[i._id])}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const next: Record<string, boolean> = {};
+                    if (checked) savedItems.forEach(i => { next[i._id] = true; });
+                    setSavedSelectedIds(next);
+                  }}
+                />
+                <span>Select all</span>
+              </label>
+              <span className="text-gray-400">|</span>
+              <span>{Object.values(savedSelectedIds).filter(Boolean).length} selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const ids = Object.entries(savedSelectedIds).filter(([,v]) => v).map(([k]) => k);
+                  if (ids.length === 0) return toast.error('No items selected');
+                  const a = document.createElement('a');
+                  a.href = `/api/admin/sourcing/sourced/export-csv?ids=${encodeURIComponent(ids.join(','))}`;
+                  a.download = '';
+                  a.click();
+                }}
+                className="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+              >
+                Export selected ({Object.values(savedSelectedIds).filter(Boolean).length})
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {savedItems.map(it => {
+              const thumb = (it.images || []).find(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u)));
+              return (
+              <div key={it._id} onClick={() => setSavedSelected(it)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center justify-between px-3 pt-3">
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300"
+                      checked={!!savedSelectedIds[it._id]}
+                      onChange={(e) => setSavedSelectedIds(prev => ({ ...prev, [it._id]: e.target.checked }))}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span>Select</span>
+                  </label>
+                  <button onClick={(e) => { e.stopPropagation(); setSavedSelected(it); }} className="text-xs px-2 py-1 rounded-lg border bg-white hover:bg-gray-50">Open</button>
+                </div>
+                <div className="aspect-[4/3] bg-gray-100">
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt={it.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                  )}
+                </div>
+                <div className="p-4">
+                  <div className="font-medium text-gray-900 line-clamp-2" title={it.title}>{it.title}</div>
+                  <div className="text-xs text-gray-500 truncate mt-1">{it.categoryGroup}</div>
+                  <div className="text-sm mt-2 font-semibold text-emerald-700">{typeof it.price === 'number' ? `$${it.price.toFixed(2)}` : '—'}</div>
+                </div>
+              </div>
+            );})}
+          </div>
+
+          {/* Pagination */}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-gray-600">Showing {savedItems.length} of {savedTotal}</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => fetchSaved(Math.max(1, savedPage - 1))} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
+              <div className="text-sm text-gray-700">Page {savedPage}</div>
+              <button onClick={() => fetchSaved(savedPage + 1)} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() => {
+                try {
+                  const ids = savedItems.map(s => s._id).join(',');
+                  const url = `/api/admin/sourcing/sourced/export-csv?ids=${encodeURIComponent(ids)}`;
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = '';
+                  a.click();
+                } catch (e) { toast.error('Export failed'); }
+              }}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+            >
+              Export CSV (Saved)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Saved Product Details Modal */}
+      {savedSelected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSavedSelected(null)} />
+          <div className="relative w-full max-w-5xl bg-white rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-slate-50 via-white to-zinc-50">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xl font-semibold text-gray-900 truncate">{savedSelected.title}</div>
+                  <div className="mt-1 text-sm text-gray-500 truncate">
+                    <a href={savedSelected.sourceUrl} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600">{savedSelected.sourceUrl}</a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{typeof savedSelected.price === 'number' ? `$${savedSelected.price.toFixed(2)}` : '—'}</div>
+                  <button onClick={() => setSavedSelected(null)} className="h-9 w-9 rounded-full bg-white border text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2" aria-label="Close">✕</button>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-12">
+              <div className="col-span-12 lg:col-span-6 bg-gray-50 p-5">
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                  {(savedSelected.images || []).filter(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u))).map((src, idx) => (
+                    <div key={idx} className="bg-white rounded-2xl border shadow-sm p-3">
+                      <div
+                        className="w-full rounded-xl overflow-hidden flex items-center justify-center cursor-zoom-in"
+                        style={{ maxHeight: '360px' }}
+                        onClick={() => openLightbox(filteredSavedImages, idx)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`${savedSelected.title} ${idx+1}`} className="w-full h-full object-contain" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-12 lg:col-span-6 p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                <div className="bg-white border rounded-2xl shadow-sm p-5">
+                  <div className="text-lg font-semibold text-gray-900 mb-3">Product Details</div>
+                  <div className="space-y-3 text-gray-800 text-sm leading-6">
+                    {(savedSelected.description || '').split(/\n\n|\r\n\r\n/).filter(Boolean).map((para, i) => (
+                      <p key={i}>{para}</p>
+                    ))}
+                    {!savedSelected.description && (
+                      <p className="text-gray-500">No description</p>
+                    )}
+                  </div>
+                  <div className="mt-5">
+                    <div className="font-semibold text-gray-900 mb-2">Specification:</div>
+                    {(!savedSelected.specs || Object.keys(savedSelected.specs).length === 0) ? (
+                      <div className="text-sm text-gray-500">No specs found</div>
+                    ) : (
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-gray-800">
+                        {Object.entries(savedSelected.specs || {}).map(([k,v]) => (
+                          <li key={k}><span className="font-semibold">{k}:</span> {String(v)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                {/* Raw parsed details from crawl/parse API */}
+                <div className="bg-white border rounded-2xl shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-lg font-semibold text-gray-900">Raw Parsed Details</div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!savedSelected) return;
+                          try {
+                            setSavedParsedLoading(true);
+                            const resp = await fetch('/api/admin/sourcing/import-url', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ url: savedSelected.sourceUrl, alsoCreateDraftProduct: false })
+                            });
+                            const data = await resp.json();
+                            if (!resp.ok) throw new Error(data?.error || 'Parse failed');
+                            setSavedParsedRaw(data?.parsed || null);
+                            toast.success('Parsed details loaded');
+                          } catch (e: any) {
+                            toast.error(e?.message || 'Parse failed');
+                          } finally {
+                            setSavedParsedLoading(false);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                        disabled={savedParsedLoading}
+                      >
+                        {savedParsedLoading ? 'Loading…' : 'Load Raw'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          try {
+                            const id = savedSelected?._id;
+                            const a = document.createElement('a');
+                            a.href = `/api/admin/sourcing/sourced/export-csv?ids=${id}`;
+                            a.download = '';
+                            a.click();
+                          } catch { toast.error('Export failed'); }
+                        }}
+                        className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                      >
+                        Export CSV (This)
+                      </button>
+                    </div>
+                  </div>
+                  {!savedParsedRaw ? (
+                    <div className="text-sm text-gray-500">Click "Load Raw" to fetch parsed JSON from the parser.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-xs uppercase tracking-wide text-gray-500">JSON</div>
+                      <pre className="text-xs whitespace-pre-wrap break-words bg-white border rounded-xl p-3 max-h-72 overflow-auto text-gray-900">{JSON.stringify(savedParsedRaw, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!savedSelected) return;
+                      try {
+                        setSavedRefreshLoading(true);
+                        const resp = await fetch('/api/admin/sourcing/import-url', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ url: savedSelected.sourceUrl, alsoCreateDraftProduct: false })
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok) throw new Error(data?.error || 'Refresh failed');
+                        const parsed = data?.parsed || {};
+                        setSavedSelected(prev => prev ? {
+                          ...prev,
+                          title: parsed.title || prev.title,
+                          price: typeof parsed.price === 'number' ? parsed.price : prev.price,
+                          description: parsed.description || prev.description,
+                          specs: parsed.specs || prev.specs,
+                          images: Array.isArray(parsed.images) && parsed.images.length ? parsed.images : prev.images,
+                        } : prev);
+                        // persist to DB for saved sourced item
+                        try {
+                          await fetch('/api/admin/sourcing/sourced/upsert', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              id: savedSelected?._id,
+                              categoryGroup: savedSelected?.categoryGroup || 'Unknown',
+                              title: parsed.title || savedSelected?.title,
+                              sourceUrl: savedSelected?.sourceUrl,
+                              price: parsed.price,
+                              description: parsed.description,
+                              images: parsed.images,
+                              specs: parsed.specs,
+                            })
+                          });
+                          await fetchSaved(savedPage);
+                        } catch {}
+                        toast.success('Details refreshed');
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Refresh failed');
+                      } finally {
+                        setSavedRefreshLoading(false);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:opacity-60"
+                    disabled={savedRefreshLoading}
+                  >
+                    {savedRefreshLoading ? 'Refreshing…' : 'Refresh details'}
+                  </button>
+                  <a href={savedSelected.sourceUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Open Source</a>
+                  <button onClick={() => setSavedSelected(null)} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Crawled Product Modal */}
+      {previewCrawled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPreviewCrawled(null)} />
+          <div className="relative w-full max-w-3xl bg-white rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-emerald-50 via-white to-teal-50">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-xl font-semibold text-gray-900 truncate">{previewCrawled.title}</div>
+                  <div className="mt-1 text-sm text-gray-500 truncate">{previewCrawled.url}</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{previewCrawled.price || '—'}</div>
+                  <button onClick={() => setPreviewCrawled(null)} className="h-9 w-9 rounded-full bg-white border text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2" aria-label="Close">✕</button>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-12">
+              <div className="col-span-12 lg:col-span-6 bg-gray-50 p-5">
+                <div className="w-full rounded-2xl overflow-hidden border bg-white flex items-center justify-center" style={{ minHeight: '280px' }}>
+                  {previewCrawled.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewCrawled.image} alt={previewCrawled.title} className="max-h-[420px] w-full object-contain" />
+                  ) : (
+                    <div className="text-gray-400">No image</div>
+                  )}
+                </div>
+              </div>
+              <div className="col-span-12 lg:col-span-6 p-6 space-y-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Title</div>
+                  <div className="text-sm text-gray-900 break-words">{previewCrawled.title}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Price</div>
+                  <div className="text-sm font-semibold text-emerald-700">{previewCrawled.price || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Source</div>
+                  <div className="text-sm text-gray-700 break-all">{previewCrawled.url}</div>
+                </div>
+                <div className="pt-2 flex gap-2">
+                  <a href={previewCrawled.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Open in new tab</a>
+                  <button onClick={() => setPreviewCrawled(null)} className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search title or URL"
-            className="border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            className="border border-gray-200 rounded-xl px-4 py-2.5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
           />
           <button
             onClick={fetchList}
-            className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-2 shadow-sm"
+            className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
         </div>
         <button
           onClick={exportCsv}
-          className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2 shadow-sm"
+          className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
         >
           <Download className="h-4 w-4" /> Export CSV
         </button>
@@ -283,7 +982,7 @@ export default function SourcingPanel() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">${(selected.price ?? 0).toFixed(2)}</div>
-                  <button onClick={() => setSelected(null)} className="h-9 w-9 rounded-full bg-white border text-gray-600 hover:bg-gray-50">✕</button>
+                  <button onClick={() => setSelected(null)} className="h-9 w-9 rounded-full bg-white border text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2" aria-label="Close">✕</button>
                 </div>
               </div>
             </div>
@@ -293,9 +992,13 @@ export default function SourcingPanel() {
               <div className="col-span-12 lg:col-span-6 bg-gray-50 p-5">
                 {(selected.images && selected.images.length > 0) ? (
                   <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-                    {selected.images.map((src, idx) => (
+                    {selected.images.filter(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u))).map((src, idx) => (
                       <div key={idx} className="bg-white rounded-2xl border shadow-sm p-3">
-                        <div className="w-full rounded-xl overflow-hidden flex items-center justify-center" style={{ maxHeight: '360px' }}>
+                        <div
+                          className="w-full rounded-xl overflow-hidden flex items-center justify-center cursor-zoom-in"
+                          style={{ maxHeight: '360px' }}
+                          onClick={() => openLightbox(filteredSelectedImages, idx)}
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={src} alt={`${selected.title} ${idx+1}`} className="w-full h-full object-contain" />
                         </div>
@@ -307,7 +1010,7 @@ export default function SourcingPanel() {
                               setEnhanceHint(idx === 0 ? 'front' : '');
                               setEnhanceErrorByIdx(prev => ({ ...prev, [idx]: '' }));
                             }}
-                            className="px-3 py-2 rounded-lg border bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer text-sm font-medium"
+                            className="px-3 py-2 rounded-lg border bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
                           >
                             Change and get new URL
                           </button>
@@ -332,7 +1035,7 @@ export default function SourcingPanel() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="font-semibold">Set product view hint</div>
                       {!enhanceLoading && (
-                        <button onClick={()=> setEnhanceIdx(null)} className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200">✕</button>
+                        <button onClick={()=> setEnhanceIdx(null)} className="h-8 w-8 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2" aria-label="Close enhance">✕</button>
                       )}
                     </div>
                     <label className="block text-xs text-gray-500 mb-1">Pose/View (e.g., front, back, left side, right side)</label>
@@ -341,7 +1044,7 @@ export default function SourcingPanel() {
                       onChange={(e)=>setEnhanceHint(e.target.value)}
                       disabled={enhanceLoading}
                       placeholder="front"
-                      className="w-full border rounded-lg px-3 py-2"
+                      className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                     {typeof enhanceIdx === 'number' && enhanceErrorByIdx[enhanceIdx] && (
                       <div className="mt-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
@@ -376,7 +1079,7 @@ export default function SourcingPanel() {
                           }
                         }}
                         disabled={enhanceLoading}
-                        className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+                        className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
                       >
                         {enhanceLoading ? 'Enhancing…' : 'Generate & Update'}
                       </button>
@@ -499,7 +1202,7 @@ export default function SourcingPanel() {
                                   }
                                 }
                               }}
-                              className="px-2 py-1 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-700"
+                              className="px-2 py-1 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
                             >
                               Copy
                             </button>
@@ -527,25 +1230,25 @@ export default function SourcingPanel() {
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Title</label>
-                        <input value={etsyTitle} onChange={e=>setEtsyTitle(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+                        <input value={etsyTitle} onChange={e=>setEtsyTitle(e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Tags (comma separated)</label>
-                        <input value={etsyTags} onChange={e=>setEtsyTags(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+                        <input value={etsyTags} onChange={e=>setEtsyTags(e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Materials</label>
-                        <input value={etsyMaterials} onChange={e=>setEtsyMaterials(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+                        <input value={etsyMaterials} onChange={e=>setEtsyMaterials(e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                       </div>
                     </div>
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Category</label>
-                        <input value={etsyCategory} onChange={e=>setEtsyCategory(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+                        <input value={etsyCategory} onChange={e=>setEtsyCategory(e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Price (USD)</label>
-                        <input value={etsyPrice} onChange={e=>setEtsyPrice(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+                        <input value={etsyPrice} onChange={e=>setEtsyPrice(e.target.value)} className="w-full border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                       </div>
                       <div className="pt-2 flex gap-2">
                         <button onClick={exportEditedCsv} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Export CSV (Edited)</button>
@@ -556,12 +1259,111 @@ export default function SourcingPanel() {
                 {/* Footer actions */}
                 <div className="sticky bottom-0 bg-white/70 backdrop-blur pt-3">
                   <div className="flex gap-3">
-                    <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm">Open Source</a>
-                    <button onClick={() => exportOne(selected._id)} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">Export CSV</button>
+                    <button
+                      onClick={async () => {
+                        if (!selected) return;
+                        try {
+                          setRefreshLoading(true);
+                          const resp = await fetch('/api/admin/sourcing/import-url', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: selected.sourceUrl, alsoCreateDraftProduct: false })
+                          });
+                          const data = await resp.json();
+                          if (!resp.ok) throw new Error(data?.error || 'Refresh failed');
+                          const parsed = data?.parsed || {};
+                          setSelected(prev => prev ? {
+                            ...prev,
+                            title: parsed.title || prev.title,
+                            price: typeof parsed.price === 'number' ? parsed.price : prev.price,
+                            description: parsed.description || prev.description,
+                            specs: parsed.specs || (prev as any).specs,
+                            images: Array.isArray(parsed.images) && parsed.images.length ? parsed.images : prev.images,
+                          } : prev);
+                          // upsert to saved sourced DB if we can infer a group from source host
+                          try {
+                            const categoryGroup = `Auto:${new URL(selected.sourceUrl).hostname}`;
+                            await fetch('/api/admin/sourcing/sourced/upsert', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                categoryGroup,
+                                title: parsed.title || selected.title,
+                                sourceUrl: selected.sourceUrl,
+                                price: parsed.price,
+                                description: parsed.description,
+                                images: parsed.images,
+                                specs: parsed.specs,
+                              })
+                            });
+                            await fetchSaved(1);
+                          } catch {}
+                          toast.success('Details refreshed');
+                        } catch (e: any) {
+                          toast.error(e?.message || 'Refresh failed');
+                        } finally {
+                          setRefreshLoading(false);
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 disabled:opacity-60"
+                      disabled={refreshLoading}
+                    >
+                      {refreshLoading ? 'Refreshing…' : 'Refresh details'}
+                    </button>
+                    <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Open Source</a>
+                    <button onClick={() => exportOne(selected._id)} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Export CSV</button>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Lightbox for images */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 transition-opacity duration-150 opacity-100"
+          onWheel={onWheelZoom}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          <button
+            onClick={closeLightbox}
+            className="absolute top-4 right-4 h-10 px-4 rounded-full bg-white/90 text-gray-800 shadow-sm"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => { setLightboxIndex((lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length); setLightboxScale(1); setLightboxPan({x:0,y:0}); }}
+            className="absolute left-4 top-1/2 -translate-y-1/2 h-10 px-3 rounded-full bg-white/80 text-gray-800 shadow-sm"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => { setLightboxIndex((lightboxIndex + 1) % lightboxImages.length); setLightboxScale(1); setLightboxPan({x:0,y:0}); }}
+            className="absolute right-4 top-1/2 -translate-y-1/2 h-10 px-3 rounded-full bg-white/80 text-gray-800 shadow-sm"
+          >
+            ›
+          </button>
+          <div
+            className="max-w-[92vw] max-h-[92vh] overflow-hidden cursor-grab active:cursor-grabbing rounded-xl bg-white"
+            onMouseDown={onMouseDown}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxImages[lightboxIndex]}
+              alt="zoomed"
+              style={{ transform: `translate(${lightboxPan.x}px, ${lightboxPan.y}px) scale(${lightboxScale})`, transition: isPanning ? 'none' : 'transform 120ms ease' }}
+              className="block max-w-[92vw] max-h-[92vh] object-contain select-none"
+              draggable={false}
+            />
+          </div>
+          <div className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-2">
+            <button onClick={() => setLightboxScale(s => Math.max(1, s - 0.2))} className="px-3 py-1 rounded-md bg-white/90 text-gray-800">-</button>
+            <button onClick={() => { setLightboxScale(1); setLightboxPan({x:0,y:0}); }} className="px-3 py-1 rounded-md bg-white/90 text-gray-800">Reset</button>
+            <button onClick={() => setLightboxScale(s => Math.min(4, s + 0.2))} className="px-3 py-1 rounded-md bg-white/90 text-gray-800">+</button>
           </div>
         </div>
       )}

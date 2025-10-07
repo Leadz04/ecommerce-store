@@ -19,35 +19,57 @@ function parseGenericProduct(html: string, url: string) {
   const priceMatch = priceText?.match(/\$?([0-9]+(?:\.[0-9]{2})?)/);
   const price = priceMatch ? parseFloat(priceMatch[1]) : undefined;
 
-  // Try to extract rich description (ONLY the paragraph block under "Product Details" and BEFORE "Specification")
+  // Extract ALL content from accordion-content class
   let description = '';
-  const detailsHeader = $("*:contains('Product Details'):not(script):not(style)").filter((_, el) => /product\s+details/i.test($(el).text())).first() as any;
-  if (detailsHeader.length) {
-    const sectionRoot = detailsHeader.closest('.accordion-content, section, div');
-    if (sectionRoot.length) {
-      const paras: string[] = [];
-      let collecting = false;
-      sectionRoot.contents().each((_: any, node: any) => {
-        if (!collecting) {
-          if (node === detailsHeader[0] || $(node).find(detailsHeader).length) {
-            collecting = true; // start after header
+  const acc = $('.accordion-content').first();
+  if (acc.length) {
+    console.log('[DESCRIPTION:PARSING] Found accordion-content, extracting ALL content...');
+    // Get all text content from the accordion-content, preserving structure
+    description = acc.html() || acc.text() || '';
+    console.log('[DESCRIPTION:PARSING] Raw HTML content length:', description.length);
+    
+    // Clean up the HTML and convert to readable text
+    if (description.includes('<')) {
+      // Convert HTML to clean text while preserving structure
+      const cleanText = acc.text().replace(/\s+/g, ' ').trim();
+      description = cleanText;
+      console.log('[DESCRIPTION:PARSING] Cleaned text length:', description.length);
+    }
+    
+    console.log('[DESCRIPTION:PARSING] Final description preview:', description.substring(0, 200) + '...');
+  } else {
+    console.log('[DESCRIPTION:PARSING] No accordion-content found');
+  }
+
+  // Fallback: paragraph block under a "Product Details" header BEFORE "Specification"
+  if (!description) {
+    const detailsHeader = $("*:contains('Product Details'):not(script):not(style)").filter((_, el) => /product\s+details/i.test($(el).text())).first() as any;
+    if (detailsHeader.length) {
+      const sectionRoot = detailsHeader.closest('.accordion-content, section, div');
+      if (sectionRoot.length) {
+        const paras: string[] = [];
+        let collecting = false;
+        sectionRoot.contents().each((_: any, node: any) => {
+          if (!collecting) {
+            if (node === detailsHeader[0] || $(node).find(detailsHeader).length) {
+              collecting = true;
+            }
+            return;
           }
-          return;
-        }
-        // Stop if we reach Specification or the next obvious section
-        const nodeText = $(node).text().trim();
-        if (/^\s*specification\s*:?/i.test(nodeText) || /shipping|return|care|maintenance|size|measurement|faq/i.test(nodeText) && $(node).is('h1,h2,h3,h4,strong,div,section')) {
-          return false; // break .each
-        }
-        if ($(node).is('p') || $(node).find('p').length) {
-          const ps = $(node).is('p') ? [node] : $(node).find('p').toArray();
-          ps.forEach((p) => {
-            const t = $(p).text().replace(/\s+/g, ' ').trim();
-            if (t) paras.push(t);
-          });
-        }
-      });
-      if (paras.length) description = paras.join('\n\n');
+          const nodeText = $(node).text().trim();
+          if (/^\s*specification\s*:?/i.test(nodeText) || /shipping|return|care|maintenance|size|measurement|faq/i.test(nodeText) && $(node).is('h1,h2,h3,h4,strong,div,section')) {
+            return false;
+          }
+          if ($(node).is('p') || $(node).find('p').length) {
+            const ps = $(node).is('p') ? [node] : $(node).find('p').toArray();
+            ps.forEach((p) => {
+              const t = $(p).text().replace(/\s+/g, ' ').trim();
+              if (t) paras.push(t);
+            });
+          }
+        });
+        if (paras.length) description = paras.join('\n\n');
+      }
     }
   }
   if (!description) {
@@ -60,17 +82,53 @@ function parseGenericProduct(html: string, url: string) {
       || $('meta[name="description"]').attr('content')
       || '';
   }
-  const metaOgImage = $('meta[property="og:image"]').attr('content') || $('meta[name="og:image"]').attr('content') || $('link[rel="image_src"]').attr('href') || '';
-  const images = Array.from(new Set(
-    [metaOgImage,
-      ...$('img').map((_, el) => $(el).attr('src') || $(el).attr('data-src') || '').get()
-    ]
-  ))
-  .filter(Boolean)
-  .map(src => src.startsWith('http') ? src : (src.startsWith('//') ? `https:${src}` : new URL(src, url).toString()))
-  .filter(src => !/(spinner|loader|loading|ajax|placeholder)\b/i.test(src))
-  .filter(src => !src.endsWith('.svg'))
-  .slice(0, 12);
+  // Collect only product images; prioritize gallery and zoom assets
+  const toAbs = (u: string) => (u?.startsWith('http') ? u : (u?.startsWith('//') ? `https:${u}` : new URL(u || '', url).toString()));
+  const isBad = (u: string) => /ajax|loader|loading|placeholder|sprite/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u) || /\.(gif)(:|$|\?)/i.test(u);
+  const isProductImg = (u: string) => /\/product_images\//i.test(u);
+
+  const candidates: string[] = [];
+  // ProductImagesGridList (MagicZoom) anchors and nested images
+  $('.ProductImagesGridList').find('a[href]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    if (href && isProductImg(href) && !isBad(href)) candidates.push(href);
+    const inner = $(a).find('img').first();
+    const src = inner.attr('data-zoom-image') || inner.attr('data-original') || inner.attr('data-src') || inner.attr('src') || '';
+    if (src && isProductImg(src) && !isBad(src)) candidates.push(src);
+    const srcset = inner.attr('srcset') || inner.attr('data-srcset');
+    if (srcset) srcset.split(',').map(s => s.trim().split(' ')[0]).forEach((u)=>{ if (u && isProductImg(u) && !isBad(u)) candidates.push(u); });
+  });
+  // JSON-LD image arrays
+  $('script[type="application/ld+json"]').each((_, s) => {
+    try {
+      const data = JSON.parse($(s).contents().text() || '{}');
+      const imgs = Array.isArray(data?.image) ? data.image : (data?.image ? [data.image] : []);
+      imgs.forEach((u: string) => { if (u && isProductImg(u) && !isBad(u)) candidates.push(u); });
+      if (Array.isArray(data?.hasPart)) data.hasPart.forEach((p: any) => Array.isArray(p?.image) && p.image.forEach((u: string) => { if (u && isProductImg(u) && !isBad(u)) candidates.push(u); }));
+    } catch {}
+  });
+  // Fallback: scan all imgs only if gallery empty
+  if (candidates.length === 0) {
+    $('img').each((_, el) => {
+      const e = $(el);
+      const src = e.attr('data-zoom-image') || e.attr('data-original') || e.attr('data-src') || e.attr('src') || '';
+      if (src && isProductImg(src) && !isBad(src)) candidates.push(src);
+      const srcset = e.attr('srcset') || e.attr('data-srcset');
+      if (srcset) srcset.split(',').map(s => s.trim().split(' ')[0]).forEach((u)=>{ if (u && isProductImg(u) && !isBad(u)) candidates.push(u); });
+    });
+  }
+  // Regex sweep backup
+  try {
+    const rx = String(html).match(/https?:[^\s'"()<>]+\.(?:webp|jpg|jpeg|png)/gi) || [];
+    rx.forEach((u) => { if (isProductImg(u) && !isBad(u)) candidates.push(u); });
+  } catch {}
+  // Normalize and dedupe, prefer zoom/original over thumb
+  const seen = new Set<string>();
+  const ordered = candidates.sort((a,b)=>{
+    const score = (u:string)=> (/(zoom|_orig|_large)/i.test(u)?3:0) + (!/(thumb|small|tiny|_s\.|_sm\.|_thumb)/i.test(u)?2:0);
+    return score(b)-score(a);
+  });
+  const images = ordered.map(toAbs).filter(u=>{ if (seen.has(u)) return false; seen.add(u); return true; }).slice(0, 20);
 
   // Basic specs parsing
   const specs: Record<string, string> = {};
@@ -187,19 +245,6 @@ export async function POST(request: NextRequest) {
     // Parse product (Angel Jackets example); if non-HTML fallback, basic meta extraction
     const isLikelyHtml = /<html[\s>]/i.test(html) || /<head[\s>]/i.test(html);
     let parsed = parseGenericProduct(html, url);
-    try {
-      console.log('[SOURCING:IMAGES]', Array.isArray(parsed.images) ? parsed.images : []);
-    } catch {}
-    try {
-      console.log('[SOURCING:PARSED_FULL]', {
-        url,
-        title: parsed.title,
-        price: parsed.price,
-        description: parsed.description,
-        specs: parsed.specs,
-        images: parsed.images,
-      });
-    } catch {}
     if (!parsed.title && !isLikelyHtml) {
       // Minimal OG/meta parsing from plaintext (proxy output)
       const titleMatch = html.match(/title:\s*(.*)/i) || html.match(/#\s*(.*)/); // r.jina.ai often returns markdown-like
@@ -227,9 +272,17 @@ export async function POST(request: NextRequest) {
       { upsert: true, new: true }
     );
 
+    // Always update Product description if a product already exists with this sourceUrl
+    try {
+      await connectDB();
+      await Product.updateOne(
+        { sourceUrl: url },
+        { $set: { description: scraped.description } }
+      );
+    } catch {}
+
     let createdProductId: string | null = null;
     if (alsoCreateDraftProduct) {
-      await connectDB();
       const existing = await Product.findOne({ sourceUrl: url });
       if (!existing) {
         const product = await Product.create({
@@ -253,29 +306,12 @@ export async function POST(request: NextRequest) {
         });
         createdProductId = product._id.toString();
       } else {
+        // Update description on the existing draft as well
+        await Product.updateOne({ _id: existing._id }, { $set: { description: scraped.description } });
         createdProductId = existing._id.toString();
       }
     }
 
-    // Log parsed details for debugging visibility
-    console.log('[SOURCING:PARSED]', {
-      url,
-      title: scraped.title,
-      price: scraped.price,
-      images: scraped.images?.length,
-      specs: scraped.specs ? Object.keys(scraped.specs).length : 0,
-    });
-    try {
-      console.log('[SOURCING:SAVED_FULL]', {
-        scrapedId: scraped._id,
-        title: scraped.title,
-        price: scraped.price,
-        description: scraped.description,
-        specs: scraped.specs,
-        images: scraped.images,
-        sourceUrl: scraped.sourceUrl,
-      });
-    } catch {}
 
     return NextResponse.json({ success: true, scrapedId: scraped._id, productId: createdProductId, parsed: { title: scraped.title, price: scraped.price, images: scraped.images, specs: scraped.specs, description: scraped.description, html } });
   } catch (error: any) {

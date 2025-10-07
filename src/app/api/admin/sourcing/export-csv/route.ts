@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const csvRows = items.map(p => ({
       Title: p.title || '',
       Description: p.description || '',
-      Category: 'Accessories',
+      Category: 'Clothing',
       'Who made it?': 'I made it',
       'What is it?': 'A finished product',
       'When was it made?': '2024',
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       Tags: 'sourced',
       Materials: 'Leather',
       'Production partners': '',
-      Section: 'Accessories',
+      Section: 'Clothing',
       Price: (p.price ?? 0).toString(),
       Quantity: '1',
       SKU: '',
