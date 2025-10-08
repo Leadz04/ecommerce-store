@@ -71,6 +71,12 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [newSpecKey, setNewSpecKey] = useState('');
   const [newSpecValue, setNewSpecValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [aiTitle, setAiTitle] = useState('');
+  const [aiDescription, setAiDescription] = useState('');
+  const [aiTagsText, setAiTagsText] = useState('');
+  const [optimizingTitle, setOptimizingTitle] = useState(false);
+  const [optimizingDescription, setOptimizingDescription] = useState(false);
+  const [optimizingTags, setOptimizingTags] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -318,6 +324,188 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                 className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter product description"
               />
+            </div>
+
+            {/* AI SEO Assistant (Gemini) */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Optimize Title</span>
+                    <button
+                      type="button"
+                      disabled={optimizingTitle}
+                      onClick={async () => {
+                        try {
+                          setOptimizingTitle(true);
+                          const res = await fetch('/api/ai/optimize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              mode: 'title',
+                              input: {
+                                name: formData.name,
+                                description: formData.description,
+                                tags: formData.tags,
+                                category: formData.category,
+                                brand: formData.brand,
+                              }
+                            })
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || 'Failed to optimize title');
+                          setAiTitle(data.output || '');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Optimize failed');
+                        } finally {
+                          setOptimizingTitle(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {optimizingTitle ? 'Optimizing…' : 'Optimize'}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={aiTitle}
+                    onChange={(e) => setAiTitle(e.target.value)}
+                    placeholder="AI suggestion will appear here"
+                    className="w-full px-3 py-2 border border-gray-300 text-gray-700 rounded-lg"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { if (aiTitle.trim()) { handleInputChange('name', aiTitle.trim()); toast.success('Title applied'); } }}
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-900"
+                    >
+                      Apply to Title
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Optimize Description</span>
+                    <button
+                      type="button"
+                      disabled={optimizingDescription}
+                      onClick={async () => {
+                        try {
+                          setOptimizingDescription(true);
+                          const res = await fetch('/api/ai/optimize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              mode: 'description',
+                              input: {
+                                name: formData.name,
+                                description: formData.description,
+                                tags: formData.tags,
+                                category: formData.category,
+                                brand: formData.brand,
+                              }
+                            })
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || 'Failed to optimize description');
+                          setAiDescription(data.output || '');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Optimize failed');
+                        } finally {
+                          setOptimizingDescription(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {optimizingDescription ? 'Optimizing…' : 'Optimize'}
+                    </button>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={aiDescription}
+                    onChange={(e) => setAiDescription(e.target.value)}
+                    placeholder="AI suggestion will appear here"
+                    className="w-full px-3 py-2 border border-gray-300 text-gray-700 rounded-lg"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { if (aiDescription.trim()) { handleInputChange('description', aiDescription.trim()); toast.success('Description applied'); } }}
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-900"
+                    >
+                      Apply to Description
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Optimize Tags</span>
+                    <button
+                      type="button"
+                      disabled={optimizingTags}
+                      onClick={async () => {
+                        try {
+                          setOptimizingTags(true);
+                          const res = await fetch('/api/ai/optimize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              mode: 'tags',
+                              input: {
+                                name: formData.name,
+                                description: formData.description,
+                                tags: formData.tags,
+                                category: formData.category,
+                                brand: formData.brand,
+                              }
+                            })
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || 'Failed to optimize tags');
+                          setAiTagsText(data.output || '');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Optimize failed');
+                        } finally {
+                          setOptimizingTags(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {optimizingTags ? 'Optimizing…' : 'Optimize'}
+                    </button>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={aiTagsText}
+                    onChange={(e) => setAiTagsText(e.target.value)}
+                    placeholder="Comma-separated tags will appear here"
+                    className="w-full px-3 py-2 border border-gray-300 text-gray-700 rounded-lg"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const parsed = aiTagsText
+                          .split(/[\,\n]/)
+                          .map(t => t.trim())
+                          .filter(Boolean);
+                        const unique = Array.from(new Set([...(formData.tags || []), ...parsed]));
+                        handleInputChange('tags', unique);
+                        toast.success('Tags merged');
+                      }}
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded hover:bg-gray-900"
+                    >
+                      Apply to Tags
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Pricing */}
