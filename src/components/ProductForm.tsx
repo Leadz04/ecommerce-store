@@ -540,13 +540,17 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
               {Object.keys(formData.specifications).length > 0 && (
                 <div className="space-y-2">
                   {Object.entries(formData.specifications).map(([key, value]) => (
-                    <div key={key} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-gray-700">{key}:</span>
-                      <span className="text-gray-600">{value}</span>
+                    <div key={key} className="flex items-center p-2 bg-gray-50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-700">{key}:</span>{' '}
+                        <span className="text-gray-600 truncate align-middle inline-block max-w-full">{value}</span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeSpecification(key)}
-                        className="ml-auto text-red-600 hover:text-red-800 transition-colors"
+                        className="ml-3 text-red-600 hover:text-red-800 transition-colors shrink-0"
+                        aria-label={`Delete ${key}`}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

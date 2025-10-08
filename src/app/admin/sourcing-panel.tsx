@@ -69,6 +69,9 @@ export default function SourcingPanel() {
   const [savedParsedRaw, setSavedParsedRaw] = useState<any | null>(null);
   const [savedParsedLoading, setSavedParsedLoading] = useState(false);
   const [savedRefreshLoading, setSavedRefreshLoading] = useState(false);
+  const [addToProductsLoading, setAddToProductsLoading] = useState(false);
+  const [bulkAddToProductsLoading, setBulkAddToProductsLoading] = useState(false);
+  const [bulkRefreshLoading, setBulkRefreshLoading] = useState(false);
   const [refreshLoading, setRefreshLoading] = useState(false);
   const [savedZoomIdx, setSavedZoomIdx] = useState<number | null>(null);
   const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
@@ -609,6 +612,116 @@ export default function SourcingPanel() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={async () => {
+                  try {
+                    // Show warning for processing all products
+                    const confirmed = window.confirm(
+                      'This will refresh ALL sourced products. This may take several minutes depending on the number of products. Continue?'
+                    );
+                    if (!confirmed) return;
+                    
+                    setBulkRefreshLoading(true);
+                    const token = localStorage.getItem('token');
+                    const resp = await fetch('/api/admin/sourcing/refresh-all', {
+                      method: 'POST',
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({})
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data?.error || 'Bulk refresh failed');
+                    
+                    const { results } = data;
+                    
+                    if (results.refreshed > 0) {
+                      toast.success(`Successfully refreshed ${results.refreshed} products`);
+                    }
+                    if (results.errors > 0) {
+                      toast.error(`Failed to refresh ${results.errors} products. Check console for details.`);
+                      console.error('Bulk refresh errors:', results.errors);
+                    }
+                    
+                    // Show detailed results
+                    console.log('Bulk refresh results:', {
+                      total: results.total,
+                      refreshed: results.refreshed,
+                      errors: results.errors,
+                      totalInDatabase: results.totalInDatabase,
+                      allProcessed: results.allProcessed
+                    });
+                    
+                    if (results.allProcessed) {
+                      toast.success(`All ${results.totalInDatabase} products have been processed!`);
+                    }
+                    
+                    // Refresh the list to show updated data
+                    await fetchSaved(savedPage);
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Bulk refresh failed');
+                  } finally {
+                    setBulkRefreshLoading(false);
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-orange-600 text-white hover:bg-orange-700 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 focus-visible:ring-offset-2 disabled:opacity-60"
+                disabled={bulkRefreshLoading}
+              >
+                {bulkRefreshLoading ? 'Refreshing All Products…' : 'Refresh All Products'}
+              </button>
+              {/* Test Refresh button removed */}
+              <button
+                onClick={async () => {
+                  const ids = Object.entries(savedSelectedIds).filter(([,v]) => v).map(([k]) => k);
+                  if (ids.length === 0) return toast.error('No items selected');
+                  try {
+                    setBulkAddToProductsLoading(true);
+                    const token = localStorage.getItem('token');
+                    const resp = await fetch('/api/admin/sourcing/convert-bulk-to-products', {
+                      method: 'POST',
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({ sourcedIds: ids })
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data?.error || 'Bulk add failed');
+                    
+                    const { results, errors, summary } = data;
+                    
+                    if (results.length > 0) {
+                      const productNames = results.map(r => r.name);
+                      toast.success(`Successfully added ${results.length} products: ${productNames.join(', ')}`);
+                    }
+                    if (errors.length > 0) {
+                      console.error('Bulk add errors:', errors);
+                      console.table(errors.map(e => ({
+                        title: e.title || 'Unknown',
+                        error: e.error || 'Unknown error',
+                        sourcedId: e.sourcedId
+                      })));
+                      const errorMessages = errors.map(e => `${e.title || 'Unknown'}: ${e.error || 'Unknown error'}`).join('; ');
+                      toast.error(`Failed to add ${errors.length} products: ${errorMessages}`);
+                    }
+                    
+                    // Clear selection after successful operations
+                    if (results.length > 0) {
+                      setSavedSelectedIds({});
+                      await fetchSaved(savedPage);
+                    }
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Bulk add failed');
+                  } finally {
+                    setBulkAddToProductsLoading(false);
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-60"
+                disabled={bulkAddToProductsLoading}
+              >
+                {bulkAddToProductsLoading ? 'Adding…' : `Add to Products (${Object.values(savedSelectedIds).filter(Boolean).length})`}
+              </button>
+              <button
                 onClick={() => {
                   const ids = Object.entries(savedSelectedIds).filter(([,v]) => v).map(([k]) => k);
                   if (ids.length === 0) return toast.error('No items selected');
@@ -621,6 +734,15 @@ export default function SourcingPanel() {
               >
                 Export selected ({Object.values(savedSelectedIds).filter(Boolean).length})
               </button>
+            </div>
+          </div>
+          {/* Top Pagination */}
+          <div className="mt-4 mb-2 flex items-center justify-between">
+            <div className="text-sm text-gray-600">Showing {savedItems.length} of {savedTotal}</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => fetchSaved(Math.max(1, savedPage - 1))} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
+              <div className="text-sm text-gray-700">Page {savedPage}</div>
+              <button onClick={() => fetchSaved(savedPage + 1)} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -668,6 +790,35 @@ export default function SourcingPanel() {
             </div>
           </div>
           <div className="mt-3 flex justify-end">
+            <button
+              onClick={async () => {
+                try {
+                  if (savedTotal <= 0) return toast.error('No saved products to add');
+                  setBulkAddToProductsLoading(true);
+                  const token = localStorage.getItem('token');
+                  const resp = await fetch('/api/admin/sourcing/convert-all-to-products', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`
+                    }
+                  });
+                  const result = await resp.json();
+                  if (!resp.ok) throw new Error(result?.error || 'Bulk add failed');
+                  const created = result?.created ?? 0;
+                  const errors = result?.errors ?? 0;
+                  toast.success(`Added ${created} products${errors ? `, ${errors} errors` : ''}`);
+                  await fetchSaved(savedPage);
+                } catch (e: any) {
+                  toast.error(e?.message || 'Bulk add failed');
+                } finally {
+                  setBulkAddToProductsLoading(false);
+                }
+              }}
+              className="mr-3 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            >
+              {bulkAddToProductsLoading ? 'Adding ALL…' : `Add ALL to Products (${savedTotal})`}
+            </button>
             <button
               onClick={() => {
                 try {
@@ -853,6 +1004,42 @@ export default function SourcingPanel() {
                     disabled={savedRefreshLoading}
                   >
                     {savedRefreshLoading ? 'Refreshing…' : 'Refresh details'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!savedSelected) return;
+                      try {
+                        setAddToProductsLoading(true);
+                        const token = localStorage.getItem('token');
+                        const resp = await fetch('/api/admin/sourcing/convert-to-product', {
+                          method: 'POST',
+                          headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ sourcedId: savedSelected._id })
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok) {
+                          if (data.error?.includes('already exists')) {
+                            toast.error('Product already exists with this source URL');
+                          } else {
+                            throw new Error(data?.error || 'Failed to add to products');
+                          }
+                          return;
+                        }
+                        toast.success(`Product "${data.product.name}" created successfully!`);
+                        setSavedSelected(null);
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Failed to add to products');
+                      } finally {
+                        setAddToProductsLoading(false);
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-60"
+                    disabled={addToProductsLoading}
+                  >
+                    {addToProductsLoading ? 'Adding…' : 'Add to Products'}
                   </button>
                   <a href={savedSelected.sourceUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Open Source</a>
                   <button onClick={() => setSavedSelected(null)} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Close</button>
