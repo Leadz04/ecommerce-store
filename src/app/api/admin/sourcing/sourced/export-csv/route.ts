@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
         'Length': '10',
         'Width': '8',
         'Height': '2',
-        'Return policy': '14 days',
+        'Return policy': '14 days to return or exchange',
         'Photo 1': imgs[0] || '',
         'Photo 2': imgs[1] || '',
         'Photo 3': imgs[2] || '',

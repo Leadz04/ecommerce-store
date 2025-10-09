@@ -153,7 +153,7 @@ export default function SourcingPanel() {
       'Length': '10',
       'Width': '8',
       'Height': '2',
-      'Return policy': '14 days',
+      'Return policy': '14 days to return or exchange',
       'Photo 1': selected.images?.[0] || '',
       'Photo 2': selected.images?.[1] || '',
       'Photo 3': selected.images?.[2] || '',
