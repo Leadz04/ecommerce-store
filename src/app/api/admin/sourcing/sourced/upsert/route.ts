@@ -22,7 +22,15 @@ export async function POST(request: NextRequest) {
     }
 
     const Sourced = await getSourcedProductModel();
-    const query = id ? { _id: id } : { categoryGroup, sourceUrl };
+    // Prefer ID match; else dedupe by exact title OR sourceUrl within category
+    const query = id
+      ? { _id: id }
+      : {
+        $or: [
+          { categoryGroup, title: title || 'Untitled' },
+          { categoryGroup, sourceUrl }
+        ]
+      };
     const update = {
       categoryGroup,
       sourceUrl,
@@ -33,7 +41,8 @@ export async function POST(request: NextRequest) {
       specs: specs || {},
     } as any;
 
-    const doc = await Sourced.findOneAndUpdate(query, update, { upsert: true, new: true });
+    // Use case-insensitive collation to match existing titles ignoring case
+    const doc = await Sourced.findOneAndUpdate(query, update, { upsert: true, new: true, setDefaultsOnInsert: true, collation: { locale: 'en', strength: 2 } });
     return NextResponse.json({ ok: true, item: doc });
   } catch (e) {
     return NextResponse.json({ error: 'Failed to upsert sourced product' }, { status: 500 });

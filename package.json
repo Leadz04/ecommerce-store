@@ -27,7 +27,8 @@
     "ensure:men": "node scripts/ensure-men-products.js",
     "import:men": "node scripts/import-men-from-scraped.js",
     "categorize:all": "node scripts/categorize-all-products.js",
-    "rss": "echo RSS available at /rss.xml"
+    "rss": "echo RSS available at /rss.xml",
+    "dedupe:sourced": "node scripts/dedupe-sourced-products.js"
   },
   "dependencies": {
     "@google/genai": "^0.6.1",

@@ -23,8 +23,10 @@ const SourcedProductSchema = new Schema<ISourcedProduct>({
   specs: { type: Map, of: String },
 }, { timestamps: true });
 
-// Unique within category on normalized title
+// Unique within category on title (legacy)
 SourcedProductSchema.index({ categoryGroup: 1, title: 1 }, { unique: true });
+// Enforce global uniqueness on title (case-insensitive)
+SourcedProductSchema.index({ title: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
 
 let SourcedProductModel: Model<ISourcedProduct> | null = null;
 

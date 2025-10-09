@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, Link2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,6 +17,8 @@ interface ScrapedItem {
 }
 
 export default function SourcingPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ScrapedItem[]>([]);
@@ -61,7 +64,7 @@ export default function SourcingPanel() {
   type SavedItem = { _id: string; title: string; sourceUrl: string; price?: number; images?: string[]; categoryGroup: string; description?: string; specs?: Record<string,string> };
   const [savedQuery, setSavedQuery] = useState('');
   const [savedPage, setSavedPage] = useState(1);
-  const [savedLimit, setSavedLimit] = useState(12);
+  const [savedLimit, setSavedLimit] = useState(20);
   const [savedTotal, setSavedTotal] = useState(0);
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
@@ -124,15 +127,15 @@ export default function SourcingPanel() {
       'Title': etsyTitle || '',
       'Description': selected.description || '',
       'Category': etsyCategory || 'Accessories',
-      'Who made it?': 'I made it',
+      'Who made it?': 'I did',
       'What is it?': 'A finished product',
-      'When was it made?': '2024',
+      'When was it made?': 'Made To Order',
       'Renewal options': 'Auto-renew',
       'Product type': 'Physical',
       'Tags': etsyTags,
       'Materials': etsyMaterials || 'Leather',
       'Production partners': '',
-      'Section': etsyCategory || 'Accessories',
+      'Section': 'Real Leather Jacket',
       'Price': etsyPrice || String(selected.price ?? 0),
       'Quantity': '1',
       'SKU': '',
@@ -145,7 +148,7 @@ export default function SourcingPanel() {
       'Var SKU': '',
       'Var Visibility': '',
       'Var Photo': '',
-      'Shipping profile': 'Standard',
+      'Shipping profile': 'Shipping',
       'Weight': '0.5',
       'Length': '10',
       'Width': '8',
@@ -337,7 +340,50 @@ export default function SourcingPanel() {
 
   // Load both sourced list and saved products on mount
   useEffect(() => { fetchList(); }, []);
-  useEffect(() => { fetchSaved(1); }, []);
+  // Initialize saved page and limit from URL (limit overrides localStorage)
+  useEffect(() => {
+    const spPage = searchParams?.get('page');
+    const spLimit = searchParams?.get('limit');
+    let initialLimit = savedLimit;
+    if (spLimit) {
+      const num = Math.max(1, Math.min(100, parseInt(spLimit)));
+      initialLimit = num;
+      setSavedLimit(num);
+      try { localStorage.setItem('sourcedSavedLimit', String(num)); } catch {}
+    } else {
+      try {
+        const persisted = localStorage.getItem('sourcedSavedLimit');
+        if (persisted) {
+          const num = Math.max(1, Math.min(100, parseInt(persisted)));
+          initialLimit = num;
+          setSavedLimit(num);
+        }
+      } catch {}
+    }
+    if (spPage) {
+      const p = Math.max(1, parseInt(spPage));
+      setSavedPage(p);
+      fetchSaved(p);
+    } else {
+      fetchSaved(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist savedLimit and refetch when it changes
+  useEffect(() => {
+    try { localStorage.setItem('sourcedSavedLimit', String(savedLimit)); } catch {}
+    // Reset to page 1 to avoid out-of-range
+    setSavedPage(1);
+    fetchSaved(1);
+    // Update URL
+    try {
+      const sp = new URLSearchParams(Array.from(searchParams?.entries?.() || []));
+      sp.set('limit', String(savedLimit));
+      sp.set('page', '1');
+      router.replace(`?${sp.toString()}`);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLimit]);
 
   // When opening saved modal, re-fetch the latest from DB by sourceUrl to ensure description/images are current
   useEffect(() => {
@@ -739,10 +785,49 @@ export default function SourcingPanel() {
           {/* Top Pagination */}
           <div className="mt-4 mb-2 flex items-center justify-between">
             <div className="text-sm text-gray-600">Showing {savedItems.length} of {savedTotal}</div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => fetchSaved(Math.max(1, savedPage - 1))} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
-              <div className="text-sm text-gray-700">Page {savedPage}</div>
-              <button onClick={() => fetchSaved(savedPage + 1)} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <span>Show</span>
+                <select
+                  value={savedLimit}
+                  onChange={(e) => {
+                    const next = Math.max(1, Math.min(100, parseInt(e.target.value)));
+                    setSavedLimit(next);
+                  }}
+                  className="border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-900"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>per page</span>
+              </div>
+              <div className="flex items-center gap-2">
+              <button onClick={() => {
+                const next = Math.max(1, savedPage - 1);
+                setSavedPage(next);
+                fetchSaved(next);
+                try {
+                  const sp = new URLSearchParams(Array.from(searchParams?.entries?.() || []));
+                  sp.set('page', String(next));
+                  sp.set('limit', String(savedLimit));
+                  router.replace(`?${sp.toString()}`);
+                } catch {}
+              }} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
+                <div className="text-sm text-gray-700">Page {savedPage}</div>
+              <button onClick={() => {
+                const next = savedPage + 1;
+                setSavedPage(next);
+                fetchSaved(next);
+                try {
+                  const sp = new URLSearchParams(Array.from(searchParams?.entries?.() || []));
+                  sp.set('page', String(next));
+                  sp.set('limit', String(savedLimit));
+                  router.replace(`?${sp.toString()}`);
+                } catch {}
+              }} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -783,10 +868,49 @@ export default function SourcingPanel() {
           {/* Pagination */}
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-600">Showing {savedItems.length} of {savedTotal}</div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => fetchSaved(Math.max(1, savedPage - 1))} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
-              <div className="text-sm text-gray-700">Page {savedPage}</div>
-              <button onClick={() => fetchSaved(savedPage + 1)} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <span>Show</span>
+                <select
+                  value={savedLimit}
+                  onChange={(e) => {
+                    const next = Math.max(1, Math.min(100, parseInt(e.target.value)));
+                    setSavedLimit(next);
+                  }}
+                  className="border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-900"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>per page</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => {
+                  const next = Math.max(1, savedPage - 1);
+                  setSavedPage(next);
+                  fetchSaved(next);
+                  try {
+                    const sp = new URLSearchParams(Array.from(searchParams?.entries?.() || []));
+                    sp.set('page', String(next));
+                    sp.set('limit', String(savedLimit));
+                    router.replace(`?${sp.toString()}`);
+                  } catch {}
+                }} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
+                <div className="text-sm text-gray-700">Page {savedPage}</div>
+                <button onClick={() => {
+                  const next = savedPage + 1;
+                  setSavedPage(next);
+                  fetchSaved(next);
+                  try {
+                    const sp = new URLSearchParams(Array.from(searchParams?.entries?.() || []));
+                    sp.set('page', String(next));
+                    sp.set('limit', String(savedLimit));
+                    router.replace(`?${sp.toString()}`);
+                  } catch {}
+                }} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+              </div>
             </div>
           </div>
           <div className="mt-3 flex justify-end">

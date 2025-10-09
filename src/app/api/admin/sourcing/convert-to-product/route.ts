@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
         // Check if a product with this source URL already exists
         const existingProduct = await Product.findOne({ sourceUrl: sourcedProduct.sourceUrl });
         if (existingProduct) {
+            // Guard: avoid creating duplicates by title (case-insensitive)
+            const existingByName = await Product.findOne({ name: sourcedProduct.title }).collation({ locale: 'en', strength: 2 });
+            if (existingByName) {
+                return NextResponse.json({
+                    error: 'Product with this title already exists',
+                    productId: existingByName._id.toString()
+                }, { status: 409 });
+            }
             return NextResponse.json({
                 error: 'Product with this source URL already exists',
                 productId: existingProduct._id.toString()
