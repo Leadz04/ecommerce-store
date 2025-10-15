@@ -5,6 +5,7 @@ export interface ISourcedProduct extends Document {
   title: string;
   sourceUrl: string;
   categoryGroup: string; // e.g., 'Men:.../categories/Mens-Leather-Jackets'
+  brand?: string;
   price?: number;
   description?: string;
   images: string[];
@@ -17,6 +18,7 @@ const SourcedProductSchema = new Schema<ISourcedProduct>({
   title: { type: String, required: true, index: true },
   sourceUrl: { type: String, required: true, index: true },
   categoryGroup: { type: String, required: true, index: true },
+  brand: { type: String, index: true },
   price: { type: Number },
   description: { type: String },
   images: [{ type: String }],

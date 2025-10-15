@@ -8,10 +8,10 @@ function buildPrompt(mode: OptimizeMode, input: { name?: string; description?: s
   const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${input.description || ''}\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${input.category || ''}\n- Brand: ${input.brand || ''}`;
 
   if (mode === 'title') {
-    return `${baseContext}${productBits}\nTask: Write an Etsy-optimized product title. 110-140 characters. No emojis. No ALL CAPS. Avoid keyword stuffing. Return ONLY the title text.`;
+    return `${baseContext}${productBits}\nTask: Write an Etsy-optimized product title. No emojis. No ALL CAPS. Avoid keyword stuffing. Return ONLY the title text.`;
   }
   if (mode === 'description') {
-    return `${baseContext}${productBits}\nTask: Write a compelling Etsy listing description (120-300 words), with a short scannable paragraph and bullet points for features/materials/care. Keep it concise. Return ONLY the description text.`;
+    return `${baseContext}${productBits}\nTask: Write a compelling Etsy listing description, with a short scannable paragraph and bullet points for features/materials/care. Return ONLY the description text.`;
   }
   // tags
   return `${baseContext}${productBits}\nTask: Generate up to 13 Etsy tags (2-3 words each), comma-separated. No quotes, no hashtags, no duplicates. Return ONLY the comma-separated list.`;

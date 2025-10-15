@@ -57,6 +57,12 @@ export default function SourcingPanel() {
   const [crawlMaxPages, setCrawlMaxPages] = useState('1');
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [crawlData, setCrawlData] = useState<CrawlResult | null>(null);
+  // Multi-brand import state
+  const brands = ['Angel Jackets','Lama','Engine','The Jacket Maker'];
+  const [activeBrand, setActiveBrand] = useState<string>('Angel Jackets');
+  const [brandUrl, setBrandUrl] = useState('');
+  const [brandHtml, setBrandHtml] = useState('');
+  const [brandImporting, setBrandImporting] = useState(false);
   // Saved sourced list state
   type SavedItem = { _id: string; title: string; sourceUrl: string; price?: number; images?: string[]; categoryGroup: string; description?: string; specs?: Record<string,string> };
   const [savedQuery, setSavedQuery] = useState('');
@@ -565,6 +571,66 @@ export default function SourcingPanel() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Brand-specific Import */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-indigo-50 via-white to-fuchsia-50">
+        <div className="relative p-6 sm:p-8">
+          <div className="mb-4">
+            <div className="text-xl font-semibold text-gray-900">Import by Brand (URL or HTML)</div>
+            <div className="text-sm text-gray-600">Choose a brand and paste a product URL or full HTML. We'll parse and save to the sourced database with the brand.</div>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {brands.map(b => (
+              <button
+                key={b}
+                onClick={() => setActiveBrand(b)}
+                className={`px-3 py-1.5 rounded-full border text-sm ${activeBrand===b ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+              >{b}</button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-gray-700">
+            <input
+              value={brandUrl}
+              onChange={e=>setBrandUrl(e.target.value)}
+              placeholder={`Paste ${activeBrand} product URL`}
+              className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+            />
+            <div className="lg:col-span-2">
+              <textarea
+                value={brandHtml}
+                onChange={e=>setBrandHtml(e.target.value)}
+                rows={3}
+                placeholder="Or paste full HTML of the product page"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={async ()=>{
+                const hasU = brandUrl.trim().length>0; const hasH = brandHtml.trim().length>0;
+                if (!hasU && !hasH) { toast.error('Enter URL or paste HTML'); return; }
+                try {
+                  setBrandImporting(true);
+                  const resp = await fetch('/api/admin/sourcing/import-brand', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brand: activeBrand, url: hasU?brandUrl:undefined, html: hasH?brandHtml:undefined })
+                  });
+                  const data = await resp.json();
+                  if (!resp.ok) throw new Error(data?.error || 'Import failed');
+                  toast.success('Imported to sourced DB');
+                  setBrandUrl(''); setBrandHtml('');
+                  await fetchSaved(1);
+                } catch(e:any) {
+                  toast.error(e?.message || 'Import failed');
+                } finally { setBrandImporting(false); }
+              }}
+              disabled={brandImporting}
+              className="px-5 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 shadow-sm"
+            >{brandImporting ? 'Importing…' : 'Import'}</button>
           </div>
         </div>
       </div>
