@@ -37,20 +37,9 @@ const CATEGORIES = [
   'Gifting'
 ];
 
-const BRANDS = [
-  'Apple',
-  'Samsung',
-  'Nike',
-  'Adidas',
-  'Sony',
-  'Microsoft',
-  'Google',
-  'Amazon',
-  'Generic',
-  'Other'
-];
-
 export default function ProductForm({ product, isOpen, onClose, onSuccess }: ProductFormProps) {
+  const [brands, setBrands] = useState<string[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -77,6 +66,25 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [optimizingTitle, setOptimizingTitle] = useState(false);
   const [optimizingDescription, setOptimizingDescription] = useState(false);
   const [optimizingTags, setOptimizingTags] = useState(false);
+
+  // Fetch brands from API
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        setBrandsLoading(true);
+        const res = await fetch('/api/admin/brands');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.brands)) {
+          setBrands(data.brands);
+        }
+      } catch (error) {
+        console.error('Failed to fetch brands:', error);
+      } finally {
+        setBrandsLoading(false);
+      }
+    };
+    fetchBrands();
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -269,13 +277,20 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   required
                   value={formData.brand}
                   onChange={(e) => handleInputChange('brand', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={brandsLoading}
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select a brand</option>
-                  {BRANDS.map(brand => (
+                  <option value="">{brandsLoading ? 'Loading brands...' : 'Select a brand'}</option>
+                  {brands.map(brand => (
                     <option key={brand} value={brand}>{brand}</option>
                   ))}
+                  {!brandsLoading && brands.length === 0 && (
+                    <option value="" disabled>No brands available</option>
+                  )}
                 </select>
+                {formData.brand && !brands.includes(formData.brand) && (
+                  <p className="text-xs text-gray-500 mt-1">Custom brand: {formData.brand}</p>
+                )}
               </div>
 
               <div>

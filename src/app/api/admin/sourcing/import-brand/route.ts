@@ -6,6 +6,24 @@ import { load as loadHtml } from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Normalize title for duplicate detection
+ * - Convert to lowercase
+ * - Remove extra whitespace
+ * - Remove special characters (keep alphanumeric and spaces)
+ * - Trim
+ */
+function normalizeTitleForDedup(title: string): string {
+  if (!title) return '';
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .replace(/[^\w\s-]/g, '') // Remove special characters except word chars, spaces, and hyphens
+    .replace(/\s+/g, ' ') // Clean up any remaining multiple spaces
+    .trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -169,9 +187,27 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedTitle = (parsed.title || 'Untitled').trim().replace(/\s+/g, ' ');
+    const normalizedTitleForDedup = normalizeTitleForDedup(normalizedTitle);
     const categoryGroup = `Brand:${brand}`;
 
     const Sourced = await getSourcedProductModel();
+    
+    // Check for duplicate by normalized title
+    const allExisting = await Sourced.find({ categoryGroup }).select('title').lean();
+    const isDuplicate = allExisting.some(existing => {
+      const existingNormalized = normalizeTitleForDedup(existing.title || '');
+      return existingNormalized === normalizedTitleForDedup && existingNormalized.length > 0;
+    });
+    
+    if (isDuplicate) {
+      console.log(`Skipping duplicate product: "${normalizedTitle}" (already exists)`);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Duplicate product',
+        message: `Product with title "${normalizedTitle}" already exists in brand "${brand}"`
+      }, { status: 409 });
+    }
+    
     const doc = await Sourced.findOneAndUpdate(
       { categoryGroup, title: normalizedTitle },
       {

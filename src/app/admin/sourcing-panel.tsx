@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Download, Link2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -42,7 +42,16 @@ export default function SourcingPanel() {
   const [panStart, setPanStart] = useState<{x:number,y:number}>({ x: 0, y: 0 });
 
   // Category scrape UI state
-  type ScrapedCategoryProduct = { title: string; price: string | null; image: string | null; url: string };
+  type ScrapedCategoryProduct = { 
+    title: string; 
+    price: string | null; 
+    image: string | null; 
+    url: string;
+    images?: string[];
+    description?: string;
+    specifications?: Record<string, string>;
+    priceNumber?: number;
+  };
   const [categoryUrl, setCategoryUrl] = useState('');
   const [categoryMaxPages, setCategoryMaxPages] = useState('1');
   const [categoryLoading, setCategoryLoading] = useState(false);
@@ -58,19 +67,44 @@ export default function SourcingPanel() {
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [crawlData, setCrawlData] = useState<CrawlResult | null>(null);
   // Multi-brand import state
-  const brands = ['Angel Jackets','Lama','Engine','The Jacket Maker'];
+  const brands = ['Angel Jackets','Lama','Engine','The Jacket Maker','outfiters'];
   const [activeBrand, setActiveBrand] = useState<string>('Angel Jackets');
   const [brandUrl, setBrandUrl] = useState('');
   const [brandHtml, setBrandHtml] = useState('');
   const [brandImporting, setBrandImporting] = useState(false);
+  // Outfiters scraping state
+  const [outfitersHtml, setOutfitersHtml] = useState('');
+  const [outfitersUrl, setOutfitersUrl] = useState('');
+  const [outfitersLoading, setOutfitersLoading] = useState(false);
+  const [outfitersResults, setOutfitersResults] = useState<ScrapedCategoryProduct[]>([]);
+  // Outfitters Collection scraping state
+  const [outfittersCollectionUrl, setOutfittersCollectionUrl] = useState('https://outfitters.com.pk/collections/men-outerwear');
+  const [outfittersCollectionMaxPages, setOutfittersCollectionMaxPages] = useState('10');
+  const [outfittersCollectionLoading, setOutfittersCollectionLoading] = useState(false);
+  const [outfittersCollectionResults, setOutfittersCollectionResults] = useState<ScrapedCategoryProduct[]>([]);
+  // London Bridge scraping state
+  const [londonBridgeUrl, setLondonBridgeUrl] = useState('https://londonbridge.com.pk/collections');
+  const [londonBridgeMaxPages, setLondonBridgeMaxPages] = useState('10');
+  const [londonBridgeLoading, setLondonBridgeLoading] = useState(false);
+  const [londonBridgeResults, setLondonBridgeResults] = useState<ScrapedCategoryProduct[]>([]);
   // Saved sourced list state
-  type SavedItem = { _id: string; title: string; sourceUrl: string; price?: number; images?: string[]; categoryGroup: string; description?: string; specs?: Record<string,string> };
+  type SavedItem = { _id: string; title: string; sourceUrl: string; price?: number; images?: string[]; categoryGroup: string; description?: string; specs?: Record<string,string>; brand?: string };
   const [savedQuery, setSavedQuery] = useState('');
   const [savedPage, setSavedPage] = useState(1);
   const [savedLimit, setSavedLimit] = useState(12);
   const [savedTotal, setSavedTotal] = useState(0);
+  const [savedPages, setSavedPages] = useState(1); // Total number of pages
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
+  const [savedGroupedByBrand, setSavedGroupedByBrand] = useState<Record<string, SavedItem[]>>({});
+  const [savedBrands, setSavedBrands] = useState<string[]>([]);
+  const [savedBrandCounts, setSavedBrandCounts] = useState<Record<string, number>>({});
+  const [savedBrandPages, setSavedBrandPages] = useState<Record<string, number>>({}); // Total pages per brand
+  const [savedBrandCurrentPages, setSavedBrandCurrentPages] = useState<Record<string, number>>({}); // Current page per brand
+  const [savedBrandTotals, setSavedBrandTotals] = useState<Record<string, number>>({});
+  const [savedBrandLimit, setSavedBrandLimit] = useState(12); // Items per page for brand view
+  const [expandedBrands, setExpandedBrands] = useState<Record<string, boolean>>({});
   const [savedLoading, setSavedLoading] = useState(false);
+  const [loadingBrands, setLoadingBrands] = useState<Record<string, boolean>>({});
   const [savedSelected, setSavedSelected] = useState<SavedItem | null>(null);
   const [savedParsedRaw, setSavedParsedRaw] = useState<any | null>(null);
   const [savedParsedLoading, setSavedParsedLoading] = useState(false);
@@ -78,6 +112,8 @@ export default function SourcingPanel() {
   const [refreshLoading, setRefreshLoading] = useState(false);
   const [savedZoomIdx, setSavedZoomIdx] = useState<number | null>(null);
   const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
+  const [savedViewMode, setSavedViewMode] = useState<'list' | 'brands'>('brands');
+  const [savedSectionExpanded, setSavedSectionExpanded] = useState(true);
 
   // Filters (must appear after selected/savedSelected exist)
   const filteredSelectedImages = useMemo(
@@ -278,16 +314,66 @@ export default function SourcingPanel() {
   async function fetchSaved(page = 1) {
     try {
       setSavedLoading(true);
-      const res = await fetch(`/api/admin/sourcing/sourced/list?q=${encodeURIComponent(savedQuery)}&page=${page}&limit=${savedLimit}`);
+      const res = await fetch(`/api/admin/sourcing/sourced/list?q=${encodeURIComponent(savedQuery)}&page=${page}&limit=${savedLimit}&groupByBrand=${savedViewMode === 'brands' ? 'true' : 'false'}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load saved products');
-      setSavedItems(Array.isArray(data.items) ? data.items : []);
-      setSavedTotal(Number(data.total || 0));
-      setSavedPage(Number(data.page || page));
+      
+      if (savedViewMode === 'brands') {
+        // Brand view - get brand list with counts
+        setSavedBrands(data.brands || []);
+        setSavedBrandCounts(data.brandCounts || {});
+        setSavedTotal(Number(data.total || 0));
+        // Initialize brand pages if not set
+        const newBrandPages: Record<string, number> = { ...savedBrandPages };
+        const newBrandTotals: Record<string, number> = { ...savedBrandTotals };
+        (data.brands || []).forEach((brand: string) => {
+          if (!newBrandPages[brand]) newBrandPages[brand] = 1;
+          if (!newBrandTotals[brand]) newBrandTotals[brand] = data.brandCounts?.[brand] || 0;
+        });
+        setSavedBrandPages(newBrandPages);
+        setSavedBrandTotals(newBrandTotals);
+      } else {
+        // Regular list
+        setSavedItems(Array.isArray(data.items) ? data.items : []);
+        setSavedTotal(Number(data.total || 0));
+        setSavedPage(Number(data.page || page));
+        setSavedPages(Number(data.pages || Math.ceil((data.total || 0) / savedLimit) || 1));
+        setSavedGroupedByBrand({});
+        setSavedBrands([]);
+        setSavedBrandCounts({});
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load saved');
     } finally {
       setSavedLoading(false);
+    }
+  }
+
+  async function fetchBrandProducts(brand: string, page = 1) {
+    try {
+      setLoadingBrands(prev => ({ ...prev, [brand]: true }));
+      const res = await fetch(`/api/admin/sourcing/sourced/list?q=${encodeURIComponent(savedQuery)}&groupByBrand=true&brand=${encodeURIComponent(brand)}&brandPage=${page}&brandLimit=${savedBrandLimit}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load brand products');
+      
+      setSavedGroupedByBrand(prev => ({ ...prev, [brand]: Array.isArray(data.items) ? data.items : [] }));
+      setSavedBrandPages(prev => ({ ...prev, [brand]: Number(data.pages || 1) })); // Total pages
+      setSavedBrandCurrentPages(prev => ({ ...prev, [brand]: page })); // Current page
+      setSavedBrandTotals(prev => ({ ...prev, [brand]: Number(data.total || 0) }));
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load brand products');
+    } finally {
+      setLoadingBrands(prev => ({ ...prev, [brand]: false }));
+    }
+  }
+
+  function toggleBrand(brand: string) {
+    const isExpanded = expandedBrands[brand];
+    setExpandedBrands(prev => ({ ...prev, [brand]: !isExpanded }));
+    
+    if (!isExpanded && !savedGroupedByBrand[brand]) {
+      // Fetch first 5 products for this brand when expanding
+      fetchBrandProducts(brand, 1);
     }
   }
 
@@ -338,9 +424,148 @@ export default function SourcingPanel() {
     }
   }
 
+  async function scrapeOutfiters() {
+    const hasUrl = outfitersUrl.trim().length > 0;
+    const hasHtml = outfitersHtml.trim().length > 0;
+    if (!hasUrl && !hasHtml) { toast.error('Enter URL or paste HTML'); return; }
+    try {
+      setOutfitersLoading(true);
+      const res = await fetch('/api/admin/sourcing/import-brand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand: 'outfiters', url: hasUrl ? outfitersUrl : undefined, html: hasHtml ? outfitersHtml : undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) {
+          // Duplicate product
+          toast.error(data?.message || 'Product already exists');
+        } else {
+          throw new Error(data?.error || 'Failed to import outfiters product');
+        }
+        return;
+      }
+      
+      // Convert the imported product to ScrapedCategoryProduct format for display
+      const product: ScrapedCategoryProduct = {
+        title: data.parsed?.title || data.item?.title || 'Imported Product',
+        price: data.parsed?.price ? `Rs. ${data.parsed.price.toFixed(2)}` : null,
+        priceNumber: data.parsed?.price,
+        image: Array.isArray(data.parsed?.images) && data.parsed.images.length > 0 ? data.parsed.images[0] : null,
+        url: data.parsed?.sourceUrl || data.item?.sourceUrl || outfitersUrl || '',
+        images: Array.isArray(data.parsed?.images) ? data.parsed.images : [],
+        description: data.parsed?.description || '',
+        specifications: data.parsed?.specs || {},
+      };
+      
+      setOutfitersResults(prev => {
+        // Check if product already exists in results
+        const exists = prev.some(p => p.title === product.title && p.url === product.url);
+        if (exists) return prev;
+        return [...prev, product];
+      });
+      
+      toast.success('Product imported to outfiters brand');
+      setOutfitersUrl('');
+      setOutfitersHtml('');
+      await fetchSaved(1);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to import outfiters product');
+    } finally {
+      setOutfitersLoading(false);
+    }
+  }
+
+  async function scrapeOutfittersCollection() {
+    if (!outfittersCollectionUrl.trim()) { toast.error('Enter a collections URL'); return; }
+    const mp = outfittersCollectionMaxPages.trim() ? Math.max(1, Math.min(50, parseInt(outfittersCollectionMaxPages))) : 10;
+    try {
+      setOutfittersCollectionLoading(true);
+      const res = await fetch('/api/admin/sourcing/scrape-outfitters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: outfittersCollectionUrl, maxPages: mp, fetchDetails: true, save: true, brand: 'outfiters' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to scrape Outfitters');
+      const arr: ScrapedCategoryProduct[] = Array.isArray(data?.products) ? data.products : [];
+      const seen = new Set<string>();
+      const unique = arr.filter((p) => {
+        if (!p?.url) return false; if (seen.has(p.url)) return false; seen.add(p.url); return true;
+      });
+      setOutfittersCollectionResults(unique);
+      const savedMsg = data?.saved ? ` and saved ${data?.savedCount ?? 0} to database` : '';
+      toast.success(`Found ${data?.count ?? 0} products from ${data?.pagesVisited?.length ?? 0} pages${savedMsg}`);
+      if (data?.saved) {
+        await fetchSaved(1); // Refresh saved products list
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Scrape failed');
+    } finally {
+      setOutfittersCollectionLoading(false);
+    }
+  }
+
+  async function scrapeLondonBridge() {
+    if (!londonBridgeUrl.trim()) { toast.error('Enter a collections URL'); return; }
+    const mp = londonBridgeMaxPages.trim() ? Math.max(1, Math.min(50, parseInt(londonBridgeMaxPages))) : 10;
+    try {
+      setLondonBridgeLoading(true);
+      const res = await fetch('/api/admin/sourcing/scrape-londonbridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: londonBridgeUrl, maxPages: mp, fetchDetails: true, save: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to scrape London Bridge');
+      const arr: ScrapedCategoryProduct[] = Array.isArray(data?.products) ? data.products : [];
+      const seen = new Set<string>();
+      const unique = arr.filter((p) => {
+        if (!p?.url) return false; if (seen.has(p.url)) return false; seen.add(p.url); return true;
+      });
+      setLondonBridgeResults(unique);
+      const savedMsg = data?.saved ? ` and saved ${data?.savedCount ?? 0} to database` : '';
+      toast.success(`Found ${data?.count ?? 0} products from ${data?.pagesVisited?.length ?? 0} pages${savedMsg}`);
+      if (data?.saved) {
+        await fetchSaved(1); // Refresh saved products list
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Scrape failed');
+    } finally {
+      setLondonBridgeLoading(false);
+    }
+  }
+
   // Load both sourced list and saved products on mount
   useEffect(() => { fetchList(); }, []);
   useEffect(() => { fetchSaved(1); }, []);
+
+  // Debounced search for savedQuery
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    // Skip debounce on initial mount when query is empty
+    const query = savedQuery || '';
+    const viewMode = savedViewMode || 'brands';
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      if (viewMode === 'brands') {
+        setSavedGroupedByBrand({});
+        setExpandedBrands({});
+      }
+      fetchSaved(1);
+    }, 500);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [savedQuery || '', savedViewMode || 'brands']); // Ensure always 2 string values
 
   // When opening saved modal, re-fetch the latest from DB by sourceUrl to ensure description/images are current
   useEffect(() => {
@@ -635,25 +860,429 @@ export default function SourcingPanel() {
         </div>
       </div>
 
+      {/* Outfiters Brand Scraper */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-orange-50 via-white to-amber-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-orange-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-amber-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-orange-600 text-white flex items-center justify-center shadow-sm">
+              <Link2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Scrape Outfiters Brand</h2>
+              <p className="text-sm text-gray-600">Enter a product URL or paste HTML content to import products under the outfiters brand.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-gray-700 mb-3">
+            <input
+              value={outfitersUrl}
+              onChange={e => setOutfitersUrl(e.target.value)}
+              placeholder="https://outfiters.com/product/..."
+              className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent shadow-sm"
+            />
+            <div className="lg:col-span-2">
+              <textarea
+                value={outfitersHtml}
+                onChange={e => setOutfitersHtml(e.target.value)}
+                rows={3}
+                placeholder="Or paste full HTML of the product page"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent shadow-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end mb-5">
+            <button
+              onClick={scrapeOutfiters}
+              disabled={outfitersLoading}
+              className="px-5 py-3 rounded-xl bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 focus-visible:ring-offset-2"
+            >
+              {outfitersLoading ? 'Importing…' : 'Import Product'}
+            </button>
+          </div>
+
+          {/* Results */}
+          <div className="mt-5">
+            {outfitersResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 border rounded-2xl bg-white">
+                <div className="text-gray-900 font-medium">No products imported yet</div>
+                <div className="text-gray-500 text-sm mt-1">Enter a URL or paste HTML and click Import Product.</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-gray-700">Imported <span className="font-semibold text-gray-900">{outfitersResults.length}</span> {outfitersResults.length === 1 ? 'product' : 'products'}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {outfitersResults.map((p, idx) => (
+                    <button key={idx} onClick={() => setPreviewCrawled(p)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow relative">
+                      {/* Badge for products with full details */}
+                      {(p.images && p.images.length > 1) || p.description || (p.specifications && Object.keys(p.specifications).length > 0) ? (
+                        <div className="absolute top-2 right-2 z-10 px-2 py-1 bg-orange-600 text-white text-xs font-semibold rounded-full shadow-lg">
+                          Full Details
+                        </div>
+                      ) : null}
+                      <div className="aspect-[4/3] bg-gray-100 relative">
+                        {p.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                        )}
+                        {/* Image count badge */}
+                        {p.images && p.images.length > 1 && (
+                          <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-xs font-semibold rounded-full">
+                            {p.images.length} images
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
+                        <div className="text-sm mt-2 font-semibold text-orange-700">{p.price || '—'}</div>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                          {p.images && p.images.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>📷</span> {p.images.length} {p.images.length === 1 ? 'image' : 'images'}
+                            </span>
+                          )}
+                          {p.description && (
+                            <span className="flex items-center gap-1">
+                              <span>📝</span> Description
+                            </span>
+                          )}
+                          {p.specifications && Object.keys(p.specifications).length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>⚙️</span> {Object.keys(p.specifications).length} specs
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Outfitters Collection Scraper */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-teal-50 via-white to-cyan-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-teal-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-cyan-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-sm">
+              <Link2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Scrape Outfitters Collections</h2>
+              <p className="text-sm text-gray-600">Enter a collection URL to scrape all products from Outfitters collections (e.g., /collections/men-outerwear).</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 text-gray-700 mb-3">
+            <input
+              value={outfittersCollectionUrl}
+              onChange={e => setOutfittersCollectionUrl(e.target.value)}
+              placeholder="https://outfitters.com.pk/collections/men-outerwear"
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent shadow-sm"
+            />
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Max Pages:</label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={outfittersCollectionMaxPages}
+                onChange={e => setOutfittersCollectionMaxPages(e.target.value)}
+                className="w-20 border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent shadow-sm"
+              />
+            </div>
+            <button
+              onClick={scrapeOutfittersCollection}
+              disabled={outfittersCollectionLoading}
+              className="px-5 py-3 rounded-xl bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+            >
+              {outfittersCollectionLoading ? 'Scraping…' : 'Scrape Collection'}
+            </button>
+          </div>
+
+          {/* Results */}
+          <div className="mt-5">
+            {outfittersCollectionResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 border rounded-2xl bg-white">
+                <div className="text-gray-900 font-medium">No products scraped yet</div>
+                <div className="text-gray-500 text-sm mt-1">Enter a collection URL and click Scrape Collection.</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-gray-700">Found <span className="font-semibold text-gray-900">{outfittersCollectionResults.length}</span> {outfittersCollectionResults.length === 1 ? 'product' : 'products'}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {outfittersCollectionResults.map((p, idx) => (
+                    <button key={idx} onClick={() => setPreviewCrawled(p)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow relative">
+                      {/* Badge for products with full details */}
+                      {(p.images && p.images.length > 1) || p.description || (p.specifications && Object.keys(p.specifications).length > 0) ? (
+                        <div className="absolute top-2 right-2 z-10 px-2 py-1 bg-teal-600 text-white text-xs font-semibold rounded-full shadow-lg">
+                          Full Details
+                        </div>
+                      ) : null}
+                      <div className="aspect-[4/3] bg-gray-100 relative">
+                        {p.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                        )}
+                        {/* Image count badge */}
+                        {p.images && p.images.length > 1 && (
+                          <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-xs font-semibold rounded-full">
+                            {p.images.length} images
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
+                        <div className="text-sm mt-2 font-semibold text-teal-700">{p.price || '—'}</div>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                          {p.images && p.images.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>📷</span> {p.images.length} {p.images.length === 1 ? 'image' : 'images'}
+                            </span>
+                          )}
+                          {p.description && (
+                            <span className="flex items-center gap-1">
+                              <span>📝</span> Description
+                            </span>
+                          )}
+                          {p.specifications && Object.keys(p.specifications).length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>⚙️</span> {Object.keys(p.specifications).length} specs
+                            </span>
+                          )}
+                        </div>
+                        <a 
+                          href={p.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-teal-600 hover:text-teal-800 mt-1 block truncate"
+                        >
+                          View Product →
+                        </a>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* London Bridge Collections Scraper */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-violet-50 via-white to-purple-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-violet-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-purple-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-sm">
+              <Link2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Scrape London Bridge Collections</h2>
+              <p className="text-sm text-gray-600">Enter a collections URL to scrape products. Handles "Load More" buttons and pagination automatically.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 text-gray-700">
+            <input
+              value={londonBridgeUrl}
+              onChange={e => setLondonBridgeUrl(e.target.value)}
+              placeholder="https://londonbridge.com.pk/collections/..."
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent shadow-sm"
+            />
+            <div className="flex gap-2 items-stretch">
+              <input
+                value={londonBridgeMaxPages}
+                onChange={e => setLondonBridgeMaxPages(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="Pages"
+                aria-label="Max pages"
+                className="w-28 border border-gray-200 rounded-xl px-3 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent shadow-sm"
+              />
+              <button
+                onClick={scrapeLondonBridge}
+                disabled={londonBridgeLoading}
+                className="px-5 py-3 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
+              >
+                {londonBridgeLoading ? 'Scraping…' : 'Scrape Products'}
+              </button>
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="mt-5">
+            {londonBridgeResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 border rounded-2xl bg-white">
+                <div className="text-gray-900 font-medium">No products scraped yet</div>
+                <div className="text-gray-500 text-sm mt-1">Enter a collections URL and click Scrape Products.</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-gray-700">Found <span className="font-semibold text-gray-900">{londonBridgeResults.length}</span> products</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {londonBridgeResults.map((p, idx) => (
+                    <button key={idx} onClick={() => setPreviewCrawled(p)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow relative">
+                      {/* Badge for products with full details */}
+                      {(p.images && p.images.length > 1) || p.description || (p.specifications && Object.keys(p.specifications).length > 0) ? (
+                        <div className="absolute top-2 right-2 z-10 px-2 py-1 bg-violet-600 text-white text-xs font-semibold rounded-full shadow-lg">
+                          Full Details
+                        </div>
+                      ) : null}
+                      <div className="aspect-[4/3] bg-gray-100 relative">
+                        {p.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                        )}
+                        {/* Image count badge */}
+                        {p.images && p.images.length > 1 && (
+                          <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white text-xs font-semibold rounded-full">
+                            {p.images.length} images
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
+                        <div className="text-sm mt-2 font-semibold text-violet-700">{p.price || '—'}</div>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                          {p.images && p.images.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>📷</span> {p.images.length} {p.images.length === 1 ? 'image' : 'images'}
+                            </span>
+                          )}
+                          {p.specifications && Object.keys(p.specifications).length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>⚙️</span> {Object.keys(p.specifications).length} specs
+                            </span>
+                          )}
+                        </div>
+                        <a 
+                          href={p.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-violet-600 hover:text-violet-800 mt-1 block truncate"
+                        >
+                          View Product →
+                        </a>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Saved Sourced Products */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-slate-50 via-white to-zinc-50">
         <div className="relative p-6 sm:p-8">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Saved Sourced Products</h2>
-              <p className="text-sm text-gray-600">Search and paginate through products saved from the crawl.</p>
+            <div className="flex items-center gap-3 flex-1">
+              <button
+                onClick={() => setSavedSectionExpanded(!savedSectionExpanded)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title={savedSectionExpanded ? 'Collapse' : 'Expand'}
+              >
+                {savedSectionExpanded ? (
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Saved Sourced Products</h2>
+                <p className="text-sm text-gray-600">Search and filter scraped products organized by brand.</p>
+              </div>
             </div>
+            {savedSectionExpanded && (
             <div className="flex gap-2">
-              <input
-                value={savedQuery}
-                onChange={e => setSavedQuery(e.target.value)}
-                placeholder="Search title or URL"
-                className="border border-gray-200 rounded-xl px-4 py-2.5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
-              />
-              <button onClick={() => fetchSaved(1)} className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Search</button>
+              <div className="relative">
+                <input
+                  value={savedQuery}
+                  onChange={e => setSavedQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Clear debounce and search immediately
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current);
+                      }
+                      if (savedViewMode === 'brands') {
+                        setSavedGroupedByBrand({});
+                        setExpandedBrands({});
+                      }
+                      fetchSaved(1);
+                    }
+                  }}
+                  placeholder="Filter by title, URL, or brand..."
+                  className="border-2 border-indigo-200 rounded-xl px-4 py-2.5 pr-10 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm w-64"
+                />
+                {savedQuery && (
+                  <button
+                    onClick={() => {
+                      setSavedQuery('');
+                      if (savedViewMode === 'brands') {
+                        setSavedGroupedByBrand({});
+                        setExpandedBrands({});
+                      }
+                      fetchSaved(1);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    title="Clear filter"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => {
+                  if (savedViewMode === 'brands') {
+                    setSavedGroupedByBrand({});
+                    setExpandedBrands({});
+                  }
+                  fetchSaved(1);
+                }} 
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+              >
+                Search
+              </button>
+              <div className="flex gap-1 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                <button
+                  onClick={() => { setSavedViewMode('brands'); setSavedGroupedByBrand({}); setExpandedBrands({}); fetchSaved(1); }}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${savedViewMode === 'brands' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  By Brand
+                </button>
+                <button
+                  onClick={() => { setSavedViewMode('list'); fetchSaved(1); }}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${savedViewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  List
+                </button>
+              </div>
             </div>
+            )}
           </div>
 
+          {savedSectionExpanded && (
+          <>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3 text-sm text-gray-700">
               <label className="inline-flex items-center gap-2">
@@ -689,50 +1318,392 @@ export default function SourcingPanel() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {savedItems.map(it => {
-              const thumb = (it.images || []).find(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u)));
-              return (
-              <div key={it._id} onClick={() => setSavedSelected(it)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow cursor-pointer">
-                <div className="flex items-center justify-between px-3 pt-3">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300"
-                      checked={!!savedSelectedIds[it._id]}
-                      onChange={(e) => setSavedSelectedIds(prev => ({ ...prev, [it._id]: e.target.checked }))}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <span>Select</span>
-                  </label>
-                  <button onClick={(e) => { e.stopPropagation(); setSavedSelected(it); }} className="text-xs px-2 py-1 rounded-lg border bg-white hover:bg-gray-50">Open</button>
+          {savedViewMode === 'brands' && savedBrands.length > 0 ? (
+            // Grouped by brand view with pagination
+            <div className="space-y-6">
+              {savedBrands.map((brand) => {
+                const brandProducts = savedGroupedByBrand[brand] || [];
+                const isExpanded = expandedBrands[brand] || false;
+                const brandPage = savedBrandCurrentPages[brand] || 1; // Current page
+                const brandTotal = savedBrandTotals[brand] || savedBrandCounts[brand] || 0;
+                const brandPages = savedBrandPages[brand] || Math.ceil(brandTotal / savedBrandLimit); // Total pages
+                const isLoading = loadingBrands[brand] || false;
+
+                return (
+                  <div key={brand} className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+                    {/* Brand Header - Always Visible */}
+                    <div 
+                      className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 px-6 py-5 cursor-pointer hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 transition-all"
+                      onClick={() => toggleBrand(brand)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-2xl font-black text-white mb-1">{brand}</h3>
+                          <p className="text-sm text-white/90">
+                            {brandTotal} {brandTotal === 1 ? 'product' : 'products'} total
+                            {isExpanded && brandProducts.length > 0 && brandTotal > savedBrandLimit && (
+                              <span className="ml-2">• Page {brandPage} of {brandPages}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-full text-lg font-bold border-2 border-white/30">
+                            {brandTotal}
+                          </div>
+                          <div className="text-white">
+                            {isExpanded ? (
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Brand Products - Collapsible */}
+                    {isExpanded && (
+                      <div className="p-6">
+                        {isLoading ? (
+                          <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                            <span className="ml-3 text-gray-600">Loading products...</span>
+                          </div>
+                        ) : brandProducts.length === 0 ? (
+                          <div className="text-center py-12 text-gray-500">No products found for this brand</div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                              {brandProducts.map((it) => {
+                                const thumb = (it.images || []).find(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u)));
+                                return (
+                                  <div key={it._id} onClick={() => setSavedSelected(it)} className="text-left group overflow-hidden rounded-xl border bg-white hover:shadow-md transition-shadow cursor-pointer">
+                                    <div className="flex items-center justify-between px-3 pt-3">
+                                      <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                                        <input
+                                          type="checkbox"
+                                          className="h-3 w-3 rounded border-gray-300"
+                                          checked={!!savedSelectedIds[it._id]}
+                                          onChange={(e) => setSavedSelectedIds(prev => ({ ...prev, [it._id]: e.target.checked }))}
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      </label>
+                                      <button onClick={(e) => { e.stopPropagation(); setSavedSelected(it); }} className="text-xs px-2 py-1 rounded-lg border bg-white hover:bg-gray-50">Open</button>
+                                    </div>
+                                    <div className="aspect-[4/3] bg-gray-100">
+                                      {thumb ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={thumb} alt={it.title} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No image</div>
+                                      )}
+                                    </div>
+                                    <div className="p-3">
+                                      <div className="font-medium text-sm text-gray-900 line-clamp-2" title={it.title}>{it.title}</div>
+                                      <div className="text-sm mt-2 font-semibold text-emerald-700">{typeof it.price === 'number' ? `Rs. ${it.price.toFixed(2)}` : '—'}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Pagination for brand products */}
+                            {brandTotal > savedBrandLimit && (
+                              <div className="mt-6 pt-4 border-t border-gray-200">
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                  <div className="text-sm text-gray-600">
+                                    Showing <span className="font-semibold text-gray-900">{(brandPage - 1) * savedBrandLimit + 1}</span> to <span className="font-semibold text-gray-900">{Math.min(brandPage * savedBrandLimit, brandTotal)}</span> of <span className="font-semibold text-gray-900">{brandTotal}</span> products
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {/* First page button */}
+                                    <button 
+                                      onClick={() => fetchBrandProducts(brand, 1)} 
+                                      disabled={isLoading || brandPage <= 1}
+                                      className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                                      title="First page"
+                                    >
+                                      ««
+                                    </button>
+                                    
+                                    {/* Previous page button */}
+                                    <button 
+                                      onClick={() => fetchBrandProducts(brand, Math.max(1, brandPage - 1))} 
+                                      disabled={isLoading || brandPage <= 1}
+                                      className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                                    >
+                                      Prev
+                                    </button>
+                                    
+                                    {/* Page numbers */}
+                                    <div className="flex items-center gap-1">
+                                      {Array.from({ length: Math.min(5, brandPages) }, (_, i) => {
+                                        let pageNum: number;
+                                        if (brandPages <= 5) {
+                                          pageNum = i + 1;
+                                        } else if (brandPage <= 3) {
+                                          pageNum = i + 1;
+                                        } else if (brandPage >= brandPages - 2) {
+                                          pageNum = brandPages - 4 + i;
+                                        } else {
+                                          pageNum = brandPage - 2 + i;
+                                        }
+                                        
+                                        if (pageNum < 1 || pageNum > brandPages) return null;
+                                        
+                                        return (
+                                          <button
+                                            key={pageNum}
+                                            onClick={() => fetchBrandProducts(brand, pageNum)}
+                                            disabled={isLoading || brandPage === pageNum}
+                                            className={`min-w-[40px] px-3 py-2 rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+                                              brandPage === pageNum
+                                                ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
+                                                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                                            }`}
+                                          >
+                                            {pageNum}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    
+                                    {/* Next page button */}
+                                    <button 
+                                      onClick={() => fetchBrandProducts(brand, brandPage + 1)} 
+                                      disabled={isLoading || brandPage >= brandPages}
+                                      className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                                    >
+                                      Next
+                                    </button>
+                                    
+                                    {/* Last page button */}
+                                    <button 
+                                      onClick={() => fetchBrandProducts(brand, brandPages)} 
+                                      disabled={isLoading || brandPage >= brandPages}
+                                      className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                                      title="Last page"
+                                    >
+                                      »»
+                                    </button>
+                                  </div>
+                                  
+                                  {/* Page info */}
+                                  <div className="text-sm text-gray-600">
+                                    Page <span className="font-semibold text-gray-900">{brandPage}</span> of <span className="font-semibold text-gray-900">{brandPages}</span>
+                                  </div>
+                                </div>
+                                
+                                {/* Items per page selector */}
+                                <div className="mt-4 flex items-center justify-center gap-2">
+                                  <label className="text-sm text-gray-600">Items per page:</label>
+                                  <select
+                                    value={savedBrandLimit}
+                                    onChange={async (e) => {
+                                      const newLimit = parseInt(e.target.value);
+                                      setSavedBrandLimit(newLimit);
+                                      // Fetch first page with new limit
+                                      await fetchBrandProducts(brand, 1);
+                                    }}
+                                    disabled={isLoading}
+                                    className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
+                                  >
+                                    <option value="12">12</option>
+                                    <option value="24">24</option>
+                                    <option value="48">48</option>
+                                    <option value="96">96</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            // Regular list view
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {savedItems.map(it => {
+                const thumb = (it.images || []).find(u => u && !(/ajax-loader|spinner|loading|placeholder|\.gif($|\?)/i.test(u) || /\/lib\/flags\//i.test(u) || /angellogo/i.test(u) || /images\/close/i.test(u)));
+                return (
+                <div key={it._id} onClick={() => setSavedSelected(it)} className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow cursor-pointer">
+                  <div className="flex items-center justify-between px-3 pt-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={!!savedSelectedIds[it._id]}
+                        onChange={(e) => setSavedSelectedIds(prev => ({ ...prev, [it._id]: e.target.checked }))}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span>Select</span>
+                    </label>
+                    <button onClick={(e) => { e.stopPropagation(); setSavedSelected(it); }} className="text-xs px-2 py-1 rounded-lg border bg-white hover:bg-gray-50">Open</button>
+                  </div>
+                  <div className="aspect-[4/3] bg-gray-100">
+                    {thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumb} alt={it.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="font-medium text-gray-900 line-clamp-2" title={it.title}>{it.title}</div>
+                    {it.brand && <div className="text-xs text-indigo-600 font-medium mt-1">{it.brand}</div>}
+                    <div className="text-xs text-gray-500 truncate mt-1">{it.categoryGroup}</div>
+                    <div className="text-sm mt-2 font-semibold text-emerald-700">{typeof it.price === 'number' ? `Rs. ${it.price.toFixed(2)}` : '—'}</div>
+                  </div>
                 </div>
-                <div className="aspect-[4/3] bg-gray-100">
-                  {thumb ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={thumb} alt={it.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
-                  )}
+              );})}
+            </div>
+          )}
+
+          {/* Pagination - only show in list view */}
+          {savedViewMode === 'list' && savedTotal > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-gray-600">
+                  Showing <span className="font-semibold text-gray-900">{(savedPage - 1) * savedLimit + 1}</span> to <span className="font-semibold text-gray-900">{Math.min(savedPage * savedLimit, savedTotal)}</span> of <span className="font-semibold text-gray-900">{savedTotal}</span> products
                 </div>
-                <div className="p-4">
-                  <div className="font-medium text-gray-900 line-clamp-2" title={it.title}>{it.title}</div>
-                  <div className="text-xs text-gray-500 truncate mt-1">{it.categoryGroup}</div>
-                  <div className="text-sm mt-2 font-semibold text-emerald-700">{typeof it.price === 'number' ? `$${it.price.toFixed(2)}` : '—'}</div>
+                <div className="flex items-center gap-2">
+                  {/* First page button */}
+                  <button 
+                    onClick={() => fetchSaved(1)} 
+                    disabled={savedLoading || savedPage <= 1}
+                    className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                    title="First page"
+                  >
+                    ««
+                  </button>
+                  
+                  {/* Previous page button */}
+                  <button 
+                    onClick={() => fetchSaved(Math.max(1, savedPage - 1))} 
+                    disabled={savedLoading || savedPage <= 1}
+                    className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                  >
+                    Prev
+                  </button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, savedPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (savedPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (savedPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (savedPage >= savedPages - 2) {
+                        pageNum = savedPages - 4 + i;
+                      } else {
+                        pageNum = savedPage - 2 + i;
+                      }
+                      
+                      if (pageNum < 1 || pageNum > savedPages) return null;
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => fetchSaved(pageNum)}
+                          disabled={savedLoading || savedPage === pageNum}
+                          className={`min-w-[40px] px-3 py-2 rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+                            savedPage === pageNum
+                              ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
+                              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Next page button */}
+                  <button 
+                    onClick={() => fetchSaved(savedPage + 1)} 
+                    disabled={savedLoading || savedPage >= savedPages}
+                    className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                  >
+                    Next
+                  </button>
+                  
+                  {/* Last page button */}
+                  <button 
+                    onClick={() => fetchSaved(savedPages)} 
+                    disabled={savedLoading || savedPage >= savedPages}
+                    className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 transition-colors"
+                    title="Last page"
+                  >
+                    »»
+                  </button>
+                </div>
+                
+                {/* Page info */}
+                <div className="text-sm text-gray-600">
+                  Page <span className="font-semibold text-gray-900">{savedPage}</span> of <span className="font-semibold text-gray-900">{savedPages}</span>
                 </div>
               </div>
-            );})}
-          </div>
-
-          {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-gray-600">Showing {savedItems.length} of {savedTotal}</div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => fetchSaved(Math.max(1, savedPage - 1))} disabled={savedLoading || savedPage <= 1} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Prev</button>
-              <div className="text-sm text-gray-700">Page {savedPage}</div>
-              <button onClick={() => fetchSaved(savedPage + 1)} disabled={savedLoading || (savedPage * savedLimit) >= savedTotal} className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 disabled:opacity-50 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2">Next</button>
+              
+              {/* Items per page selector */}
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <label className="text-sm text-gray-600">Items per page:</label>
+                <select
+                  value={savedLimit}
+                  onChange={async (e) => {
+                    const newLimit = parseInt(e.target.value);
+                    setSavedLimit(newLimit);
+                    setSavedPage(1);
+                    // Fetch with new limit directly
+                    try {
+                      setSavedLoading(true);
+                      const res = await fetch(`/api/admin/sourcing/sourced/list?q=${encodeURIComponent(savedQuery)}&page=1&limit=${newLimit}&groupByBrand=false`);
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data?.error || 'Failed to load saved products');
+                      setSavedItems(Array.isArray(data.items) ? data.items : []);
+                      setSavedTotal(Number(data.total || 0));
+                      setSavedPage(1);
+                      setSavedPages(Number(data.pages || Math.ceil((data.total || 0) / newLimit) || 1));
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to load saved');
+                    } finally {
+                      setSavedLoading(false);
+                    }
+                  }}
+                  disabled={savedLoading}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
+                >
+                  <option value="12">12</option>
+                  <option value="24">24</option>
+                  <option value="48">48</option>
+                  <option value="96">96</option>
+                </select>
+              </div>
             </div>
-          </div>
+          )}
+          {savedViewMode === 'brands' && (
+            <div className="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
+              <div className="text-sm text-gray-700">
+                <span className="font-semibold text-gray-900">Total: {savedTotal} products</span> across <span className="font-semibold text-indigo-700">{savedBrands.length} {savedBrands.length === 1 ? 'brand' : 'brands'}</span>
+                {savedBrands.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {savedBrands.map(brand => (
+                      <span key={brand} className="px-2 py-1 bg-white rounded-lg text-xs border border-indigo-200">
+                        {brand}: {savedBrandCounts[brand] || 0}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="mt-3 flex justify-end">
             <button
               onClick={() => {
@@ -750,6 +1721,8 @@ export default function SourcingPanel() {
               Export CSV (Saved)
             </button>
           </div>
+      </>
+      )}
         </div>
       </div>
 
@@ -931,48 +1904,92 @@ export default function SourcingPanel() {
 
       {/* Crawled Product Modal */}
       {previewCrawled && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPreviewCrawled(null)} />
-          <div className="relative w-full max-w-3xl bg-white rounded-3xl overflow-hidden shadow-2xl">
-            <div className="px-6 py-5 border-b bg-gradient-to-r from-emerald-50 via-white to-teal-50">
+          <div className="relative w-full max-w-6xl bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-5 border-b bg-gradient-to-r from-violet-50 via-white to-purple-50 flex-shrink-0">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-xl font-semibold text-gray-900 truncate">{previewCrawled.title}</div>
                   <div className="mt-1 text-sm text-gray-500 truncate">{previewCrawled.url}</div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">{previewCrawled.price || '—'}</div>
-                  <button onClick={() => setPreviewCrawled(null)} className="h-9 w-9 rounded-full bg-white border text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2" aria-label="Close">✕</button>
+                  <div className="px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 font-semibold">{previewCrawled.price || '—'}</div>
+                  <button onClick={() => setPreviewCrawled(null)} className="h-9 w-9 rounded-full bg-white border text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2" aria-label="Close">✕</button>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-12">
-              <div className="col-span-12 lg:col-span-6 bg-gray-50 p-5">
-                <div className="w-full rounded-2xl overflow-hidden border bg-white flex items-center justify-center" style={{ minHeight: '280px' }}>
-                  {previewCrawled.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previewCrawled.image} alt={previewCrawled.title} className="max-h-[420px] w-full object-contain" />
-                  ) : (
-                    <div className="text-gray-400">No image</div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-12 gap-6 p-6">
+                {/* Images Section */}
+                <div className="col-span-12 lg:col-span-6 space-y-4">
+                  <div className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                    Images ({previewCrawled.images?.length || (previewCrawled.image ? 1 : 0)})
+                  </div>
+                  <div className="space-y-3">
+                    {(previewCrawled.images && previewCrawled.images.length > 0 ? previewCrawled.images : (previewCrawled.image ? [previewCrawled.image] : [])).map((img, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-center justify-center h-64">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt={`${previewCrawled.title} - Image ${idx + 1}`} className="max-h-full max-w-full object-contain" />
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500 text-center truncate">{img}</div>
+                      </div>
+                    ))}
+                    {(!previewCrawled.images || previewCrawled.images.length === 0) && !previewCrawled.image && (
+                      <div className="bg-gray-50 rounded-xl p-8 border border-gray-200 text-center text-gray-400">No images available</div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Details Section */}
+                <div className="col-span-12 lg:col-span-6 space-y-6">
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Title</div>
+                    <div className="text-sm text-gray-900 break-words">{previewCrawled.title}</div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Price</div>
+                    <div className="text-sm font-semibold text-violet-700">{previewCrawled.price || '—'}</div>
+                  </div>
+
+                  {/* Description */}
+                  {previewCrawled.description && (
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Description</div>
+                      <div className="text-sm text-gray-700 whitespace-pre-wrap break-words bg-gray-50 p-3 rounded-lg border border-gray-200 max-h-48 overflow-y-auto">
+                        {previewCrawled.description}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
-              <div className="col-span-12 lg:col-span-6 p-6 space-y-4">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Title</div>
-                  <div className="text-sm text-gray-900 break-words">{previewCrawled.title}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Price</div>
-                  <div className="text-sm font-semibold text-emerald-700">{previewCrawled.price || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Source</div>
-                  <div className="text-sm text-gray-700 break-all">{previewCrawled.url}</div>
-                </div>
-                <div className="pt-2 flex gap-2">
-                  <a href={previewCrawled.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Open in new tab</a>
-                  <button onClick={() => setPreviewCrawled(null)} className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Close</button>
+
+                  {/* Specifications */}
+                  {previewCrawled.specifications && Object.keys(previewCrawled.specifications).length > 0 && (
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Specifications</div>
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 max-h-64 overflow-y-auto">
+                        <div className="space-y-2">
+                          {Object.entries(previewCrawled.specifications).map(([key, value]) => (
+                            <div key={key} className="flex gap-3 text-sm">
+                              <div className="font-medium text-gray-700 min-w-[120px]">{key}:</div>
+                              <div className="text-gray-600 break-words flex-1">{String(value)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Source URL</div>
+                    <div className="text-sm text-gray-700 break-all">{previewCrawled.url}</div>
+                  </div>
+
+                  <div className="pt-2 flex gap-2">
+                    <a href={previewCrawled.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2">Open in new tab</a>
+                    <button onClick={() => setPreviewCrawled(null)} className="px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2">Close</button>
+                  </div>
                 </div>
               </div>
             </div>

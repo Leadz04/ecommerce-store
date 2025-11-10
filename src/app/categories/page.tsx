@@ -8,7 +8,7 @@ import { ArrowRight, Star, Search, X } from 'lucide-react';
 import { CategoriesSkeleton } from '@/components/LoadingSkeleton';
 import { sampleProducts } from '@/data/products';
 
-const categories = [
+const baseCategories = [
     {
       id: 'men',
       name: 'Men',
@@ -24,7 +24,7 @@ const categories = [
       slug: 'women',
       description: 'Elegant leather goods, clothing, and accessories for women',
       image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop',
-      productCount: 41,
+      productCount: 0,
       featuredProducts: []
     },
     {
@@ -42,7 +42,7 @@ const categories = [
       slug: 'accessories',
       description: 'Wallets, belts, phone cases, and other leather accessories',
       image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600&h=400&fit=crop',
-      productCount: 32,
+      productCount: 0,
       featuredProducts: []
     },
     {
@@ -61,20 +61,42 @@ export default function CategoriesPage() {
   const searchParams = useSearchParams();
 
   const [searchInput, setSearchInput] = useState('');
-  const [filteredCategories, setFilteredCategories] = useState<typeof categories>([]);
+  const [categories, setCategories] = useState<typeof baseCategories>(baseCategories);
+  const [filteredCategories, setFilteredCategories] = useState<typeof baseCategories>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch category counts
+  useEffect(() => {
+    const fetchCategoryCounts = async () => {
+      try {
+        const response = await fetch('/api/categories/counts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch category counts');
+        }
+        const data = await response.json();
+        const counts = data.counts || {};
+        
+        // Update categories with real counts
+        setCategories(prevCategories => 
+          prevCategories.map(cat => ({
+            ...cat,
+            productCount: counts[cat.name] || 0
+          }))
+        );
+      } catch (error) {
+        console.error('Error fetching category counts:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCategoryCounts();
+  }, []);
 
   // Initialize from URL params
   useEffect(() => {
     const search = searchParams.get('search') || '';
     setSearchInput(search);
-    
-    // Simulate loading for skeleton demonstration
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-    
-    return () => clearTimeout(timer);
   }, [searchParams]);
 
   // Update URL when search changes
@@ -111,7 +133,7 @@ export default function CategoriesPage() {
     });
 
     setFilteredCategories(filtered);
-  }, [searchInput]);
+  }, [searchInput, categories]);
 
   // Debounce search to avoid firing URL updates on every keystroke
   useEffect(() => {
