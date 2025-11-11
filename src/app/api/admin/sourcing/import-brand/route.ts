@@ -24,6 +24,36 @@ function normalizeTitleForDedup(title: string): string {
     .trim();
 }
 
+function normalizeBrandName(raw: string | undefined | null, fallback: string): string {
+  const candidate = (raw ?? '').trim();
+  if (!candidate) return fallback;
+  return candidate
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function sanitizeSlug(raw: string | undefined | null, defaultSlug = 'manual'): string {
+  const candidate = (raw ?? '').toString().trim();
+  if (!candidate) return defaultSlug;
+  return candidate
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || defaultSlug;
+}
+
+function deriveSlugFromSource(url: string | undefined | null): string {
+  if (!url) return 'manual';
+  try {
+    const parsed = new URL(url);
+    const pathSlug = parsed.pathname.split('/').filter(Boolean).join('-');
+    return sanitizeSlug(pathSlug || parsed.hostname || 'manual');
+  } catch {
+    return sanitizeSlug(url, 'manual');
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -37,6 +67,8 @@ export async function POST(request: NextRequest) {
     if (!url && !html) {
       return NextResponse.json({ error: 'Provide url or html' }, { status: 400 });
     }
+
+    const normalizedBrand = normalizeBrandName(brand, brand || 'General');
 
     // Parse product
     let parsed;
@@ -188,7 +220,8 @@ export async function POST(request: NextRequest) {
 
     const normalizedTitle = (parsed.title || 'Untitled').trim().replace(/\s+/g, ' ');
     const normalizedTitleForDedup = normalizeTitleForDedup(normalizedTitle);
-    const categoryGroup = `Brand:${brand}`;
+    const slug = deriveSlugFromSource(parsed.sourceUrl || url);
+    const categoryGroup = `Brand:${normalizedBrand}:${slug}`;
 
     const Sourced = await getSourcedProductModel();
     
@@ -204,7 +237,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         success: false, 
         error: 'Duplicate product',
-        message: `Product with title "${normalizedTitle}" already exists in brand "${brand}"`
+        message: `Product with title "${normalizedTitle}" already exists in brand "${normalizedBrand}"`
       }, { status: 409 });
     }
     
@@ -214,7 +247,7 @@ export async function POST(request: NextRequest) {
         title: normalizedTitle,
         sourceUrl: parsed.sourceUrl || url,
         categoryGroup,
-        brand,
+        brand: normalizedBrand,
         price: parsed.price,
         description: parsed.description || '',
         images: Array.isArray(parsed.images) ? parsed.images.slice(0, 20) : [],

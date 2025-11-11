@@ -67,7 +67,7 @@ export default function SourcingPanel() {
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [crawlData, setCrawlData] = useState<CrawlResult | null>(null);
   // Multi-brand import state
-  const brands = ['Angel Jackets','Lama','Engine','The Jacket Maker','outfiters'];
+  const brands = ['Angel Jackets','Engine','Lama','London Bridge','Outfitters','The Jacket Maker'];
   const [activeBrand, setActiveBrand] = useState<string>('Angel Jackets');
   const [brandUrl, setBrandUrl] = useState('');
   const [brandHtml, setBrandHtml] = useState('');
@@ -77,6 +77,13 @@ export default function SourcingPanel() {
   const [outfitersUrl, setOutfitersUrl] = useState('');
   const [outfitersLoading, setOutfitersLoading] = useState(false);
   const [outfitersResults, setOutfitersResults] = useState<ScrapedCategoryProduct[]>([]);
+  // Direct collection scraping (uses /api/scrape) state
+  const [directScrapeUrl, setDirectScrapeUrl] = useState('https://outfitters.com.pk/collections/men-outerwear');
+  const [directScrapeMaxPages, setDirectScrapeMaxPages] = useState('50');
+  const [directScrapeDelayMs, setDirectScrapeDelayMs] = useState('200');
+  const [directScrapeLoading, setDirectScrapeLoading] = useState(false);
+  const [directScrapeResults, setDirectScrapeResults] = useState<ScrapedCategoryProduct[]>([]);
+  const [directScrapePagesVisited, setDirectScrapePagesVisited] = useState<string[]>([]);
   // Outfitters Collection scraping state
   const [outfittersCollectionUrl, setOutfittersCollectionUrl] = useState('https://outfitters.com.pk/collections/men-outerwear');
   const [outfittersCollectionMaxPages, setOutfittersCollectionMaxPages] = useState('10');
@@ -424,6 +431,67 @@ export default function SourcingPanel() {
     }
   }
 
+  async function scrapeDirectCollection() {
+    if (!directScrapeUrl.trim()) {
+      toast.error('Enter a collection URL');
+      return;
+    }
+
+    const parsedMaxPages = Number.parseInt(directScrapeMaxPages, 10);
+    const parsedDelay = Number.parseInt(directScrapeDelayMs, 10);
+
+    const payload: { url: string; maxPages?: number; delayMsBetweenPages?: number } = {
+      url: directScrapeUrl.trim(),
+    };
+
+    if (Number.isFinite(parsedMaxPages) && !Number.isNaN(parsedMaxPages) && parsedMaxPages > 0) {
+      payload.maxPages = Math.min(Math.max(parsedMaxPages, 1), 200);
+    }
+
+    if (Number.isFinite(parsedDelay) && !Number.isNaN(parsedDelay) && parsedDelay >= 0) {
+      payload.delayMsBetweenPages = Math.min(Math.max(parsedDelay, 0), 5000);
+    }
+
+    try {
+      setDirectScrapeLoading(true);
+      setDirectScrapePagesVisited([]);
+
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.detail || data?.error || 'Failed to scrape collection');
+      }
+
+      const list: ScrapedCategoryProduct[] = Array.isArray(data?.products)
+        ? data.products.map((item: any) => ({
+            title: item?.title ?? 'Untitled Product',
+            price: typeof item?.price === 'string' ? item.price : item?.price ?? null,
+            image: item?.image ?? null,
+            url: item?.url ?? payload.url,
+          }))
+        : [];
+
+      setDirectScrapeResults(list);
+      setDirectScrapePagesVisited(Array.isArray(data?.pagesVisited) ? data.pagesVisited : []);
+
+      toast.success(`Found ${list.length} product${list.length === 1 ? '' : 's'}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Scrape failed');
+    } finally {
+      setDirectScrapeLoading(false);
+    }
+  }
+
+  function resetDirectScrape() {
+    setDirectScrapeResults([]);
+    setDirectScrapePagesVisited([]);
+  }
+
   async function scrapeOutfiters() {
     const hasUrl = outfitersUrl.trim().length > 0;
     const hasHtml = outfitersHtml.trim().length > 0;
@@ -433,7 +501,7 @@ export default function SourcingPanel() {
       const res = await fetch('/api/admin/sourcing/import-brand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: 'outfiters', url: hasUrl ? outfitersUrl : undefined, html: hasHtml ? outfitersHtml : undefined }),
+        body: JSON.stringify({ brand: 'Outfitters', url: hasUrl ? outfitersUrl : undefined, html: hasHtml ? outfitersHtml : undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -441,7 +509,7 @@ export default function SourcingPanel() {
           // Duplicate product
           toast.error(data?.message || 'Product already exists');
         } else {
-          throw new Error(data?.error || 'Failed to import outfiters product');
+          throw new Error(data?.error || 'Failed to import Outfitters product');
         }
         return;
       }
@@ -465,12 +533,12 @@ export default function SourcingPanel() {
         return [...prev, product];
       });
       
-      toast.success('Product imported to outfiters brand');
+      toast.success('Product imported to Outfitters brand');
       setOutfitersUrl('');
       setOutfitersHtml('');
       await fetchSaved(1);
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to import outfiters product');
+      toast.error(e?.message || 'Failed to import Outfitters product');
     } finally {
       setOutfitersLoading(false);
     }
@@ -484,7 +552,7 @@ export default function SourcingPanel() {
       const res = await fetch('/api/admin/sourcing/scrape-outfitters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: outfittersCollectionUrl, maxPages: mp, fetchDetails: true, save: true, brand: 'outfiters' }),
+        body: JSON.stringify({ url: outfittersCollectionUrl, maxPages: mp, fetchDetails: true, save: true, brand: 'Outfitters' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to scrape Outfitters');
@@ -860,7 +928,7 @@ export default function SourcingPanel() {
         </div>
       </div>
 
-      {/* Outfiters Brand Scraper */}
+      {/* Outfitters Brand Scraper */}
       <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-orange-50 via-white to-amber-50">
         <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-orange-200/40 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-amber-200/40 blur-3xl" />
@@ -870,8 +938,8 @@ export default function SourcingPanel() {
               <Link2 className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Scrape Outfiters Brand</h2>
-              <p className="text-sm text-gray-600">Enter a product URL or paste HTML content to import products under the outfiters brand.</p>
+              <h2 className="text-xl font-semibold text-gray-900">Scrape Outfitters Brand</h2>
+              <p className="text-sm text-gray-600">Enter a product URL or paste HTML content to import products under the Outfitters brand.</p>
             </div>
           </div>
 
@@ -879,7 +947,7 @@ export default function SourcingPanel() {
             <input
               value={outfitersUrl}
               onChange={e => setOutfitersUrl(e.target.value)}
-              placeholder="https://outfiters.com/product/..."
+              placeholder="https://outfitters.com.pk/products/..."
               className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent shadow-sm"
             />
             <div className="lg:col-span-2">
@@ -962,6 +1030,157 @@ export default function SourcingPanel() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Collection Scraper (uses /api/scrape) */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-blue-50 via-white to-sky-50">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-blue-200/40 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-sky-200/40 blur-3xl" />
+        <div className="relative p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Quick Collection Scraper</h2>
+              <p className="text-sm text-gray-600">
+                Call the new <code className="rounded bg-blue-100 px-1 py-0.5 text-xs text-blue-700">/api/scrape</code> route to gather product cards from any Outfitters (or similar) collection page.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 text-gray-700">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                value={directScrapeUrl}
+                onChange={(event) => setDirectScrapeUrl(event.target.value)}
+                placeholder="https://outfitters.com.pk/collections/men-outerwear"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+              />
+              <div className="flex gap-2">
+                <div className="flex flex-col">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Max Pages</label>
+                  <input
+                    value={directScrapeMaxPages}
+                    onChange={(event) => setDirectScrapeMaxPages(event.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="50"
+                    className="w-24 border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Delay (ms)</label>
+                  <input
+                    value={directScrapeDelayMs}
+                    onChange={(event) => setDirectScrapeDelayMs(event.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="200"
+                    className="w-24 border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={scrapeDirectCollection}
+                  disabled={directScrapeLoading}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${directScrapeLoading ? 'animate-spin' : ''}`} />
+                  {directScrapeLoading ? 'Scraping…' : 'Fetch Collection'}
+                </button>
+                <button
+                  onClick={resetDirectScrape}
+                  disabled={directScrapeLoading || directScrapeResults.length === 0}
+                  className="px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                >
+                  Clear Results
+                </button>
+              </div>
+              <div className="text-xs text-gray-500">
+                Uses POST with JSON payload: <code className="rounded bg-blue-100 px-1 py-0.5 text-[10px] text-blue-700">{'{ url, maxPages?, delayMsBetweenPages? }'}</code>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {directScrapePagesVisited.length > 0 && (
+              <div className="rounded-xl border border-blue-100 bg-white/60 p-4">
+                <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Pages Visited ({directScrapePagesVisited.length})</div>
+                <div className="flex flex-wrap gap-2">
+                  {directScrapePagesVisited.map((page, index) => (
+                    <a
+                      key={page}
+                      href={page}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 hover:bg-blue-100 transition"
+                    >
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-semibold">
+                        {index + 1}
+                      </span>
+                      <span className="truncate max-w-[12rem] sm:max-w-[16rem]">{page.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              {directScrapeResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 border border-dashed border-blue-200 rounded-2xl bg-white/70">
+                  <div className="text-gray-900 font-medium">No collection scraped yet</div>
+                  <div className="text-gray-500 text-sm mt-1 text-center max-w-md">
+                    Enter a collection URL and click <span className="font-semibold text-blue-700">Fetch Collection</span> to see product cards pulled directly from the page.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-sm text-gray-700">
+                    Found <span className="font-semibold text-gray-900">{directScrapeResults.length}</span> {directScrapeResults.length === 1 ? 'product' : 'products'}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {directScrapeResults.map((product, index) => (
+                      <button
+                        key={`${product.url}-${index}`}
+                        onClick={() => setPreviewCrawled(product)}
+                        className="text-left group overflow-hidden rounded-2xl border bg-white hover:shadow-md transition-shadow relative"
+                      >
+                        <div className="aspect-[4/3] bg-gray-100 relative">
+                          {product.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={product.image} alt={product.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                          )}
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <div className="font-medium text-gray-900 line-clamp-2" title={product.title}>{product.title}</div>
+                          <div className="text-sm font-semibold text-blue-700">{product.price || '—'}</div>
+                          <div className="text-xs text-gray-500 break-words">
+                            {product.url ? (
+                              <a
+                                href={product.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                className="text-blue-600 hover:text-blue-800 transition"
+                              >
+                                View Product →
+                              </a>
+                            ) : (
+                              'No product URL'
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

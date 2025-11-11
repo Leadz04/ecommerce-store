@@ -32,6 +32,41 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function normalizeBrandName(raw: string | undefined | null, fallback: string): string {
+  const candidate = (raw ?? '').trim();
+  if (!candidate) return fallback;
+  return candidate
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function deriveCollectionSlug(url: string | undefined): string {
+  if (!url) return 'collection';
+  try {
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    const collectionsIdx = segments.indexOf('collections');
+    if (collectionsIdx >= 0) {
+      const afterCollections = segments.slice(collectionsIdx + 1);
+      if (afterCollections.length > 0) {
+        return afterCollections.join('-').toLowerCase();
+      }
+    }
+    if (segments.length > 0) {
+      return segments.join('-').toLowerCase();
+    }
+    return 'collection';
+  } catch {
+    return String(url)
+      .replace(/^https?:\/\//, '')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'collection';
+  }
+}
+
 /**
  * Normalize title for duplicate detection
  * - Convert to lowercase
@@ -338,7 +373,7 @@ function extractBrandFromHtml(html: string, url: string): string | null {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname;
       // Extract brand from common patterns
-      if (hostname.includes('outfitters')) return 'outfiters';
+      if (hostname.includes('outfitters')) return 'Outfitters';
     } catch {}
     
     return null;
@@ -353,7 +388,7 @@ async function enrichProductsWithDetails(
 ): Promise<ScrapedProduct[]> {
   const delayMs = options.delayMs ?? 500;
   const maxConcurrent = options.maxConcurrent ?? 5;
-  const defaultBrand = options.defaultBrand || 'outfiters';
+  const defaultBrand = options.defaultBrand || 'Outfitters';
   const enriched: ScrapedProduct[] = [];
 
   // Process products in batches to avoid overwhelming the server
@@ -375,7 +410,7 @@ async function enrichProductsWithDetails(
           });
           const extractedBrand = extractBrandFromHtml(htmlResp.data as string, product.url);
           if (extractedBrand) {
-            brand = extractedBrand;
+            brand = normalizeBrandName(extractedBrand, defaultBrand);
           }
         } catch {}
         
@@ -388,7 +423,7 @@ async function enrichProductsWithDetails(
           image: parsed.images && parsed.images.length > 0 ? parsed.images[0] : product.image,
           description: parsed.description || '',
           specifications: parsed.specs || {},
-          brand: brand,
+          brand: normalizeBrandName(brand, defaultBrand),
         };
       } catch (error: any) {
         console.error(`Error fetching details for ${product.url}:`, error.message);
@@ -396,7 +431,7 @@ async function enrichProductsWithDetails(
         return {
           ...product,
           images: product.image ? [product.image] : [],
-          brand: defaultBrand,
+          brand: normalizeBrandName(defaultBrand, defaultBrand),
         };
       }
     });
@@ -416,7 +451,7 @@ async function enrichProductsWithDetails(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { url, html, maxPages = 10, fetchDetails = true, save = false, brand = 'outfiters' } = body || {};
+    const { url, html, maxPages = 10, fetchDetails = true, save = false, brand = 'Outfitters' } = body || {};
 
     if (!url && !html) {
       return NextResponse.json({ error: 'Provide url or html' }, { status: 400 });
@@ -460,7 +495,7 @@ export async function POST(request: NextRequest) {
       enrichedProducts = await enrichProductsWithDetails(products, {
         delayMs: 500,
         maxConcurrent: 5,
-        defaultBrand: brand || 'outfiters',
+        defaultBrand: normalizeBrandName(brand, 'Outfitters'),
       });
       console.log(`Successfully enriched ${enrichedProducts.length} products`);
     }
@@ -471,13 +506,15 @@ export async function POST(request: NextRequest) {
     if (save && enrichedProducts.length > 0) {
       try {
         const Sourced = await getSourcedProductModel();
-        const productBrand = brand || 'outfiters';
-        const categoryGroup = `Brand:${productBrand}`;
+        const requestedBrand = normalizeBrandName(brand, 'Outfitters');
+        const collectionSlug = deriveCollectionSlug(collectionUrl);
         
         for (const product of enrichedProducts) {
           try {
             const normalizedTitle = (product.title || 'Untitled').trim().replace(/\s+/g, ' ');
             const normalizedTitleForDedup = normalizeTitleForDedup(normalizedTitle);
+            const productBrand = normalizeBrandName(product.brand, requestedBrand);
+            const categoryGroup = `Brand:${productBrand}:${collectionSlug}`;
             
             // Check all existing products in this categoryGroup for duplicate title (normalized)
             const allExisting = await Sourced.find({ categoryGroup }).select('title').lean();
