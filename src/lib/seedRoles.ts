@@ -86,9 +86,34 @@ export async function seedRoles() {
       }
     }
 
-    // Update existing users without roles to have CUSTOMER role
+    // Create demo customer user if it doesn't exist
     const customerRole = await Role.findOne({ name: 'CUSTOMER' });
     if (customerRole) {
+      const existingCustomer = await User.findOne({ email: 'john@example.com' });
+      
+      if (!existingCustomer) {
+        const demoCustomer = new User({
+          name: 'John Doe',
+          email: 'john@example.com',
+          password: 'password123', // This will be hashed by the pre-save hook
+          phone: '+1 555-123-4567',
+          role: customerRole._id,
+          permissions: ROLE_PERMISSIONS.CUSTOMER,
+          isEmailVerified: true,
+          isActive: true,
+          settings: {
+            emailNotifications: true,
+            smsNotifications: false,
+            theme: 'system',
+            language: 'en'
+          }
+        });
+
+        await demoCustomer.save();
+        console.log('✅ Demo customer user created (john@example.com / password123)');
+      }
+
+      // Update existing users without roles to have CUSTOMER role
       const usersWithoutRoles = await User.find({ 
         $or: [
           { role: { $exists: false } },

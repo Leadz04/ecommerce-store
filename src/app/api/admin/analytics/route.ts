@@ -1,53 +1,90 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { AnalyticsEvent, Order, SearchEvent, User } from '@/models';
-import { applyDeduplication } from '@/lib/deduplication';
+import Order from '@/models/Order';
+import User from '@/models/User';
+import Product from '@/models/Product';
+import AnalyticsEvent from '@/models/AnalyticsEvent';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const { searchParams } = new URL(request.url);
-    const days = parseInt(searchParams.get('days') || '30');
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-
-    const funnelRaw = await AnalyticsEvent.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $group: { _id: '$type', count: { $sum: 1 }, value: { $sum: { $ifNull: ['$value', 0] } } } },
-    ]);
-
-    const searchAggRaw = await SearchEvent.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $group: { _id: '$query', count: { $sum: 1 }, noResults: { $sum: { $cond: [{ $eq: ['$resultsCount', 0] }, 1, 0] } } } },
-      { $sort: { count: -1 } },
-      { $limit: 20 },
-    ]);
-
-    const ordersRaw = await Order.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $group: { _id: '$userId', revenue: { $sum: '$total' }, orders: { $sum: 1 }, first: { $min: '$createdAt' } } },
-    ]);
-
-    // Apply deduplication to ensure unique analytics data
-    const funnel = applyDeduplication(funnelRaw, 'analyticsEvents');
-    const searchAgg = applyDeduplication(searchAggRaw, 'analyticsEvents');
-    const orders = applyDeduplication(ordersRaw, 'analyticsEvents');
-
-    // Simple cohort: group by month of first order
-    const cohorts = orders.reduce((acc: Record<string, { users: number; revenue: number }>, o: any) => {
-      const key = new Date(o.first).toISOString().slice(0, 7);
-      if (!acc[key]) acc[key] = { users: 0, revenue: 0 };
-      acc[key].users += 1;
-      acc[key].revenue += o.revenue;
-      return acc;
-    }, {});
-
-    const ltv = orders.length ? orders.reduce((s: number, o: any) => s + o.revenue, 0) / orders.length : 0;
-
-    return NextResponse.json({ funnel, search: searchAgg, cohorts, ltv });
-  } catch (e) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    
+    // Current month stats
+    const currentMonthOrders = await Order.find({
+      createdAt: { $gte: startOfMonth }
+    });
+    
+    const totalRevenue = currentMonthOrders.reduce((sum, order) => sum + order.total, 0);
+    const totalOrders = currentMonthOrders.length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    
+    // Last month stats for comparison
+    const lastMonthOrders = await Order.find({
+      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+    });
+    
+    const lastMonthRevenue = lastMonthOrders.reduce((sum, order) => sum + order.total, 0);
+    const lastMonthTotalOrders = lastMonthOrders.length;
+    const lastMonthAvgOrder = lastMonthTotalOrders > 0 ? lastMonthRevenue / lastMonthTotalOrders : 0;
+    
+    // Calculate changes
+    const revenueChange = lastMonthRevenue > 0 
+      ? ((totalRevenue - lastMonthRevenue) / lastMonthRevenue * 100)
+      : 0;
+    const ordersChange = lastMonthTotalOrders > 0
+      ? ((totalOrders - lastMonthTotalOrders) / lastMonthTotalOrders * 100)
+      : 0;
+    const avgOrderChange = lastMonthAvgOrder > 0
+      ? ((avgOrderValue - lastMonthAvgOrder) / lastMonthAvgOrder * 100)
+      : 0;
+    
+    // Customer stats
+    const totalCustomers = await User.countDocuments({ role: 'customer' });
+    const newCustomersThisMonth = await User.countDocuments({
+      role: 'customer',
+      createdAt: { $gte: startOfMonth }
+    });
+    const newCustomersLastMonth = await User.countDocuments({
+      role: 'customer',
+      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+    });
+    
+    const customersChange = newCustomersLastMonth > 0
+      ? ((newCustomersThisMonth - newCustomersLastMonth) / newCustomersLastMonth * 100)
+      : 0;
+    
+    // Conversion rate (orders / unique visitors)
+    const uniqueVisitors = await AnalyticsEvent.distinct('sessionId', {
+      createdAt: { $gte: startOfMonth }
+    });
+    
+    const conversionRate = uniqueVisitors.length > 0
+      ? (totalOrders / uniqueVisitors.length * 100)
+      : 0;
+    
+    return NextResponse.json({
+      totalRevenue,
+      totalOrders,
+      totalCustomers,
+      avgOrderValue,
+      revenueChange: Math.round(revenueChange * 10) / 10,
+      ordersChange: Math.round(ordersChange * 10) / 10,
+      customersChange: Math.round(customersChange * 10) / 10,
+      avgOrderChange: Math.round(avgOrderChange * 10) / 10,
+      conversionRate: Math.round(conversionRate * 100) / 100,
+      newCustomersThisMonth,
+      period: {
+        start: startOfMonth,
+        end: now
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 });
   }
 }
-
-

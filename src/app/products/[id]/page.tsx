@@ -441,14 +441,14 @@ export default function ProductPage() {
             ) : (
               <>
                 {/* Main Image */}
-                <div className="aspect-square overflow-hidden rounded-xl bg-white  shadow-lg border border-gray-200 ">
+                <div className="aspect-square overflow-hidden rounded-xl bg-white  shadow-lg border border-gray-200 cursor-zoom-in">
                   <Image
                     src={images[selectedImage]}
                     alt={product.name}
                     width={600}
                     height={600}
                     loader={cdnImageLoader}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover hover:scale-150 transition-transform duration-500 ease-in-out"
                   />
                 </div>
                 
@@ -459,7 +459,7 @@ export default function ProductPage() {
                       <button
                         key={index}
                         onClick={() => setSelectedImage(index)}
-                        className={`aspect-square overflow-hidden rounded-lg border-2 transition-all duration-200 ${
+                        className={`aspect-square overflow-hidden rounded-lg border-2 transition-all duration-200 group ${
                           selectedImage === index 
                             ? 'border-blue-500 ring-2 ring-blue-200 ' 
                             : 'border-gray-200  hover:border-gray-300 '
@@ -471,7 +471,7 @@ export default function ProductPage() {
                           width={150}
                           height={150}
                           loader={cdnImageLoader}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-300 ease-in-out group-hover:scale-125"
                         />
                       </button>
                     ))}

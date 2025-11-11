@@ -1041,8 +1041,8 @@ export default function AdminDashboard() {
       return;
     }
     
-    const limitSelect = document.getElementById('export-limit');
-    const customInput = document.getElementById('custom-limit');
+    const limitSelect = document.getElementById('export-limit') as HTMLSelectElement | null;
+    const customInput = document.getElementById('custom-limit') as HTMLInputElement | null;
     
     if (limitSelect && customInput) {
       const handleLimitChange = () => {
@@ -2514,7 +2514,7 @@ export default function AdminDashboard() {
                                   File: {(() => {
                                     const product = products.find(p => p._id === selectedProductIds[0]);
                                     if (product) {
-                                      const productName = product.name || product.title || 'product';
+                                      const productName = product.name || 'product';
                                       const sanitized = productName
                                         .replace(/[^a-zA-Z0-9\s-_]/g, '')
                                         .replace(/\s+/g, '-')
@@ -2545,7 +2545,7 @@ export default function AdminDashboard() {
                               if (selectedProductIds.length === 1) {
                                 const selectedProduct = products.find(p => p._id === selectedProductIds[0]);
                                 if (selectedProduct) {
-                                  params.set('filename', selectedProduct.name || selectedProduct.title || 'product');
+                                  params.set('filename', selectedProduct.name || 'product');
                                 }
                               }
                               

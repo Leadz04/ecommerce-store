@@ -155,15 +155,38 @@ ecommerce-store/
 ├── src/
 │   ├── app/                 # Next.js app directory
 │   │   ├── api/            # API routes
+│   │   │   ├── discounts/       # Discount system
+│   │   │   ├── gift-cards/      # Gift card system
+│   │   │   ├── loyalty/         # Loyalty program
+│   │   │   ├── abandoned-carts/ # Cart recovery
+│   │   │   ├── flash-sales/     # Flash sales
+│   │   │   ├── bundles/         # Product bundles
+│   │   │   └── recommendations/ # AI recommendations
 │   │   ├── admin/          # Admin dashboard
+│   │   │   ├── analytics/       # Real-time analytics
+│   │   │   ├── shopify-tools/   # 🆕 API Testing UI
+│   │   │   └── api-docs/        # 🆕 API Documentation
 │   │   ├── products/       # Product pages
 │   │   └── ...
 │   ├── components/         # React components
+│   │   ├── ui/                  # 🆕 Modern UI components
+│   │   ├── ProductCard.tsx      # 🆕 Enhanced product card
+│   │   └── FlashSaleBanner.tsx  # 🆕 Flash sale banner
 │   ├── lib/               # Utilities and configurations
-│   │   ├── autoMigrate.js     # Auto-migration system
-│   │   ├── migrationRunner.js # Migration execution
+│   │   ├── autoMigrate.js       # Auto-migration system
+│   │   ├── migrationRunner.js   # Migration execution
+│   │   ├── realtime.ts          # 🆕 Real-time SSE service
 │   │   └── simpleSchemaAnalyzer.js # Schema analysis
 │   ├── models/            # Mongoose models
+│   │   ├── Discount.ts          # 🆕 Discount model
+│   │   ├── GiftCard.ts          # 🆕 Gift card model
+│   │   ├── LoyaltyProgram.ts    # 🆕 Loyalty model
+│   │   ├── AbandonedCart.ts     # 🆕 Cart recovery model
+│   │   ├── FlashSale.ts         # 🆕 Flash sale model
+│   │   ├── ProductBundle.ts     # 🆕 Bundle model
+│   │   └── ProductRecommendation.ts # 🆕 Recommendations
+│   ├── hooks/             # 🆕 React hooks
+│   │   └── useRealtime.ts       # Real-time updates hook
 │   ├── store/             # Zustand state management
 │   └── types/             # TypeScript type definitions
 ├── migrations/            # Database migrations
@@ -171,6 +194,11 @@ ecommerce-store/
 │   └── *.js              # Migration files
 ├── scripts/              # Utility scripts
 │   └── migrate.js        # Migration CLI
+├── SHOPIFY_IMPLEMENTATION_PLAN.md  # 🆕 Full roadmap
+├── IMPLEMENTATION_SUMMARY.md       # 🆕 Feature docs
+├── QUICK_START.md                  # 🆕 5-min guide
+├── API_REFERENCE.md                # 🆕 API docs
+├── TESTING_GUIDE.md                # 🆕 Testing UI guide
 └── ...
 ```
 
@@ -242,6 +270,9 @@ npm run migrate:status
 - [Migration System Guide](./MIGRATIONS.md) - Complete migration documentation
 - [Auto-Migration Guide](./AUTO_MIGRATIONS.md) - Auto-migration system details
 - [API Documentation](./docs/api.md) - API endpoints reference
+- [Testing Documentation](./TESTING_DOCUMENTATION.md) - Complete testing guide with coverage
+- [Testing Summary](./TESTING_SUMMARY.md) - Test results and statistics
+- [Test Commands](./TEST_COMMANDS.md) - Quick reference for test commands
 
 ## 🤝 Contributing
 
@@ -251,6 +282,38 @@ npm run migrate:status
 4. Run migrations if needed: `npm run migrate:auto`
 5. Test your changes
 6. Submit a pull request
+
+## 🧪 Testing & API Documentation
+
+### Interactive Testing UI (🆕 Shopify-like)
+We've built a **Swagger-like testing interface**!
+
+```bash
+# Open in browser
+http://localhost:3000/admin/shopify-tools
+```
+
+**Features:**
+- ✅ Test all APIs with one click
+- ✅ No Postman needed!
+- ✅ Beautiful UI with real-time responses
+- ✅ Copy responses to clipboard
+- ✅ Test discounts, gift cards, loyalty, flash sales, and more!
+
+### API Documentation
+Complete API reference with cURL examples:
+
+```bash
+http://localhost:3000/admin/api-docs
+```
+
+**Features:**
+- ✅ All endpoints documented
+- ✅ Copy-paste ready cURL commands
+- ✅ Request/response examples
+- ✅ Organized by feature
+
+See [TESTING_GUIDE.md](./TESTING_GUIDE.md) for complete testing documentation.
 
 ## 📄 License
 
