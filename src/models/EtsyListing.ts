@@ -37,7 +37,7 @@ export interface IEtsyListing extends Document {
 const EtsyListingSchema = new Schema<IEtsyListing>({
   etsyListingId: { type: String, required: true, unique: true },
   shopId: { type: String, required: true },
-  productId: { type: Schema.Types.ObjectId, ref: 'Product' },
+  productId: { type: String, ref: 'Product' },
   title: { type: String, required: true },
   description: { type: String, required: true },
   price: { type: Number, required: true },

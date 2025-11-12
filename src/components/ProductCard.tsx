@@ -40,7 +40,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Link href={`/products/${product._id || product.id}`} className="group">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all duration-300 h-full flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 h-full flex flex-col">
         {/* Product Image */}
         <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-700">
           {!imageError ? (
@@ -59,7 +59,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           
           {/* Discount Badge */}
           {discountPercentage > 0 && (
-            <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse-slow">
               -{discountPercentage}%
             </div>
           )}
@@ -129,7 +129,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <button
             onClick={handleAddToCart}
             disabled={!product.inStock}
-            className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white py-2.5 px-4 rounded-lg disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium mt-auto"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 dark:from-blue-500 dark:to-purple-500 text-white py-3 px-4 rounded-xl disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center space-x-2 text-sm font-semibold mt-auto shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
           >
             <ShoppingCart className="h-4 w-4" />
             <span>{product.inStock ? 'Add to Cart' : 'Out of Stock'}</span>

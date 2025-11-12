@@ -45,7 +45,7 @@ export interface IEtsyOrder extends Document {
 const EtsyOrderSchema = new Schema<IEtsyOrder>({
   etsyOrderId: { type: String, required: true, unique: true },
   shopId: { type: String, required: true },
-  orderId: { type: Schema.Types.ObjectId, ref: 'Order' },
+  orderId: { type: String, ref: 'Order' },
   receiptId: { type: String, required: true },
   buyerUserId: { type: String, required: true },
   buyerEmail: { type: String, required: true },
@@ -58,7 +58,7 @@ const EtsyOrderSchema = new Schema<IEtsyOrder>({
   taxCost: { type: Number, default: 0 },
   items: [{
     listingId: { type: String, required: true },
-    productId: { type: Schema.Types.ObjectId, ref: 'Product' },
+    productId: { type: String, ref: 'Product' },
     title: { type: String, required: true },
     quantity: { type: Number, required: true },
     price: { type: Number, required: true },

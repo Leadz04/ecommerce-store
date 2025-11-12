@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     const {
       id,
       categoryGroup,
+      brand,
       title,
       sourceUrl,
       price,
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       categoryGroup,
       sourceUrl,
       title: title || 'Untitled',
+      brand: brand || undefined,
       price: typeof price === 'number' ? price : undefined,
       description: description || '',
       images: Array.isArray(images) ? images.slice(0, 20) : [],

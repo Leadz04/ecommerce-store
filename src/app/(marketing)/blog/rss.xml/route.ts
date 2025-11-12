@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Blog from '@/models/Blog';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   await connectDB();
   const now = new Date();
-  const posts = await Blog.find({
+  const posts = await (Blog as any).find({
     isDeleted: false,
     isActive: true,
     status: 'published',

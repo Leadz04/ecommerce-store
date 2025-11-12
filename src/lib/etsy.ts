@@ -175,10 +175,14 @@ export interface EtsyOrderData {
   message_from_buyer?: string;
   message_from_seller?: string;
   was_paid: boolean;
-  total_tax_cost: {
-    amount: number;
-    divisor: number;
-    currency_code: string;
+  shipping_address?: {
+    first_line?: string;
+    second_line?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country_iso?: string;
+    phone?: string;
   };
 }
 

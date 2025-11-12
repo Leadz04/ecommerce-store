@@ -4,10 +4,13 @@ import { notFound } from 'next/navigation';
 import connectDB from '@/lib/mongodb';
 import Blog from '@/models/Blog';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 async function getPost(slug: string) {
   await connectDB();
   const now = new Date();
-  const post = await Blog.findOne({
+  const post = await (Blog as any).findOne({
     slug: slug.toLowerCase(),
     isActive: true,
     status: 'published',
@@ -58,7 +61,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
   // Fetch a few related articles (best-effort)
   await connectDB();
-  const relatedRaw = await Blog.find({
+  const relatedRaw = await (Blog as any).find({
     _id: { $ne: post._id },
     isActive: true,
     isDeleted: false,

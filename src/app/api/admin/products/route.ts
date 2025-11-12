@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     // Audit log
     try {
-      const ip = request.headers.get('x-forwarded-for') || request.ip || '' as any;
+      const ip = request.headers.get('x-forwarded-for') || '';
       const userAgent = request.headers.get('user-agent') || '';
       await AuditLog.create({
         userId: user.userId,

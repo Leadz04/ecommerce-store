@@ -570,7 +570,7 @@ export default function KeywordPlanner({ onClose }: KeywordPlannerProps) {
                       <div className="text-xs text-blue-600 space-y-1">
                         <div className="font-medium">Interest: {formatValue(related.searchVolume)}</div>
                         <div className="font-medium">Type: Related Query</div>
-                        <div className="font-medium">Trend: {related.searchVolume > 0 ? 'Active' : 'Unknown'}</div>
+                        <div className="font-medium">Trend: {Number(related.searchVolume) > 0 ? 'Active' : 'Unknown'}</div>
                       </div>
                     </div>
                   ))}
@@ -1244,8 +1244,8 @@ export default function KeywordPlanner({ onClose }: KeywordPlannerProps) {
                         <div className="text-center p-3 bg-white/60 rounded-lg">
                           <div className="text-gray-600 text-xs">Trend</div>
                             {(() => { const s = getDisplaySummary(search); return (
-                              <div className={`font-bold ${getTrendColor(s.trendDirection)}`}>
-                                {getTrendIcon(s.trendDirection)} {s.trendDirection.toUpperCase()}
+                              <div className={`font-bold ${getTrendColor(s.trendDirection as 'up' | 'down' | 'stable')}`}>
+                                {getTrendIcon(s.trendDirection as 'up' | 'down' | 'stable')} {s.trendDirection.toUpperCase()}
                               </div>
                             ); })()}
                         </div>

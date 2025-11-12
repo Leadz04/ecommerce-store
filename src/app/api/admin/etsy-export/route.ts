@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         Quantity: product.stock?.toString() || '1',
         SKU: product.sku || '',
         'Variation 1': product.variants?.length ? 'Size' : '',
-        'V1 Option': product.variants?.map(v => v.name).join('|') || '',
+        'V1 Option': product.variants?.map((v: any) => v.name).join('|') || '',
         'Variation 2': product.variants?.length > 1 ? 'Color' : '',
         'V2 Option': '',
         'Var Price': '',

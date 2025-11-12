@@ -406,6 +406,8 @@ export default function AdminDashboard() {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -1009,6 +1011,12 @@ export default function AdminDashboard() {
     }
   }, [searchParams, activeTab, orders]);
 
+  // Fetch brands on mount
+  useEffect(() => {
+    fetchBrands();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const userId = searchParams.get('userId');
     if (userId && activeTab === 'users' && users.length) {
@@ -1033,8 +1041,8 @@ export default function AdminDashboard() {
       return;
     }
     
-    const limitSelect = document.getElementById('export-limit');
-    const customInput = document.getElementById('custom-limit');
+    const limitSelect = document.getElementById('export-limit') as HTMLSelectElement | null;
+    const customInput = document.getElementById('custom-limit') as HTMLInputElement | null;
     
     if (limitSelect && customInput) {
       const handleLimitChange = () => {
@@ -1137,7 +1145,7 @@ export default function AdminDashboard() {
       setProductPage(1);
     } catch (error) {
       console.error('Error fetching products:', error);
-      toast.error('Failed to fetch products');
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
     } finally {
       setLoading(false);
     }
@@ -1190,6 +1198,22 @@ export default function AdminDashboard() {
       toast.error('Failed to fetch occasions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch brands
+  const fetchBrands = async () => {
+    try {
+      setBrandsLoading(true);
+      const response = await fetch('/api/admin/brands');
+      const data = await response.json();
+      if (response.ok && Array.isArray(data.brands)) {
+        setAvailableBrands(data.brands);
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+    } finally {
+      setBrandsLoading(false);
     }
   };
 
@@ -2482,7 +2506,7 @@ export default function AdminDashboard() {
                                   File: {(() => {
                                     const product = products.find(p => p._id === selectedProductIds[0]);
                                     if (product) {
-                                      const productName = product.name || product.title || 'product';
+                                      const productName = product.name || 'product';
                                       const sanitized = productName
                                         .replace(/[^a-zA-Z0-9\s-_]/g, '')
                                         .replace(/\s+/g, '-')
@@ -2513,7 +2537,7 @@ export default function AdminDashboard() {
                               if (selectedProductIds.length === 1) {
                                 const selectedProduct = products.find(p => p._id === selectedProductIds[0]);
                                 if (selectedProduct) {
-                                  params.set('filename', selectedProduct.name || selectedProduct.title || 'product');
+                                  params.set('filename', selectedProduct.name || 'product');
                                 }
                               }
                               
@@ -2534,7 +2558,7 @@ export default function AdminDashboard() {
                               if (selectedProductIds.length === 1) {
                                 const selectedProduct = products.find(p => p._id === selectedProductIds[0]);
                                 if (selectedProduct) {
-                                  const productName = selectedProduct.name || selectedProduct.title || 'product';
+                                  const productName = selectedProduct.name || 'product';
                                   const sanitized = productName
                                     .replace(/[^a-zA-Z0-9\s-_]/g, '')
                                     .replace(/\s+/g, '-')
@@ -4799,22 +4823,16 @@ export default function AdminDashboard() {
                 <select
                   value={selectedBrand}
                   onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={brandsLoading}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">All Brands</option>
-                  <option value="LeatherCraft">LeatherCraft</option>
-                  <option value="LuxuryLeather">LuxuryLeather</option>
-                  <option value="CraftLeather">CraftLeather</option>
-                  <option value="VintageLeather">VintageLeather</option>
-                  <option value="CustomCraft">CustomCraft</option>
-                  <option value="MinimalLeather">MinimalLeather</option>
-                  <option value="BohoLeather">BohoLeather</option>
-                  <option value="HandCraft">HandCraft</option>
-                  <option value="Apple">Apple</option>
-                  <option value="Samsung">Samsung</option>
-                  <option value="Nike">Nike</option>
-                  <option value="Adidas">Adidas</option>
-                  <option value="Generic">Generic</option>
+                  <option value="">{brandsLoading ? 'Loading brands...' : 'All Brands'}</option>
+                  {availableBrands.map(brand => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                  {!brandsLoading && availableBrands.length === 0 && (
+                    <option value="" disabled>No brands available</option>
+                  )}
                 </select>
                 <select
                   value={selectedOrderStatus}

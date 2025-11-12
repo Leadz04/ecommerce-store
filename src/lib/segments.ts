@@ -41,7 +41,7 @@ export async function querySegment(filter: SegmentFilter) {
   const byUserId = new Map(orders.map((o: any) => [o._id, o]));
 
   return users.filter((u: any) => {
-    const o = byUserId.get(u._id.toString());
+    const o: any = byUserId.get(u._id.toString());
     if (filter.purchased === true && !o) return false;
     if (filter.minOrders && (!o || o.orderCount < filter.minOrders)) return false;
     if (filter.categoryInterest && (!o || !String(o.lastCategory).toLowerCase().includes(filter.categoryInterest.toLowerCase()))) return false;
