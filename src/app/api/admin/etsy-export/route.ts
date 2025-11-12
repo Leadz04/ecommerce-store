@@ -5,7 +5,7 @@ import { Product } from '@/models';
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    
+
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
@@ -13,24 +13,24 @@ export async function GET(request: NextRequest) {
     const customLimit = searchParams.get('customLimit');
     const productIds = searchParams.get('productIds');
     const customFilename = searchParams.get('filename');
-    
+
     // Use custom limit if provided, otherwise use the selected limit
     const finalLimit = customLimit ? parseInt(customLimit) : limit;
-    
+
     // Validate limit bounds
     if (finalLimit < 1 || finalLimit > 1000) {
       return NextResponse.json({ error: 'Limit must be between 1 and 1000' }, { status: 400 });
     }
-    
+
     let products;
-    
+
     // Handle specific product selection
     if (productIds) {
       const ids = productIds.split(',').filter(id => id.trim());
       if (ids.length === 0) {
         return NextResponse.json({ error: 'No valid product IDs provided' }, { status: 400 });
       }
-      
+
       products = await Product.find({ _id: { $in: ids } })
         .sort({ createdAt: -1 })
         .lean();
@@ -40,18 +40,18 @@ export async function GET(request: NextRequest) {
       if (category && category !== 'all') {
         query.category = category;
       }
-      
+
       // Fetch products
       products = await Product.find(query)
         .limit(finalLimit)
         .sort({ createdAt: -1 })
         .lean();
     }
-    
+
     if (!products.length) {
       return NextResponse.json({ error: 'No products found' }, { status: 404 });
     }
-    
+
     // Convert products to Etsy CSV format
     const csvData = products.map(product => {
       // Map product fields to Etsy template columns
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
         Tags: product.tags?.join(', ') || '',
         Materials: product.materials?.join(', ') || 'Leather',
         'Production partners': '',
-        Section: product.category || 'Accessories',
+        Section: 'Real leather jacket',
         Price: product.price?.toString() || '0',
         Quantity: product.stock?.toString() || '1',
         SKU: product.sku || '',
@@ -103,15 +103,15 @@ export async function GET(request: NextRequest) {
         'Digital file 4': '',
         'Digital file 5': ''
       };
-      
+
       return etsyProduct;
     });
-    
+
     // Convert to CSV
     const headers = Object.keys(csvData[0]);
     const csvContent = [
       headers.join(','),
-      ...csvData.map(row => 
+      ...csvData.map(row =>
         headers.map(header => {
           const value = row[header as keyof typeof row] || '';
           // Escape commas and quotes in CSV
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
         }).join(',')
       )
     ].join('\n');
-    
+
     // Generate filename
     let filename = 'etsy-products-export';
     if (customFilename) {
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
     } else {
       filename = `etsy-products-export-${new Date().toISOString().split('T')[0]}`;
     }
-    
+
     // Return CSV file
     return new NextResponse(csvContent, {
       status: 200,
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}.csv"`
       }
     });
-    
+
   } catch (error) {
     console.error('Etsy export error:', error);
     return NextResponse.json({ error: 'Failed to export products' }, { status: 500 });

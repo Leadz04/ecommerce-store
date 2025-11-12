@@ -1119,37 +1119,29 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication token missing');
-      }
-
-      const pageSize = 250;
-      let currentPage = 1;
-      let totalPages = 1;
-      const aggregatedProducts: any[] = [];
-
-      while (currentPage <= totalPages) {
-        const response = await fetch(`/api/admin/products?page=${currentPage}&limit=${pageSize}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+      // Fetch all pages from the API to include every product
+      const perPage = 500; // API allows up to 1000; use 500 to keep responses reasonable
+      let page = 1;
+      let all: any[] = [];
+      let safety = 0;
+      while (true) {
+        const res = await fetch(`/api/admin/products?page=${page}&limit=${perPage}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
         });
-
-        if (!response.ok) {
-          const errorBody = await response.text().catch(() => '');
-          throw new Error(errorBody || `Failed to fetch products (page ${currentPage})`);
+        if (!res.ok) {
+          const err = await res.text().catch(() => '');
+          throw new Error(`Failed to fetch products (page ${page}): ${res.status} ${err}`);
         }
-
-        const data = await response.json().catch(() => ({}));
-        const pageProducts = Array.isArray(data.products) ? data.products : [];
-        aggregatedProducts.push(...pageProducts);
-
-        const pagination = data.pagination || {};
-        totalPages = Number.isFinite(pagination.totalPages) && pagination.totalPages > 0 ? pagination.totalPages : 1;
-        currentPage += 1;
+        const json = await res.json();
+        const items = Array.isArray(json.products) ? json.products : [];
+        all = all.concat(items);
+        const hasNext = !!json?.pagination?.hasNext;
+        if (!hasNext) break;
+        page += 1;
+        safety += 1;
+        if (safety > 50) break; // hard stop to avoid infinite loops
       }
-
-      setProducts(aggregatedProducts);
+      setProducts(all);
       setProductPage(1);
     } catch (error) {
       console.error('Error fetching products:', error);
