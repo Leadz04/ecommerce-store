@@ -57,18 +57,22 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
   const listingData = {
     title: product.name,
     description: product.description,
-    price: Math.round(product.price * 100), // Convert to cents
+    price: {
+      amount: Math.round(product.price * 100), // Convert to cents
+      divisor: 100,
+      currency_code: 'USD' as const
+    },
     quantity: product.stockCount || 1,
     tags: product.tags || [],
     materials: product.specifications?.materials || [],
-    who_made: 'i_did',
-    when_made: 'made_to_order',
+    who_made: 'i_did' as const,
+    when_made: 'made_to_order' as const,
     is_supply: false,
     is_customizable: true,
     is_digital: false,
     has_variations: product.variants && product.variants.length > 0,
     should_auto_renew: true,
-    language: 'en',
+    language: 'en' as const,
     is_private: false,
   };
 
@@ -120,7 +124,11 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
   const listingData = {
     title: product.name,
     description: product.description,
-    price: Math.round(product.price * 100), // Convert to cents
+    price: {
+      amount: Math.round(product.price * 100), // Convert to cents
+      divisor: 100,
+      currency_code: 'USD' as const
+    },
     quantity: product.stockCount || 1,
     tags: product.tags || [],
     materials: product.specifications?.materials || [],

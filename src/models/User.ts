@@ -18,7 +18,7 @@ export interface IUser extends Document {
     country: string;
     phone?: string;
   };
-  role: mongoose.Types.ObjectId;
+  role: string;
   permissions: string[];
   isEmailVerified: boolean;
   wishlist?: string[];
@@ -76,7 +76,7 @@ const UserSchema = new Schema<IUser>({
     phone: { type: String, trim: true }
   },
   role: {
-    type: Schema.Types.ObjectId,
+    type: String,
     ref: 'Role',
     required: true
   },
@@ -88,7 +88,7 @@ const UserSchema = new Schema<IUser>({
     type: Boolean,
     default: false
   },
-  wishlist: [{ type: Schema.Types.ObjectId, ref: 'Product', index: true }],
+  wishlist: [{ type: String, ref: 'Product', index: true }],
   settings: {
     emailNotifications: { type: Boolean, default: true },
     smsNotifications: { type: Boolean, default: false }

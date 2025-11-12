@@ -297,7 +297,7 @@ export default function Header() {
 
       {/* Cart Sidebar */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
             onClick={() => setIsCartOpen(false)}
@@ -317,7 +317,7 @@ export default function Header() {
                 </button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 p-4">
                 {!isMounted ? (
                   <p className="text-gray-500 text-center py-8">Loading...</p>
                 ) : items.length === 0 ? (

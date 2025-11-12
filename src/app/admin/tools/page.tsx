@@ -106,7 +106,7 @@ export default function AdminToolsPage() {
   };
 
   const authorizedFetch = async (url: string, options: RequestInit = {}) => {
-    const headers: HeadersInit = options.headers ? { ...options.headers } : {};
+    const headers: Record<string, string> = options.headers ? { ...(options.headers as Record<string, string>) } : {};
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) {

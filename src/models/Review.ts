@@ -2,8 +2,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IReview extends Document {
   _id: string;
-  productId: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
+  productId: string;
+  userId: string;
   userName: string;
   userEmail: string;
   rating: number; // 1-5
@@ -11,12 +11,12 @@ export interface IReview extends Document {
   comment: string;
   verifiedPurchase: boolean;
   helpfulCount: number;
-  helpfulUsers: mongoose.Types.ObjectId[];
+  helpfulUsers: string[];
   images?: string[];
   status: 'pending' | 'approved' | 'rejected';
   adminResponse?: {
     message: string;
-    respondedBy: mongoose.Types.ObjectId;
+    respondedBy: string;
     respondedAt: Date;
   };
   createdAt: Date;
@@ -26,13 +26,13 @@ export interface IReview extends Document {
 const ReviewSchema = new Schema<IReview>(
   {
     productId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: 'Product',
       required: [true, 'Product ID is required'],
       index: true,
     },
     userId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: 'User',
       required: [true, 'User ID is required'],
       index: true,
@@ -76,7 +76,7 @@ const ReviewSchema = new Schema<IReview>(
       min: 0,
     },
     helpfulUsers: [{
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: 'User',
     }],
     images: [{
@@ -94,7 +94,7 @@ const ReviewSchema = new Schema<IReview>(
         maxlength: [1000, 'Admin response cannot be more than 1000 characters'],
       },
       respondedBy: {
-        type: Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
       },
       respondedAt: {

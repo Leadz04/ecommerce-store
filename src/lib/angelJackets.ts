@@ -36,7 +36,7 @@ export function extractCategoryLinks(html: string, baseUrl: string): CategoryLin
   const menBlocks = $("*:contains('Men')").filter((_, el) => /\bMen\b/i.test($(el).text())).toArray();
   const womenBlocks = $("*:contains('Women')").filter((_, el) => /\bWomen\b/i.test($(el).text())).toArray();
 
-  const scan = (nodes: cheerio.Element[], section: 'Men' | 'Women') => {
+  const scan = (nodes: any[], section: 'Men' | 'Women') => {
     for (const n of nodes) {
       const scope = $(n).closest('nav, .menu, .dropdown, .flyout, .mega, ul, .container').first().length ? $(n).closest('nav, .menu, .dropdown, .flyout, .mega, ul, .container').first() : $(n).parent();
       scope.find('a').each((_, a) => {

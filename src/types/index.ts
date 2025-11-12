@@ -3,6 +3,7 @@ export interface Product {
   id?: string; // For backward compatibility
   name: string;
   description: string;
+  descriptionHtml?: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -15,6 +16,8 @@ export interface Product {
   stockCount: number;
   tags: string[];
   specifications?: Record<string, string>;
+  status?: string;
+  productType?: string;
 }
 
 export interface CartItem {

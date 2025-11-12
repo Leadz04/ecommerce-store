@@ -45,7 +45,7 @@ export async function PUT(
     const userId = user.userId;
     const isHelpful = helpful === true;
     const hasMarkedHelpful = review.helpfulUsers.some(
-      (id) => id.toString() === userId
+      (id: any) => id.toString() === userId
     );
 
     if (isHelpful && !hasMarkedHelpful) {
@@ -55,7 +55,7 @@ export async function PUT(
     } else if (!isHelpful && hasMarkedHelpful) {
       // Remove helpful vote
       review.helpfulUsers = review.helpfulUsers.filter(
-        (id) => id.toString() !== userId
+        (id: any) => id.toString() !== userId
       );
       review.helpfulCount = Math.max(0, review.helpfulCount - 1);
     }

@@ -1,4 +1,5 @@
-'use client';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 import Link from 'next/link';
 import connectDB from '@/lib/mongodb';
@@ -7,7 +8,7 @@ import Blog from '@/models/Blog';
 async function getBlogs() {
   await connectDB();
   const now = new Date();
-  const blogs = await Blog.find({
+  const blogs = await (Blog as any).find({
     isActive: true,
     status: 'published',
     $or: [

@@ -1,9 +1,12 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
+const MONGODB_URI = process.env.MONGODB_URI || '';
 
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+// Allow build to proceed without MongoDB connection
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
+
+if (!MONGODB_URI && !isBuildTime) {
+  console.warn('⚠️  MONGODB_URI is not defined. Database operations will fail.');
 }
 
 /**
@@ -28,6 +31,12 @@ if (!global.mongoose) {
 }
 
 async function connectDB() {
+  // Skip connection during build phase
+  if (isBuildTime || !MONGODB_URI) {
+    console.warn('⚠️  Skipping MongoDB connection (build time or no URI)');
+    return null as any;
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
@@ -35,9 +44,15 @@ async function connectDB() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 5000, // Fail fast
+      socketTimeoutMS: 10000,
     } as const;
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts);
+    cached.promise = mongoose.connect(MONGODB_URI, opts).catch((err) => {
+      cached.promise = null;
+      console.error('MongoDB connection error:', err.message);
+      throw err;
+    });
   }
 
   try {
