@@ -8,9 +8,13 @@ import { applyDeduplication } from '@/lib/deduplication';
 
 // GET /api/admin/users - Get all users with pagination and filtering
 export async function GET(request: NextRequest) {
+  console.log('[API /admin/users] GET request received');
   try {
+    console.log('[API /admin/users] Verifying permissions...');
     const user = await requirePermission(PERMISSIONS.USER_VIEW)(request);
+    console.log('[API /admin/users] Permission verified, connecting to database...');
     await connectDB();
+    console.log('[API /admin/users] Database connected');
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -18,6 +22,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const role = searchParams.get('role') || '';
     const status = searchParams.get('status') || '';
+
+    console.log('[API /admin/users] Query params:', { page, limit, search, role, status });
 
     // Build query
     const query: any = {};
@@ -42,6 +48,8 @@ export async function GET(request: NextRequest) {
       query.isActive = false;
     }
 
+    console.log('[API /admin/users] Executing query:', JSON.stringify(query));
+
     // Get users with pagination
     const skip = (page - 1) * limit;
     const usersRaw = await User.find(query)
@@ -51,11 +59,24 @@ export async function GET(request: NextRequest) {
       .skip(skip)
       .limit(limit);
 
+    console.log('[API /admin/users] Found', usersRaw.length, 'users (before deduplication)');
+    
+    // Check for null roles
+    const usersWithNullRoles = usersRaw.filter(u => !u.role);
+    if (usersWithNullRoles.length > 0) {
+      console.warn('[API /admin/users] WARNING:', usersWithNullRoles.length, 'users have null roles');
+      console.warn('[API /admin/users] Users with null roles:', usersWithNullRoles.map(u => ({ id: u._id, email: u.email })));
+    }
+
     // Apply deduplication to ensure unique users
     const users = applyDeduplication(usersRaw, 'users');
 
+    console.log('[API /admin/users] After deduplication:', users.length, 'users');
+
     const total = await User.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
+
+    console.log('[API /admin/users] Success - Returning', users.length, 'users');
 
     return NextResponse.json({
       users,
@@ -70,7 +91,11 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Get users error:', error);
+    console.error('❌ [API /admin/users] Get users error:', error);
+    if (error instanceof Error) {
+      console.error('[API /admin/users] Error message:', error.message);
+      console.error('[API /admin/users] Error stack:', error.stack);
+    }
     if (error instanceof Error) {
       if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

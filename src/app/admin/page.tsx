@@ -1470,7 +1470,7 @@ export default function AdminDashboard() {
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = !selectedRole || user.role.name === selectedRole;
+    const matchesRole = !selectedRole || user.role?.name === selectedRole;
     return matchesSearch && matchesRole;
   });
 
@@ -4538,7 +4538,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {user.role.name}
+                            {user.role?.name || 'N/A'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -4837,10 +4837,10 @@ export default function AdminDashboard() {
                     {products
                       .filter(product => {
                         const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                                             product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                             product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                         const matchesCategory = !selectedCategory || product.category === selectedCategory;
-                        const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                        const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
                         return matchesSearch && matchesCategory && matchesBrand;
                       })
                       .slice((productPage - 1) * productPerPage, productPage * productPerPage)
@@ -4860,24 +4860,24 @@ export default function AdminDashboard() {
                                 {product.name}
                               </div>
                               <div className="text-sm text-gray-600 truncate max-w-xs">
-                                {product.description}
+                                {product.description || 'No description'}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-5 text-gray-700 whitespace-nowrap">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
-                            {product.category}
+                            {product.category || 'N/A'}
                           </span>
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap text-sm font-medium text-gray-700">
-                          {product.brand}
+                          {product.brand || 'N/A'}
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap text-sm">
                           <div className="flex items-center">
                             <DollarSign className="h-4 w-4 text-green-500 mr-1" />
-                            <span className="font-semibold text-gray-900">${product.price.toFixed(2)}</span>
-                            {product.originalPrice && product.originalPrice > product.price && (
+                            <span className="font-semibold text-gray-900">${(product.price ?? 0).toFixed(2)}</span>
+                            {product.originalPrice && product.originalPrice > (product.price ?? 0) && (
                               <span className="ml-2 text-sm text-gray-500 line-through">
                                 ${product.originalPrice.toFixed(2)}
                               </span>
@@ -4958,10 +4958,10 @@ export default function AdminDashboard() {
                   {(() => {
                     const filteredCount = products.filter(product => {
                       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                        product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                       const matchesCategory = !selectedCategory || product.category === selectedCategory;
-                      const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                      const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
                       return matchesSearch && matchesCategory && matchesBrand;
                     }).length;
                     const start = (productPage - 1) * productPerPage + 1;
@@ -5101,8 +5101,8 @@ export default function AdminDashboard() {
                     {orders
                       .filter(order => {
                         const matchesSearch = order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             order.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             order.user.email.toLowerCase().includes(searchTerm.toLowerCase());
+                                             order.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                             order.user?.email?.toLowerCase().includes(searchTerm.toLowerCase());
                         const matchesStatus = !selectedOrderStatus || order.status === selectedOrderStatus;
                         return matchesSearch && matchesStatus;
                       })
@@ -5116,8 +5116,8 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{order.user.name}</div>
-                            <div className="text-sm text-gray-500">{order.user.email}</div>
+                            <div className="text-sm font-medium text-gray-900">{order.user?.name || 'N/A'}</div>
+                            <div className="text-sm text-gray-500">{order.user?.email || 'N/A'}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
