@@ -700,7 +700,266 @@ export default function SourcingPanel() {
 
   return (
     <div className="space-y-8">
-      {/* ... Rest of JSX will continue in next part due to character limit ... */}
+      {/* Sourcing Panel Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Product Sourcing Panel</h2>
+        <p className="text-gray-600 mb-6">
+          Import products from external sources by URL or browse saved sourced products.
+        </p>
+
+        {/* Import by URL Section */}
+        <div className="space-y-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Link2 className="inline h-4 w-4 mr-2" />
+                Product URL
+              </label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/product-page"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="pt-6">
+              <button
+                onClick={importUrl}
+                disabled={loading || !url}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <Download className="h-4 w-4" />
+                <span>{loading ? 'Importing...' : 'Import'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Saved Products Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Saved Sourced Products</h3>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => fetchSaved(1)}
+                disabled={savedLoading}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center space-x-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${savedLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+              <select
+                value={savedViewMode}
+                onChange={(e) => setSavedViewMode(e.target.value as 'list' | 'brands')}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="brands">Group by Brand</option>
+                <option value="list">List View</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Search */}
+          <input
+            type="text"
+            value={savedQuery}
+            onChange={(e) => setSavedQuery(e.target.value)}
+            placeholder="Search saved products..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <div className="p-6">
+          {savedLoading ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="text-gray-600 mt-4">Loading saved products...</p>
+            </div>
+          ) : savedItems.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No saved products found</p>
+              <p className="text-gray-400 mt-2">Import products using the URL field above</p>
+            </div>
+          ) : savedViewMode === 'brands' ? (
+            <div className="space-y-6">
+              {savedBrands.map((brand) => (
+                <div key={brand} className="border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => {
+                      const isExpanded = expandedBrands[brand];
+                      setExpandedBrands({ ...expandedBrands, [brand]: !isExpanded });
+                      if (!isExpanded && !savedGroupedByBrand[brand]) {
+                        fetchSaved(1, brand);
+                      }
+                    }}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <h4 className="font-semibold text-gray-900">{brand}</h4>
+                      <span className="text-sm text-gray-500">({savedBrandCounts[brand] || 0} items)</span>
+                    </div>
+                    <span className="text-gray-400">{expandedBrands[brand] ? '▼' : '▶'}</span>
+                  </button>
+                  
+                  {expandedBrands[brand] && (
+                    <div className="p-4 bg-gray-50 border-t border-gray-200">
+                      {loadingBrands[brand] ? (
+                        <div className="text-center py-8">
+                          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {(savedGroupedByBrand[brand] || []).map((item) => (
+                            <div
+                              key={item._id}
+                              onClick={() => setSavedSelected(item)}
+                              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow"
+                            >
+                              {item.images && item.images[0] && (
+                                <img
+                                  src={item.images[0]}
+                                  alt={item.title}
+                                  className="w-full h-40 object-cover rounded-lg mb-3"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/placeholder-product.svg';
+                                  }}
+                                />
+                              )}
+                              <h5 className="font-medium text-gray-900 text-sm line-clamp-2 mb-2">
+                                {item.title}
+                              </h5>
+                              {item.price && (
+                                <p className="text-blue-600 font-semibold">${item.price}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {savedItems.map((item) => (
+                <div
+                  key={item._id}
+                  onClick={() => setSavedSelected(item)}
+                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow"
+                >
+                  {item.images && item.images[0] && (
+                    <img
+                      src={item.images[0]}
+                      alt={item.title}
+                      className="w-full h-40 object-cover rounded-lg mb-3"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder-product.svg';
+                      }}
+                    />
+                  )}
+                  <h5 className="font-medium text-gray-900 text-sm line-clamp-2 mb-2">
+                    {item.title}
+                  </h5>
+                  {item.price && (
+                    <p className="text-blue-600 font-semibold">${item.price}</p>
+                  )}
+                  {item.brand && (
+                    <p className="text-gray-500 text-xs mt-1">{item.brand}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {savedPages > 1 && (
+            <div className="mt-6 flex items-center justify-center space-x-2">
+              <button
+                onClick={() => fetchSaved(savedPage - 1)}
+                disabled={savedPage === 1 || savedLoading}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-gray-600">
+                Page {savedPage} of {savedPages}
+              </span>
+              <button
+                onClick={() => fetchSaved(savedPage + 1)}
+                disabled={savedPage === savedPages || savedLoading}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Product Detail Modal */}
+      {savedSelected && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-gray-900">Product Details</h3>
+              <button
+                onClick={() => setSavedSelected(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  {filteredSavedImages.length > 0 && (
+                    <img
+                      src={filteredSavedImages[0]}
+                      alt={savedSelected.title}
+                      className="w-full h-64 object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder-product.svg';
+                      }}
+                    />
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">{savedSelected.title}</h4>
+                  {savedSelected.price && (
+                    <p className="text-2xl font-bold text-blue-600 mb-4">${savedSelected.price}</p>
+                  )}
+                  {savedSelected.description && (
+                    <div className="mb-4">
+                      <h5 className="font-medium text-gray-700 mb-2">Description:</h5>
+                      <p className="text-gray-600 text-sm">{savedSelected.description}</p>
+                    </div>
+                  )}
+                  {savedSelected.brand && (
+                    <p className="text-gray-600 mb-2">
+                      <span className="font-medium">Brand:</span> {savedSelected.brand}
+                    </p>
+                  )}
+                  {savedSelected.sourceUrl && (
+                    <a
+                      href={savedSelected.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm flex items-center space-x-1"
+                    >
+                      <Link2 className="h-4 w-4" />
+                      <span>View Original</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

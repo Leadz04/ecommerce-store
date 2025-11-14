@@ -40,10 +40,14 @@ async function generateOrderNumber(): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
+  console.log('[API /orders] GET request received');
   try {
+    console.log('[API /orders] Connecting to database...');
     await connectDB();
+    console.log('[API /orders] Database connected');
     
     const userId = await verifyToken(request);
+    console.log('[API /orders] Fetching orders for user:', userId);
     
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -71,17 +75,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Execute query
+    console.log('[API /orders] Executing query:', JSON.stringify(query));
     const ordersRaw = await Order.find(query)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .lean();
 
+    console.log('[API /orders] Found', ordersRaw.length, 'orders (before deduplication)');
+    
     // Apply deduplication to ensure unique orders
     const orders = applyDeduplication(ordersRaw, 'orders');
+    console.log('[API /orders] After deduplication:', orders.length, 'orders');
 
     const total = await Order.countDocuments(query);
+    console.log('[API /orders] Total order count:', total);
 
+    console.log('✅ [API /orders] Success - Returning', orders.length, 'orders');
     return NextResponse.json({
       orders,
       pagination: {
@@ -93,7 +103,11 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Orders fetch error:', error);
+    console.error('❌ [API /orders] Error:', error);
+    if (error instanceof Error) {
+      console.error('[API /orders] Error message:', error.message);
+      console.error('[API /orders] Error stack:', error.stack);
+    }
     if (error instanceof Error && error.message === 'No token provided') {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -101,7 +115,7 @@ export async function GET(request: NextRequest) {
       );
     }
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

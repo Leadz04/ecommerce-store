@@ -423,29 +423,29 @@ export default function OrdersPage() {
                       <div>
                         <h4 className="text-lg font-bold text-gray-900 mb-6">Order Items</h4>
                         <div className="space-y-4">
-                          {order.items.map((item, index) => (
+                          {order.items?.filter(item => item != null).map((item, index) => (
                             <div key={index} className="flex items-center space-x-4 p-4 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
                               <div className="relative w-20 h-20 flex-shrink-0">
                                 <Image
-                                  src={(item.image as string) || '/placeholder-product.jpg'}
-                                  alt={(item.name as string) || 'Product image'}
+                                  src={(item?.image as string) || '/placeholder-product.jpg'}
+                                  alt={(item?.name as string) || 'Product image'}
                                   fill
                                   className="object-cover rounded-lg"
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h5 className="text-base font-semibold text-gray-900 truncate">
-                                  {item.name}
+                                  {item?.name || 'Product'}
                                 </h5>
                                 <p className="text-sm text-gray-600 font-medium">
-                                  Quantity: {item.quantity}
+                                  Quantity: {item?.quantity || 0}
                                 </p>
-                                {item.size && (
+                                {item?.size && (
                                   <p className="text-sm text-gray-600 font-medium">
                                     Size: {item.size}
                                   </p>
                                 )}
-                                {item.color && (
+                                {item?.color && (
                                   <p className="text-sm text-gray-600 font-medium">
                                     Color: {item.color}
                                   </p>
@@ -453,11 +453,11 @@ export default function OrdersPage() {
                               </div>
                               <div className="text-right">
                                 <p className="text-base font-bold text-gray-900">
-                                  ${(item.price ?? 0).toFixed(2)}
+                                  ${(item?.price ?? 0).toFixed(2)}
                                 </p>
                               </div>
                             </div>
-                          ))}
+                          )) || []}
                         </div>
                       </div>
 
