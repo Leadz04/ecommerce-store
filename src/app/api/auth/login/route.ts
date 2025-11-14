@@ -6,10 +6,14 @@ import jwt from 'jsonwebtoken';
 import { User, Role } from '@/models';
 
 export async function POST(request: NextRequest) {
+  console.log('[API /auth/login] Login attempt received');
   try {
+    console.log('[API /auth/login] Connecting to database...');
     await connectDB();
+    console.log('[API /auth/login] Database connected');
     
     const { email, password } = await request.json();
+    console.log('[API /auth/login] Attempting login for email:', email);
 
     // Validate required fields
     if (!email || !password) {
@@ -61,9 +65,11 @@ export async function POST(request: NextRequest) {
     // Reset login attempts on successful login
     await user.resetLoginAttempts();
     
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    // Update last login (use updateOne to avoid validation issues with populated fields)
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { lastLogin: new Date() } }
+    );
 
     // Get user permissions (from role or direct permissions)
     const permissions = user.role && (user.role as any).permissions 
@@ -82,6 +88,7 @@ export async function POST(request: NextRequest) {
       { expiresIn: '7d' }
     );
 
+    console.log('✅ [API /auth/login] Login successful for:', email);
     return NextResponse.json({
       message: 'Login successful',
       user: {
@@ -102,7 +109,11 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ [API /auth/login] Login error:', error);
+    if (error instanceof Error) {
+      console.error('[API /auth/login] Error message:', error.message);
+      console.error('[API /auth/login] Error stack:', error.stack);
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

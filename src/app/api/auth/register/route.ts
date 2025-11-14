@@ -5,10 +5,14 @@ import Role from '@/models/Role';
 import jwt from 'jsonwebtoken';
 
 export async function POST(request: NextRequest) {
+  console.log('[API /auth/register] Registration attempt received');
   try {
+    console.log('[API /auth/register] Connecting to database...');
     await connectDB();
+    console.log('[API /auth/register] Database connected');
     
     const { name, email, password, phone } = await request.json();
+    console.log('[API /auth/register] Attempting registration for email:', email);
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -28,11 +32,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get CUSTOMER role (default for new users)
+    console.log('[API /auth/register] Looking for CUSTOMER role...');
     let customerRole = await Role.findOne({ name: 'CUSTOMER' });
     
     // If CUSTOMER role doesn't exist, create it
     if (!customerRole) {
-      console.log('CUSTOMER role not found, creating it...');
+      console.log('[API /auth/register] CUSTOMER role not found, creating it...');
       customerRole = new Role({
         name: 'CUSTOMER',
         description: 'Customer access with limited permissions',
@@ -40,7 +45,9 @@ export async function POST(request: NextRequest) {
         isActive: true
       });
       await customerRole.save();
-      console.log('CUSTOMER role created successfully');
+      console.log('✅ [API /auth/register] CUSTOMER role created successfully');
+    } else {
+      console.log('[API /auth/register] CUSTOMER role found:', customerRole._id);
     }
 
     // Create new user with CUSTOMER role
@@ -60,7 +67,9 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    console.log('[API /auth/register] Saving new user...');
     await user.save();
+    console.log('✅ [API /auth/register] User saved successfully');
 
     // Get user with populated role for response
     const userWithRole = await User.findById(user._id)
@@ -97,7 +106,11 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ [API /auth/register] Registration error:', error);
+    if (error instanceof Error) {
+      console.error('[API /auth/register] Error message:', error.message);
+      console.error('[API /auth/register] Error stack:', error.stack);
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

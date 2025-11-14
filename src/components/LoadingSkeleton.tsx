@@ -52,33 +52,6 @@ export function OrderCardSkeleton() {
   );
 }
 
-export function OccasionCardSkeleton() {
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3">
-          <Skeleton className="w-12 h-12 rounded-full" />
-          <div className="flex-1">
-            <div className="flex items-center space-x-2 mb-2">
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-6 w-16 rounded-full" />
-            </div>
-            <Skeleton className="h-4 w-64 mb-3" />
-            <div className="flex items-center space-x-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-28" />
-            </div>
-          </div>
-        </div>
-        <Skeleton className="h-5 w-5" />
-      </div>
-      <div className="mt-4 flex justify-end">
-        <Skeleton className="h-8 w-24" />
-      </div>
-    </div>
-  );
-}
-
 export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
