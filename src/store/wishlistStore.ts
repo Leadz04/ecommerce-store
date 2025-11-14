@@ -16,8 +16,6 @@ interface WishlistStore {
   clearError: () => void;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 export const useWishlistStore = create<WishlistStore>((set, get) => ({
   items: [],
   isLoading: false,
@@ -28,7 +26,8 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) throw new Error('No authentication token');
-      const response = await fetch(`${API_BASE_URL}/api/users/wishlist`, {
+      console.log('[WishlistStore] Fetching wishlist');
+      const response = await fetch(`/api/users/wishlist`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -44,7 +43,8 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) throw new Error('No authentication token');
-      const response = await fetch(`${API_BASE_URL}/api/users/wishlist`, {
+      console.log('[WishlistStore] Adding to wishlist:', productId);
+      const response = await fetch(`/api/users/wishlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ productId })
@@ -70,7 +70,8 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) throw new Error('No authentication token');
-      const response = await fetch(`${API_BASE_URL}/api/users/wishlist?productId=${productId}`, {
+      console.log('[WishlistStore] Removing from wishlist:', productId);
+      const response = await fetch(`/api/users/wishlist?productId=${productId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

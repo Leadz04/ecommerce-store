@@ -10,8 +10,6 @@ interface PaymentStore {
   clearError: () => void;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 export const usePaymentStore = create<PaymentStore>((set, get) => ({
   isLoading: false,
   error: null,
@@ -26,7 +24,8 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/payments/create-payment-intent`, {
+      console.log('[PaymentStore] Creating payment intent for order:', orderId);
+      const response = await fetch(`/api/payments/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

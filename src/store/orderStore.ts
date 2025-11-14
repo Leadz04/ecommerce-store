@@ -46,8 +46,6 @@ interface OrderStore {
   clearError: () => void;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 export const useOrderStore = create<OrderStore>((set, get) => ({
   orders: [],
   currentOrder: null,
@@ -85,7 +83,8 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         searchParams.set('dateRange', params.dateRange);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/orders?${searchParams.toString()}`, {
+      console.log('[OrderStore] Fetching orders:', searchParams.toString());
+      const response = await fetch(`/api/orders?${searchParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -121,7 +120,8 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/orders/${id}`, {
+      console.log('[OrderStore] Fetching order:', id);
+      const response = await fetch(`/api/orders/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -156,7 +156,8 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+      console.log('[OrderStore] Creating order');
+      const response = await fetch(`/api/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,7 +202,8 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         throw new Error('No authentication token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/orders/${id}`, {
+      console.log('[OrderStore] Updating order:', id);
+      const response = await fetch(`/api/orders/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

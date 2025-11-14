@@ -43,8 +43,6 @@ interface ProductStore {
   clearError: () => void;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 export const useProductStore = create<ProductStore>((set, get) => ({
   products: [],
   currentProduct: null,
@@ -119,12 +117,18 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         searchParams.set('collection', effectiveCollection);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/products?${searchParams.toString()}`);
+      console.log('[ProductStore] Fetching products:', searchParams.toString());
+      const response = await fetch(`/api/products?${searchParams.toString()}`);
+      
+      console.log('[ProductStore] Response status:', response.status);
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('[ProductStore] Error fetching products:', data.error);
         throw new Error(data.error || 'Failed to fetch products');
       }
+      
+      console.log('[ProductStore] Successfully fetched', data.products?.length, 'products');
 
       set({
         products: data.products,
@@ -145,12 +149,16 @@ export const useProductStore = create<ProductStore>((set, get) => ({
     set({ isLoading: true, error: null, currentProduct: null });
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products/${id}`);
+      console.log('[ProductStore] Fetching product:', id);
+      const response = await fetch(`/api/products/${id}`);
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('[ProductStore] Error fetching product:', data.error);
         throw new Error(data.error || 'Failed to fetch product');
       }
+      
+      console.log('[ProductStore] Successfully fetched product:', data.product?.name);
 
       set({
         currentProduct: data.product,

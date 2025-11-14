@@ -4,10 +4,14 @@ import Product from '@/models/Product';
 import { applyDeduplication } from '@/lib/deduplication';
 
 export async function GET(request: NextRequest) {
+  console.log('[API /products] GET request received');
   try {
+    console.log('[API /products] Connecting to database...');
     await connectDB();
+    console.log('[API /products] Database connected successfully');
     
     const { searchParams } = new URL(request.url);
+    console.log('[API /products] Search params:', searchParams.toString());
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '12');
     const category = searchParams.get('category');
@@ -100,22 +104,28 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    console.log('[API /products] Executing query:', JSON.stringify(query));
     const productsRaw = await Product.find(query)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .lean();
 
+    console.log('[API /products] Found', productsRaw.length, 'products (before deduplication)');
+    
     // Apply deduplication to ensure unique products
     const products = applyDeduplication(productsRaw, 'products');
+    console.log('[API /products] After deduplication:', products.length, 'products');
 
     const total = await Product.countDocuments(query);
+    console.log('[API /products] Total count:', total);
 
     const [categories, brands] = await Promise.all([
       Product.distinct('category', { isActive: true }),
       Product.distinct('brand', { isActive: true })
     ]);
 
+    console.log('[API /products] Success - Returning', products.length, 'products');
     return NextResponse.json({
       products,
       pagination: {
@@ -128,9 +138,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Products fetch error:', error);
+    console.error('❌ [API /products] Error:', error);
+    console.error('[API /products] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

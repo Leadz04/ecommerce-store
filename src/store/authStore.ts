@@ -13,8 +13,6 @@ interface AuthStore extends AuthState {
   verifyToken: () => Promise<void>;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
@@ -27,7 +25,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          console.log('[AuthStore] Attempting login for:', credentials.email);
+          const response = await fetch(`/api/auth/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -35,12 +34,15 @@ export const useAuthStore = create<AuthStore>()(
             body: JSON.stringify(credentials),
           });
 
+          console.log('[AuthStore] Login response status:', response.status);
           const data = await response.json();
 
           if (!response.ok) {
+            console.error('[AuthStore] Login failed:', data.error);
             throw new Error(data.error || 'Login failed');
           }
 
+          console.log('[AuthStore] Login successful for:', data.user.email);
           // Store token in localStorage
           localStorage.setItem('token', data.token);
 
@@ -64,7 +66,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+          console.log('[AuthStore] Attempting registration for:', credentials.email);
+          const response = await fetch(`/api/auth/register`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -121,7 +124,8 @@ export const useAuthStore = create<AuthStore>()(
             throw new Error('No authentication token');
           }
 
-          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          console.log('[AuthStore] Updating user profile');
+          const response = await fetch(`/api/auth/me`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -164,7 +168,8 @@ export const useAuthStore = create<AuthStore>()(
         }
 
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          console.log('[AuthStore] Verifying token');
+          const response = await fetch(`/api/auth/me`, {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
