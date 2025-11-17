@@ -27,7 +27,32 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    if (showFilters) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showFilters]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setShowFilters(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const categories = ['all', 'Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'];
+  const currentPriceRange = filters.priceRange || [0, 1000];
 
   // Initialize from URL params
   useEffect(() => {
@@ -122,6 +147,13 @@ export default function ProductsPage() {
     fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
   };
 
+  const handleClearAllFiltersClick = () => {
+    clearAllFilters();
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setShowFilters(false);
+    }
+  };
+
   // Check if there are any active filters
   const hasActiveFilters = () => {
     return (
@@ -131,6 +163,81 @@ export default function ProductsPage() {
       filters.inStock !== null
     );
   };
+
+  const activeFilterCount = [
+    filters.search && filters.search.trim() !== '',
+    filters.category && filters.category !== 'all',
+    filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000),
+    filters.inStock !== null
+  ].filter(Boolean).length;
+
+  const FiltersContent = () => (
+    <>
+      <div className="mb-6">
+        <h4 className="font-medium mb-3 text-gray-900">Category</h4>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+          {categories.map((category) => (
+            <label key={category} className="flex items-center text-gray-700 text-sm">
+              <input
+                type="radio"
+                name="category"
+                value={category}
+                checked={filters.category === category}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="mr-2 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="capitalize">{category}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h4 className="font-medium mb-3 text-gray-900">Availability</h4>
+        <label className="flex items-center text-gray-700 text-sm">
+          <input
+            type="checkbox"
+            checked={filters.inStock === true}
+            onChange={(e) => {
+              const nextInStock = e.target.checked ? true : null;
+              setFilters({ inStock: nextInStock });
+              updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
+              fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1 });
+            }}
+            className="mr-2 text-blue-600 focus:ring-blue-500"
+          />
+          In stock only
+        </label>
+      </div>
+
+      <div className="mb-6">
+        <h4 className="font-medium mb-3 text-gray-900">Price Range</h4>
+        <div className="space-y-2">
+          <input
+            type="range"
+            min="0"
+            max="1000"
+            value={currentPriceRange[1]}
+            onChange={(e) => handlePriceRangeChange([currentPriceRange[0], parseInt(e.target.value, 10)])}
+            className="w-full accent-blue-600"
+          />
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>${currentPriceRange[0]}</span>
+            <span>${currentPriceRange[1]}</span>
+          </div>
+        </div>
+      </div>
+
+      {hasActiveFilters() && (
+        <button
+          onClick={handleClearAllFiltersClick}
+          className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
+        >
+          Clear All Filters
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-screen">
@@ -217,87 +324,49 @@ export default function ProductsPage() {
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="lg:hidden flex items-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
+              aria-expanded={showFilters}
+              aria-controls="mobile-filter-drawer"
             >
               <SlidersHorizontal className="h-5 w-5" />
-              <span>Filters</span>
+              <span>
+                Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+              </span>
             </button>
           </div>
 
+          {showFilters && (
+            <div className="lg:hidden fixed inset-0 z-40 flex" id="mobile-filter-drawer" role="dialog" aria-modal="true">
+              <div className="flex-1 bg-black/40" onClick={() => setShowFilters(false)} aria-hidden="true" />
+              <div className="ml-auto flex h-full w-11/12 max-w-sm flex-col bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b px-6 py-4">
+                  <div className="flex items-center text-gray-900 font-semibold">
+                    <Filter className="h-5 w-5 mr-2 text-blue-600" />
+                    Filters
+                  </div>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="p-2 text-gray-600 hover:text-gray-900"
+                    aria-label="Close filters"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  <FiltersContent />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Sidebar Filters */}
-            <div className={`lg:w-64 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+            <div className="hidden lg:block lg:w-64 flex-shrink-0">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
                   <Filter className="h-5 w-5 mr-2 text-blue-600" />
                   Filters
                 </h3>
-
-                {/* Category Filter */}
-                <div className="mb-6">
-                  <h4 className="font-medium mb-3 text-gray-900">Category</h4>
-                  <div className="space-y-2">
-                    {categories.map((category) => (
-                      <label key={category} className="flex items-center text-gray-700">
-                        <input
-                          type="radio"
-                          name="category"
-                          value={category}
-                          checked={filters.category === category}
-                          onChange={(e) => handleCategoryChange(e.target.value)}
-                          className="mr-2 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="capitalize">{category}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Availability */}
-                <div className="mb-6">
-                  <h4 className="font-medium mb-3 text-gray-900">Availability</h4>
-                  <label className="flex items-center text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={filters.inStock === true}
-                      onChange={(e) => {
-                        const nextInStock = e.target.checked ? true : null;
-                        setFilters({ inStock: nextInStock });
-                        fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1 });
-                      }}
-                      className="mr-2 text-blue-600 focus:ring-blue-500"
-                    />
-                    In stock only
-                  </label>
-                </div>
-
-                {/* Price Range */}
-                <div className="mb-6">
-                  <h4 className="font-medium mb-3 text-gray-900">Price Range</h4>
-                  <div className="space-y-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="1000"
-                      value={filters.priceRange[1]}
-                      onChange={(e) => handlePriceRangeChange([filters.priceRange[0], parseInt(e.target.value)])}
-                      className="w-full accent-blue-600"
-                    />
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>${filters.priceRange[0]}</span>
-                      <span>${filters.priceRange[1]}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clear Filters */}
-                {hasActiveFilters() && (
-                  <button
-                    onClick={clearAllFilters}
-                    className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                  >
-                    Clear All Filters
-                  </button>
-                )}
+                <FiltersContent />
               </div>
             </div>
 

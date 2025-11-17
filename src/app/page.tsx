@@ -74,42 +74,43 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white overflow-hidden">
+      <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white overflow-hidden py-20 sm:py-24 lg:py-32">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="fade-in">
-              <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-tight">
+              <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold mb-6 leading-tight">
                 Discover Amazing
                 <span className="block bg-gradient-to-r from-yellow-300 to-pink-300 bg-clip-text text-transparent"> Products</span>
               </h1>
-              <p className="text-xl md:text-2xl mb-10 text-blue-50 leading-relaxed">
+              <p className="text-lg sm:text-xl md:text-2xl mb-10 text-blue-50 leading-relaxed">
                 Shop the latest trends and find everything you need at unbeatable prices. 
                 Fast shipping, excellent customer service, and quality guaranteed.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   href="/products"
-                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all duration-300 flex items-center justify-center shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95"
+                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all duration-300 flex items-center justify-center shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95 w-full sm:w-auto"
                 >
                   Shop Now
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
                 <Link
                   href="/categories"
-                  className="border-2 border-white/80 text-white px-8 py-4 rounded-xl font-bold hover:bg-white/10 backdrop-blur-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                  className="border-2 border-white/80 text-white px-8 py-4 rounded-xl font-bold hover:bg-white/10 backdrop-blur-sm transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 w-full sm:w-auto"
                 >
                   Browse Categories
                 </Link>
               </div>
             </div>
-            <div className="relative">
+            <div className="relative w-full h-64 sm:h-80 lg:h-[420px]">
               <Image
                 src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop"
                 alt="Shopping"
-                width={600}
-                height={400}
-                className="rounded-lg shadow-2xl"
+                fill
+                priority
+                sizes="(min-width: 1024px) 600px, (min-width: 640px) 80vw, 100vw"
+                className="rounded-lg shadow-2xl object-cover"
               />
             </div>
           </div>
@@ -204,13 +205,13 @@ export default function Home() {
             Subscribe to our newsletter and be the first to know about new products, 
             exclusive deals, and special offers.
           </p>
-          <div className="max-w-md mx-auto flex gap-4">
+          <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-4">
             <input
               type="email"
               placeholder="Enter your email"
               className="flex-1 px-4 py-3 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
-            <button className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+            <button className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors w-full sm:w-auto">
               Subscribe
             </button>
           </div>
