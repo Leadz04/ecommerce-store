@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -252,6 +252,7 @@ export default function Header() {
                   {isAuthenticated ? (
                     <button
                       onClick={() => {
+                        
                         logout();
                         setIsMenuOpen(false);
                       }}
@@ -278,62 +279,133 @@ export default function Header() {
 
       {/* Cart Sidebar */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 flex justify-end">
           <div
             className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
             onClick={() => setIsCartOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl">
-            <div className="flex flex-col h-full">
-              <div className="flex items-center justify-between p-4 border-b">
-                <h2 className="text-lg font-semibold">Shopping Cart</h2>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  aria-label="Close cart"
-                  title="Close"
-                  className="p-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-                >
-                  <X className="h-5 w-5 text-gray-700" />
-                </button>
-              </div>
-              
-              <div className="flex-1 p-4">
+          <div className="relative h-screen w-1/4 bg-white shadow-xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+              <h2 className="text-lg font-bold text-gray-900">
+                Shopping Cart ({getTotalItems()})
+              </h2>
+              <button
+                onClick={() => setIsCartOpen(false)}
+                aria-label="Close cart"
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-700" />
+              </button>
+            </div>
+            
+            {/* Cart Items */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
                 {!isMounted ? (
                   <p className="text-gray-500 text-center py-8">Loading...</p>
                 ) : items.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">Your cart is empty</p>
+                  <div className="text-center py-16">
+                    <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 mb-4">Your cart is empty</p>
+                    <Link
+                      href="/products"
+                      onClick={() => setIsCartOpen(false)}
+                      className="inline-block px-6 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+                    >
+                      Continue Shopping
+                    </Link>
+                  </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {items.map((item) => {
                       const pid = (item.product as any)._id || (item.product as any).id;
+                      const totalPrice = item.product.price * item.quantity;
+                      const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
                       return (
-                        <div key={item.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:border-gray-300 transition-colors">
+                        <div key={item.id} className="flex gap-3 pb-6 border-b border-gray-200 last:border-b-0">
+                          {/* Product Image */}
                           <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
-                            <img src={item.product.image} alt={item.product.name} className="w-14 h-14 object-cover rounded" />
+                            <img 
+                              src={item.product.image} 
+                              alt={item.product.name} 
+                              className="w-20 h-20 object-cover rounded border border-gray-200" 
+                            />
                           </Link>
+                          
+                          {/* Product Details */}
                           <div className="flex-1 min-w-0">
-                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="block font-medium text-sm text-gray-900 hover:text-blue-600 truncate">
+                            <Link 
+                              href={`/products/${pid}`} 
+                              onClick={() => setIsCartOpen(false)}
+                              className="block font-bold text-gray-900 hover:text-blue-600 mb-1"
+                            >
                               {item.product.name}
                             </Link>
-                            <div className="flex items-center justify-between mt-1">
-                              <span className="text-gray-700 text-sm font-medium">${item.product.price}</span>
-                              <div className="flex items-center space-x-2">
-                                <button onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} className="px-2 py-1 border rounded text-sm hover:bg-gray-50">-</button>
-                                <span className="text-sm w-6 text-center">{item.quantity}</span>
-                                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="px-2 py-1 border rounded text-sm hover:bg-gray-50">+</button>
-                              </div>
+                            
+                            {/* Size (if available) */}
+                            {(item as any).size && (
+                              <p className="text-sm text-gray-600 mb-2">Size: {(item as any).size}</p>
+                            )}
+                            
+                            {/* Price */}
+                            <div className="mb-3">
+                              {hasDiscount ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-red-600 font-bold text-lg">
+                                    ${item.product.price.toFixed(2)}
+                                  </span>
+                                  <span className="text-gray-400 line-through text-sm">
+                                    ${item.product.originalPrice?.toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-900 font-bold text-lg">
+                                  ${item.product.price.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Quantity Selector */}
+                            <div className="flex items-center gap-2 mb-3">
+                              <button
+                                onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                aria-label="Decrease quantity"
+                              >
+                                −
+                              </button>
+                              <span className="w-8 text-center font-semibold text-gray-900">{item.quantity}</span>
+                              <button
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                aria-label="Increase quantity"
+                              >
+                                +
+                              </button>
                             </div>
                           </div>
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            className="inline-flex items-center space-x-1 text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-200 hover:bg-red-50"
-                            aria-label={`Remove ${item.product.name}`}
-                            title="Remove"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span>Remove</span>
-                          </button>
+                          
+                          {/* Action Icons */}
+                          <div className="flex flex-col gap-3 shrink-0">
+                            <Link
+                              href={`/products/${pid}`}
+                              onClick={() => setIsCartOpen(false)}
+                              className="p-2 hover:bg-gray-100 rounded transition-colors inline-block"
+                              aria-label="Edit item"
+                              title="Edit"
+                            >
+                              <Edit className="h-5 w-5 text-gray-600" />
+                            </Link>
+                            <button
+                              onClick={() => removeItem(item.id)}
+                              className="p-2 hover:bg-red-50 rounded transition-colors"
+                              aria-label={`Remove ${item.product.name}`}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5 text-red-600" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -341,21 +413,31 @@ export default function Header() {
                 )}
               </div>
               
-              {isMounted && items.length > 0 && (
-                <div className="border-t p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-semibold">Total: ${getTotalPrice().toFixed(2)}</span>
-                  </div>
+            {/* Footer */}
+            {isMounted && items.length > 0 && (
+              <div className="border-t px-6 py-5 bg-white shrink-0">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="font-bold text-gray-900">Subtotal</span>
+                  <span className="font-bold text-gray-900">${getTotalPrice().toFixed(2)}</span>
+                </div>
+                <div className="space-y-3">
+                  <Link
+                    href="/cart"
+                    className="w-full py-3 px-4 border-2 border-gray-900 text-gray-900 font-semibold rounded text-center block hover:bg-gray-50 transition-colors"
+                    onClick={() => setIsCartOpen(false)}
+                  >
+                    View Cart
+                  </Link>
                   <Link
                     href="/checkout"
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors text-center block"
+                    className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded text-center block hover:bg-gray-800 transition-colors"
                     onClick={() => setIsCartOpen(false)}
                   >
                     Checkout
                   </Link>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
