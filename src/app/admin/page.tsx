@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import Script from 'next/script';
 import { 
   Users, 
   Package, 
@@ -32,7 +33,10 @@ import {
   AlertCircle,
   Calendar,
   Gift,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  HelpCircle
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
@@ -1999,9 +2003,522 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Etsy Integration Tab */}
+            {/* Etsy Integration Tab */}
         {(activeTab as any) === 'etsy' && (
           <div className="space-y-8">
+            {/* How It Works - Info Section */}
+            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-lg border-2 border-blue-200 p-6 mb-8">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-blue-100 rounded-xl shrink-0">
+                  <HelpCircle className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-black text-gray-900 mb-4">How Etsy Policy Checking Works</h3>
+                  <div className="space-y-4 text-sm text-gray-700">
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">1</span>
+                        Product Data Extraction
+                      </h4>
+                      <p className="ml-8 text-gray-600">The system extracts and analyzes three key components from each product:</p>
+                      <ul className="ml-8 mt-2 space-y-1 list-disc list-inside text-gray-600">
+                        <li><strong>Title:</strong> Product name/title text</li>
+                        <li><strong>Description:</strong> Full product description (HTML stripped to plain text)</li>
+                        <li><strong>Image Alt Text:</strong> Image filenames and metadata (if available)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">2</span>
+                        Policy Violation Detection
+                      </h4>
+                      <p className="ml-8 text-gray-600 mb-2">The system scans for prohibited content using pattern matching:</p>
+                      <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                        <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                          <p className="font-semibold text-red-900 text-xs mb-1">❌ Personal Information</p>
+                          <p className="text-xs text-red-700">Phone numbers, emails, addresses, ZIP codes</p>
+                        </div>
+                        <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                          <p className="font-semibold text-red-900 text-xs mb-1">❌ External Marketplace Links</p>
+                          <p className="text-xs text-red-700">Amazon, eBay, Shopify, Walmart, etc.</p>
+                        </div>
+                        <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                          <p className="font-semibold text-red-900 text-xs mb-1">❌ Prohibited Content</p>
+                          <p className="text-xs text-red-700">Counterfeit, weapons, drugs, hate speech</p>
+                        </div>
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                          <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Misleading Information</p>
+                          <p className="text-xs text-yellow-700">Spam phrases, false guarantees</p>
+                        </div>
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                          <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Copyright Violations</p>
+                          <p className="text-xs text-yellow-700">Disney, Marvel, Nintendo, etc.</p>
+                        </div>
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                          <p className="font-semibold text-blue-900 text-xs mb-1">ℹ️ Spam Keywords</p>
+                          <p className="text-xs text-blue-700">ALL CAPS, excessive punctuation</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">3</span>
+                        Etsy Handbook Comparison
+                      </h4>
+                      <p className="ml-8 text-gray-600 mb-2">Each product is scored against Etsy's seller handbook guidelines:</p>
+                      <div className="ml-8 grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                        <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                          <p className="font-semibold text-xs text-gray-900">Title Requirements</p>
+                          <p className="text-xs text-gray-600">Max 140 chars, no personal info, descriptive keywords</p>
+                        </div>
+                        <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                          <p className="font-semibold text-xs text-gray-900">Description Requirements</p>
+                          <p className="text-xs text-gray-600">Min 200 chars, include materials, dimensions, care info</p>
+                        </div>
+                        <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                          <p className="font-semibold text-xs text-gray-900">Image Alt Text</p>
+                          <p className="text-xs text-gray-600">Descriptive, accessible, no personal information</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">4</span>
+                        Scoring System
+                      </h4>
+                      <p className="ml-8 text-gray-600 mb-2">Products receive a compliance score (0-100) based on:</p>
+                      <div className="ml-8 grid grid-cols-3 gap-3 mt-2">
+                        <div className="text-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                          <p className="text-2xl font-black text-green-600">80-100</p>
+                          <p className="text-xs font-semibold text-green-900 mt-1">Compliant</p>
+                        </div>
+                        <div className="text-center p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                          <p className="text-2xl font-black text-yellow-600">60-79</p>
+                          <p className="text-xs font-semibold text-yellow-900 mt-1">Needs Work</p>
+                        </div>
+                        <div className="text-center p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                          <p className="text-2xl font-black text-red-600">0-59</p>
+                          <p className="text-xs font-semibold text-red-900 mt-1">Critical Issues</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">5</span>
+                        Google Search Analysis (Optional - SerpAPI)
+                      </h4>
+                      <p className="ml-8 text-gray-600 mb-2">When enabled, the system also performs Google Shopping searches to:</p>
+                      <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                        <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                          <p className="font-semibold text-indigo-900 text-xs mb-1">🔍 Search Visibility</p>
+                          <p className="text-xs text-indigo-700">Checks if your product appears in Google Shopping results for relevant keywords</p>
+                        </div>
+                        <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                          <p className="font-semibold text-indigo-900 text-xs mb-1">📊 Competitor Analysis</p>
+                          <p className="text-xs text-indigo-700">Compares your product title, price, and ratings with top competitors</p>
+                        </div>
+                        <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                          <p className="font-semibold text-indigo-900 text-xs mb-1">🔑 Keyword Performance</p>
+                          <p className="text-xs text-indigo-700">Extracts related search terms and trending keywords from Google</p>
+                        </div>
+                        <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                          <p className="font-semibold text-indigo-900 text-xs mb-1">⚡ SEO Insights</p>
+                          <p className="text-xs text-indigo-700">Identifies opportunities to improve search ranking and discoverability</p>
+                        </div>
+                      </div>
+                      <p className="ml-8 mt-2 text-xs text-gray-500 italic">Note: Requires SERPAPI_KEY in environment variables. Adds ~1 second delay per product for API rate limiting.</p>
+                    </div>
+                    <div className="bg-blue-100 border-l-4 border-blue-500 p-4 rounded-lg mt-4">
+                      <p className="text-xs font-bold text-blue-900 mb-1">💡 Important Note:</p>
+                      <p className="text-xs text-blue-800">This tool uses pattern matching and Etsy's published guidelines. It cannot guarantee 100% compliance - always review Etsy's latest policies before listing. The Google Search Analysis provides additional insights but does not replace manual review.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Product Analysis Tool */}
+            <div className="bg-white rounded-2xl shadow-xl border-2 border-orange-100 overflow-hidden">
+              <div className="p-8 border-b-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg">
+                    <BarChart3 className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black text-white tracking-tight">Product Analysis vs Etsy Handbook</h2>
+                    <p className="text-orange-50 text-base mt-2 font-medium">Analyze products using SerpAPI and compare with Etsy seller handbook guidelines</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+                <div className="mb-8">
+                  <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="p-2 bg-orange-100 rounded-lg">
+                      <Package className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <span>Select Products to Analyze</span>
+                  </label>
+                  <div className="flex gap-6 items-start">
+                    <div className="flex-1 relative">
+                      <select
+                        multiple
+                        size={10}
+                        className="w-full border-2 border-gray-300 rounded-2xl p-4 text-sm bg-white shadow-md focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all [&>option]:py-3 [&>option]:px-4 [&>option]:my-1 [&>option]:rounded-lg [&>option]:font-semibold [&>option]:text-gray-900 [&>option]:bg-white [&>option]:border-b [&>option]:border-gray-200 [&>option:hover]:bg-orange-100 [&>option:checked]:bg-orange-200 [&>option:checked]:text-orange-900"
+                        id="etsyAnalysisProducts"
+                        style={{ 
+                          minHeight: '320px',
+                        }}
+                      >
+                        {products.map((p: any) => (
+                          <option 
+                            key={p._id} 
+                            value={p._id}
+                            style={{ 
+                              backgroundColor: '#ffffff',
+                              color: '#111827',
+                              fontWeight: '600',
+                              padding: '12px 16px',
+                              marginBottom: '4px',
+                              borderBottom: '1px solid #e5e7eb'
+                            }}
+                          >
+                            {p.name} - ${p.price}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-lg">
+                        <p className="text-xs text-gray-700 flex items-center gap-2 font-medium">
+                          <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-md font-bold">TIP</span>
+                          Hold Ctrl/Cmd to select multiple products
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <button
+                        onClick={() => {
+                          const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
+                          if (select) {
+                            Array.from(select.options).forEach(opt => opt.selected = true);
+                          }
+                        }}
+                        className="px-6 py-3 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={() => {
+                          const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
+                          if (select) {
+                            Array.from(select.options).forEach(opt => opt.selected = false);
+                          }
+                        }}
+                        className="px-6 py-3 text-sm font-bold bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all shadow-md hover:shadow-lg"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-8 p-5 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-200 shadow-md">
+                  <label className="flex items-center gap-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="includeGoogleData"
+                      defaultChecked
+                      className="w-6 h-6 text-orange-600 border-gray-300 rounded-lg focus:ring-orange-500 focus:ring-4 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-base font-bold text-gray-900 block mb-1">Include Google Search Analysis</span>
+                      <span className="text-sm text-gray-600">Uses SerpAPI to analyze search visibility and competitor data (requires SERPAPI_KEY)</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="flex justify-center">
+                  <button
+                    onClick={async () => {
+                      const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
+                      const includeGoogle = (document.getElementById('includeGoogleData') as HTMLInputElement)?.checked ?? true;
+                      if (!select) return;
+                      
+                      const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
+                      if (selectedIds.length === 0) {
+                        toast.error('Please select at least one product');
+                        return;
+                      }
+
+                      try {
+                        toast.loading('Analyzing products with SerpAPI...', { id: 'analyze-etsy' });
+                        const response = await fetch('/api/admin/products/analyze-etsy', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            productIds: selectedIds,
+                            includeGoogleData: includeGoogle
+                          })
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || 'Analysis failed');
+
+                      // Store results in a modal or expandable section
+                      const resultsDiv = document.getElementById('etsyAnalysisResults');
+                      if (resultsDiv) {
+                        // Define tag generation function if not already defined
+                        if (!(window as any).generateTagsForProduct) {
+                          (window as any).generateTagsForProduct = async function(productId: any, button: any) {
+                            const originalText = button.innerHTML;
+                            button.disabled = true;
+                            button.innerHTML = '<div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block"></div> Generating...';
+                            
+                            try {
+                              const token = localStorage.getItem('token');
+                              if (!token) {
+                                alert('Authentication required');
+                                button.innerHTML = originalText;
+                                button.disabled = false;
+                                return;
+                              }
+                              
+                              const url = '/api/products/' + productId + '/generate-tags';
+                              const response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 
+                                  'Content-Type': 'application/json',
+                                  'Authorization': 'Bearer ' + token
+                                },
+                                body: JSON.stringify({ useSerpAPI: true })
+                              });
+                              
+                              const data = await response.json();
+                              if (!response.ok) throw new Error(data.error || 'Failed to generate tags');
+                              
+                              const addedCount = data.added?.length || 0;
+                              const totalTags = data.tags?.length || 0;
+                              const message = 'Generated ' + addedCount + ' new tags. Total: ' + totalTags + '/13';
+                              
+                              if (typeof toast !== 'undefined') {
+                                toast.success(message, { id: 'generate-tags' });
+                              } else {
+                                alert(message);
+                              }
+                              
+                              button.innerHTML = originalText;
+                              button.disabled = false;
+                              
+                              // Reload page to show updated tags
+                              setTimeout(() => window.location.reload(), 1000);
+                            } catch (error) {
+                              const errorMessage = error instanceof Error ? error.message : 'Failed to generate tags';
+                              if (typeof toast !== 'undefined') {
+                                toast.error(errorMessage, { id: 'generate-tags' });
+                              } else {
+                                alert(errorMessage);
+                              }
+                              button.innerHTML = originalText;
+                              button.disabled = false;
+                            }
+                          };
+                        }
+                        
+                        resultsDiv.innerHTML = `
+                          <div class="mt-10 space-y-10">
+                            <!-- Analysis Summary Section -->
+                            <div class="bg-gradient-to-br from-white via-gray-50 to-white p-10 rounded-3xl shadow-2xl border-2 border-gray-200">
+                              <div class="flex items-center gap-4 mb-8">
+                                <div class="p-4 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl shadow-xl">
+                                  <BarChart3 class="h-7 w-7 text-white" />
+                                </div>
+                                <h3 class="text-3xl font-black text-gray-900 tracking-tight">Analysis</h3>
+                              </div>
+                              
+                              <!-- Key Metrics Grid -->
+                              <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                                <div class="bg-white p-6 rounded-2xl border-2 border-gray-300 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Total Products</p>
+                                  <p class="text-5xl font-black text-gray-900 leading-none">${data.summary.totalProducts}</p>
+                                </div>
+                                <div class="bg-white p-6 rounded-2xl border-2 ${data.summary.averageScore >= 80 ? 'border-green-400' : data.summary.averageScore >= 60 ? 'border-yellow-400' : 'border-red-400'} shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Avg Score</p>
+                                  <div class="flex items-baseline gap-1">
+                                    <p class="text-5xl font-black ${data.summary.averageScore >= 80 ? 'text-green-600' : data.summary.averageScore >= 60 ? 'text-yellow-600' : 'text-red-600'} leading-none">${data.summary.averageScore}</p>
+                                    <p class="text-xl font-bold text-gray-400">/100</p>
+                                  </div>
+                                </div>
+                                <div class="bg-white p-6 rounded-2xl border-2 border-orange-300 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Total Issues</p>
+                                  <p class="text-5xl font-black text-orange-600 leading-none">${data.summary.totalIssues}</p>
+                                </div>
+                                <div class="bg-white p-6 rounded-2xl border-2 border-red-400 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+                                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Critical</p>
+                                  <p class="text-5xl font-black text-red-600 leading-none">${data.summary.criticalIssues}</p>
+                                </div>
+                              </div>
+                              
+                              <!-- Compliance Rate by Category -->
+                              ${data.summary.complianceRate ? `
+                                <div class="pt-8 border-t-2 border-gray-300">
+                                  <h4 class="text-xl font-black text-gray-900 mb-6 flex items-center gap-3">
+                                    <div class="p-2 bg-orange-100 rounded-lg">
+                                      <Shield class="h-6 w-6 text-orange-600" />
+                                    </div>
+                                    <span>Compliance Rate by Category</span>
+                                  </h4>
+                                  <div class="grid grid-cols-3 md:grid-cols-6 gap-4">
+                                    ${['title', 'description', 'tags', 'images', 'pricing', 'seo'].map(cat => {
+                                      const rate = data.summary.complianceRate[cat] || 0;
+                                      const isCompliant = rate >= 80;
+                                      return `
+                                        <div class="text-center p-5 bg-white rounded-2xl border-2 ${isCompliant ? 'border-green-300 bg-green-50/50' : 'border-red-300 bg-red-50/50'} shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5">
+                                          <p class="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3">${cat.charAt(0).toUpperCase() + cat.slice(1)}</p>
+                                          <p class="text-3xl font-black ${isCompliant ? 'text-green-600' : 'text-red-600'} leading-none">${Math.round(rate)}%</p>
+                                        </div>
+                                      `;
+                                    }).join('')}
+                                  </div>
+                                </div>
+                              ` : ''}
+                            </div>
+                            
+                            <!-- Product Analysis Results -->
+                            <div>
+                              <div class="flex items-center gap-4 mb-8">
+                                <div class="p-3 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl shadow-lg">
+                                  <Package class="h-6 w-6 text-white" />
+                                </div>
+                                <h3 class="text-3xl font-black text-gray-900 tracking-tight">Product Analysis</h3>
+                              </div>
+                              
+                              <div class="space-y-6">
+                                ${data.results.map((result: any, idx: number) => `
+                                  <div class="bg-white border-2 ${result.score >= 80 ? 'border-green-400' : result.score >= 60 ? 'border-yellow-400' : 'border-red-400'} rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all">
+                                    <!-- Product Header -->
+                                    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6 pb-6 border-b-2 border-gray-200">
+                                      <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-4">
+                                          <h4 class="font-black text-gray-900 text-2xl leading-tight">${result.productName}</h4>
+                                          <button 
+                                            onclick="generateTagsForProduct('${result.productId}', this)"
+                                            class="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg hover:from-purple-600 hover:to-indigo-600 transition-all shadow-md hover:shadow-lg text-sm font-bold flex items-center gap-2 whitespace-nowrap"
+                                            title="Generate tags using SerpAPI"
+                                          >
+                                            <Tag class="h-4 w-4" />
+                                            Generate Tags
+                                          </button>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.title ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.title ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">Title</span>
+                                          </div>
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.description ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.description ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">Description</span>
+                                          </div>
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.tags ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.tags ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">Tags</span>
+                                          </div>
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.images ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.images ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">Images</span>
+                                          </div>
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.pricing ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.pricing ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">Pricing</span>
+                                          </div>
+                                          <div class="flex items-center gap-2 px-3 py-2 rounded-lg ${result.etsyCompliance.seo ? 'bg-green-100 text-green-900 border-2 border-green-400' : 'bg-red-100 text-red-900 border-2 border-red-400'} shadow-sm whitespace-nowrap">
+                                            <CheckCircle2 class="h-4 w-4 ${result.etsyCompliance.seo ? 'text-green-700' : 'text-red-700'} shrink-0" />
+                                            <span class="font-bold text-xs">SEO</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div class="px-6 py-5 rounded-2xl ${result.score >= 80 ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-900 border-2 border-green-400' : result.score >= 60 ? 'bg-gradient-to-br from-yellow-100 to-yellow-50 text-yellow-900 border-2 border-yellow-400' : 'bg-gradient-to-br from-red-100 to-red-50 text-red-900 border-2 border-red-400'} shadow-lg">
+                                        <p class="text-xs font-black uppercase tracking-widest mb-2">Score</p>
+                                        <div class="flex items-baseline gap-1">
+                                          <p class="text-4xl font-black">${result.score}</p>
+                                          <p class="text-base font-bold opacity-70">/100</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    <!-- Issues Section -->
+                                    ${result.issues.length > 0 ? `
+                                      <div class="space-y-4">
+                                        ${result.issues.map((issue: any, issueIdx: number) => `
+                                          <div class="p-5 rounded-2xl border-l-4 ${issue.severity === 'error' ? 'bg-red-50 border-red-500' : issue.severity === 'warning' ? 'bg-yellow-50 border-yellow-500' : 'bg-blue-50 border-blue-500'} shadow-md">
+                                            <div class="flex items-start gap-4">
+                                              <div class="p-3 rounded-xl ${issue.severity === 'error' ? 'bg-red-100' : issue.severity === 'warning' ? 'bg-yellow-100' : 'bg-blue-100'} shrink-0 shadow-sm">
+                                                <AlertTriangle class="h-6 w-6 ${issue.severity === 'error' ? 'text-red-600' : issue.severity === 'warning' ? 'text-yellow-600' : 'text-blue-600'}" />
+                                              </div>
+                                              <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2 mb-3 flex-wrap">
+                                                  <span class="px-3 py-1.5 rounded-lg text-xs font-black uppercase whitespace-nowrap ${issue.severity === 'error' ? 'bg-red-200 text-red-900 border-2 border-red-400' : issue.severity === 'warning' ? 'bg-yellow-200 text-yellow-900 border-2 border-yellow-400' : 'bg-blue-200 text-blue-900 border-2 border-blue-400'}">
+                                                    ${issue.category}
+                                                  </span>
+                                                  <span class="text-xs font-bold text-gray-700 px-2.5 py-1.5 bg-gray-200 rounded-md border border-gray-300 whitespace-nowrap">${issue.severity}</span>
+                                                </div>
+                                                <p class="text-base font-bold ${issue.severity === 'error' ? 'text-red-900' : issue.severity === 'warning' ? 'text-yellow-900' : 'text-blue-900'} mb-3 leading-relaxed">
+                                                  ${issue.message}
+                                                </p>
+                                                ${issue.found && issue.found.length > 0 ? `
+                                                  <div class="mb-3 p-3 bg-white/60 rounded-lg border border-gray-200">
+                                                    <p class="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Found:</p>
+                                                    <div class="flex flex-wrap gap-2">
+                                                      ${issue.found.slice(0, 3).map((item: string) => `
+                                                        <span class="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-lg text-xs font-mono border border-gray-300">${item.substring(0, 30)}${item.length > 30 ? '...' : ''}</span>
+                                                      `).join('')}
+                                                      ${issue.found.length > 3 ? `<span class="px-3 py-1.5 bg-gray-300 text-gray-900 rounded-lg text-xs font-bold border-2 border-gray-400">+${issue.found.length - 3} more</span>` : ''}
+                                                    </div>
+                                                  </div>
+                                                ` : ''}
+                                                <div class="mt-4 pt-4 border-t-2 ${issue.severity === 'error' ? 'border-red-200' : issue.severity === 'warning' ? 'border-yellow-200' : 'border-blue-200'}">
+                                                  <p class="text-sm text-gray-800 leading-relaxed">
+                                                    <span class="font-black text-gray-900">💡 Recommendation:</span> ${issue.recommendation}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        `).join('')}
+                                      </div>
+                                    ` : `
+                                      <div class="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl shadow-lg">
+                                        <div class="flex items-center gap-4">
+                                          <div class="p-3 bg-green-100 rounded-xl shadow-sm">
+                                            <CheckCircle2 class="h-7 w-7 text-green-600" />
+                                          </div>
+                                          <div>
+                                            <p class="text-base font-black text-green-900">✓ All Clear!</p>
+                                            <p class="text-sm text-green-700 mt-1 font-medium">This product meets all Etsy seller handbook guidelines.</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    `}
+                                  </div>
+                                `).join('')}
+                              </div>
+                            </div>
+                          </div>
+                        `;
+                        resultsDiv.style.display = 'block';
+                        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      }
+                      toast.success(`Analysis complete! Found ${data.summary.totalIssues} issues across ${data.summary.totalProducts} products`, { id: 'analyze-etsy' });
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : 'Analysis failed', { id: 'analyze-etsy' });
+                    }
+                  }}
+                    className="px-10 py-5 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white rounded-2xl hover:from-orange-600 hover:via-red-600 hover:to-pink-600 transition-all duration-200 shadow-2xl hover:shadow-3xl font-black text-xl flex items-center justify-center gap-3 transform hover:-translate-y-1"
+                  >
+                    <BarChart3 className="h-6 w-6" />
+                    Analyze Products with SerpAPI
+                  </button>
+                </div>
+                <div id="etsyAnalysisResults" className="hidden mt-10"></div>
+              </div>
+            </div>
             {/* Etsy Connection */}
             <div className="bg-white rounded-lg shadow-sm border border-purple-100">
               <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">

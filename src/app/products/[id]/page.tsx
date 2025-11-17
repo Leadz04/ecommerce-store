@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -112,7 +112,11 @@ export default function ProductPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
   const [isGeneratingSpecs, setIsGeneratingSpecs] = useState(false);
+  const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const [openFAQIndex, setOpenFAQIndex] = useState<number | null>(null);
+  const [isCheckingEtsyPolicies, setIsCheckingEtsyPolicies] = useState(false);
+  const [etsyPolicyResults, setEtsyPolicyResults] = useState<any>(null);
+  const [showEtsyResults, setShowEtsyResults] = useState(false);
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
@@ -284,6 +288,44 @@ export default function ProductPage() {
     setEditFormData({});
   };
 
+  const handleCheckEtsyPolicies = async () => {
+    if (!productId) return;
+    
+    setIsCheckingEtsyPolicies(true);
+    setEtsyPolicyResults(null);
+    setShowEtsyResults(false);
+    
+    try {
+      const response = await fetch(`/api/products/${productId}/check-etsy-policies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to check Etsy policies');
+        throw new Error(data.error || 'Failed to check Etsy policies');
+      }
+
+      setEtsyPolicyResults(data);
+      setShowEtsyResults(true);
+      
+      if (data.summary.isCompliant) {
+        toast.success(`✓ Product is Etsy compliant! Score: ${data.score}/100`);
+      } else {
+        toast.error(`Found ${data.summary.criticalIssues} critical issue(s) and ${data.summary.warnings} warning(s)`);
+      }
+    } catch (error) {
+      console.error('Etsy policy check error:', error);
+      toast.error('Failed to check Etsy policies');
+    } finally {
+      setIsCheckingEtsyPolicies(false);
+    }
+  };
+
   const handleGenerateSpecs = async () => {
     if (!productId || !isSuperAdmin) return;
     
@@ -342,6 +384,91 @@ export default function ProductPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to generate specifications');
     } finally {
       setIsGeneratingSpecs(false);
+    }
+  };
+
+  const handleGenerateTags = async (replaceExisting: boolean = false) => {
+    if (!productId || !isSuperAdmin) return;
+    
+    const currentTagCount = currentProduct.tags?.length || 0;
+    
+    // If tags are already at 13 and not replacing, show confirmation
+    if (currentTagCount >= 13 && !replaceExisting) {
+      const confirmed = window.confirm(
+        `This product already has ${currentTagCount} tags (Etsy maximum is 13).\n\n` +
+        `Would you like to replace all existing tags with newly generated ones?\n\n` +
+        `Click OK to replace, or Cancel to keep existing tags.`
+      );
+      if (confirmed) {
+        handleGenerateTags(true);
+        return;
+      }
+      return;
+    }
+    
+    setIsGeneratingTags(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      const response = await fetch(`/api/products/${productId}/generate-tags`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          useSerpAPI: true,
+          replaceExisting: replaceExisting || currentTagCount >= 13
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Your session has expired. Please log in again.');
+          setTimeout(() => {
+            router.push('/login');
+          }, 2000);
+        } else if (response.status === 403) {
+          toast.error('You do not have permission to generate tags. Super admin access required.');
+        } else {
+          toast.error(data.error || 'Failed to generate tags');
+        }
+        throw new Error(data.error || 'Failed to generate tags');
+      }
+
+      if (data.success === false && data.message) {
+        // Handle case where tags are already at 13
+        toast.error(data.message);
+        return;
+      }
+
+      const addedCount = data.added?.length || 0;
+      const totalTags = data.tags?.length || 0;
+      
+      if (replaceExisting || currentTagCount >= 13) {
+        toast.success(`Regenerated ${totalTags} tags. Total: ${totalTags}/13 tags`);
+      } else {
+        toast.success(`Generated ${addedCount} new tag${addedCount !== 1 ? 's' : ''}. Total: ${totalTags}/13 tags`);
+      }
+      
+      // Refresh product data
+      fetchProduct(productId);
+      
+      // If in edit mode, update the form data
+      if (isEditMode) {
+        setEditFormData({ ...editFormData, tags: data.tags.join(', ') });
+      }
+    } catch (error) {
+      console.error('Error generating tags:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to generate tags');
+    } finally {
+      setIsGeneratingTags(false);
     }
   };
 
@@ -942,26 +1069,70 @@ export default function ProductPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-lg font-semibold text-gray-800">Specifications</h4>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCheckEtsyPolicies}
+                      disabled={isCheckingEtsyPolicies}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Check if product follows Etsy seller policies"
+                    >
+                      {isCheckingEtsyPolicies ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Checking...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-4 w-4" />
+                          Check Etsy Policies
+                        </>
+                      )}
+                    </button>
                     {isSuperAdmin && (
-                      <button
-                        type="button"
-                        onClick={handleGenerateSpecs}
-                        disabled={isGeneratingSpecs}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Generate specifications from product title and description"
-                      >
-                        {isGeneratingSpecs ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-4 w-4" />
-                            Generate Specs
-                          </>
-                        )}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleGenerateSpecs}
+                          disabled={isGeneratingSpecs}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Generate specifications from product title and description"
+                        >
+                          {isGeneratingSpecs ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              Generate Specs
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateTags(false)}
+                          disabled={isGeneratingTags}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={
+                            (currentProduct.tags?.length || 0) >= 13
+                              ? `Product has maximum tags (13/13). Click to regenerate all tags.`
+                              : `Generate tags using SerpAPI (Current: ${currentProduct.tags?.length || 0}/13)`
+                          }
+                        >
+                          {isGeneratingTags ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Tag className="h-4 w-4" />
+                              {(currentProduct.tags?.length || 0) >= 13 ? 'Regenerate Tags' : `Generate Tags (${currentProduct.tags?.length || 0}/13)`}
+                            </>
+                          )}
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -1370,6 +1541,171 @@ export default function ProductPage() {
         </div>
       )}
 
+      {/* Etsy Policy Check Results */}
+      {showEtsyResults && etsyPolicyResults && (
+        <div className="mt-24 mb-16">
+          <div className="max-w-4xl mx-auto px-4">
+            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-gray-200">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${
+                    etsyPolicyResults.summary.isCompliant 
+                      ? 'bg-green-100' 
+                      : etsyPolicyResults.score >= 60 
+                      ? 'bg-yellow-100' 
+                      : 'bg-red-100'
+                  }`}>
+                    {etsyPolicyResults.summary.isCompliant ? (
+                      <CheckCircle2 className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <AlertTriangle className="h-6 w-6 text-red-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Etsy Policy Compliance</h2>
+                    <p className="text-sm text-gray-600">Compliance Score: {etsyPolicyResults.score}/100</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEtsyResults(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">Compliance Rate</p>
+                  <p className="text-2xl font-bold text-gray-900">{etsyPolicyResults.complianceRate}%</p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm text-red-600">Critical Issues</p>
+                  <p className="text-2xl font-bold text-red-600">{etsyPolicyResults.summary.criticalIssues}</p>
+                </div>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <p className="text-sm text-yellow-600">Warnings</p>
+                  <p className="text-2xl font-bold text-yellow-600">{etsyPolicyResults.summary.warnings}</p>
+                </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-blue-600">Recommendations</p>
+                  <p className="text-2xl font-bold text-blue-600">{etsyPolicyResults.summary.recommendations}</p>
+                </div>
+              </div>
+
+              {/* Compliance Status */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Compliance Status</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className={`p-3 rounded-lg border-2 ${
+                    etsyPolicyResults.compliance.title 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-red-200 bg-red-50'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {etsyPolicyResults.compliance.title ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <X className="h-5 w-5 text-red-600" />
+                      )}
+                      <span className="font-medium text-gray-900">Title</span>
+                    </div>
+                  </div>
+                  <div className={`p-3 rounded-lg border-2 ${
+                    etsyPolicyResults.compliance.description 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-red-200 bg-red-50'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {etsyPolicyResults.compliance.description ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <X className="h-5 w-5 text-red-600" />
+                      )}
+                      <span className="font-medium text-gray-900">Description</span>
+                    </div>
+                  </div>
+                  <div className={`p-3 rounded-lg border-2 ${
+                    etsyPolicyResults.compliance.imageAltText 
+                      ? 'border-green-200 bg-green-50' 
+                      : 'border-yellow-200 bg-yellow-50'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {etsyPolicyResults.compliance.imageAltText ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                      )}
+                      <span className="font-medium text-gray-900">Image Alt Text</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Violations */}
+              {etsyPolicyResults.violations.all.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Issues Found</h3>
+                  <div className="space-y-3">
+                    {etsyPolicyResults.violations.all.map((violation: any, index: number) => (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border-2 ${
+                          violation.severity === 'error'
+                            ? 'border-red-200 bg-red-50'
+                            : violation.severity === 'warning'
+                            ? 'border-yellow-200 bg-yellow-50'
+                            : 'border-blue-200 bg-blue-50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {violation.severity === 'error' ? (
+                            <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                          ) : violation.severity === 'warning' ? (
+                            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />
+                          ) : (
+                            <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                          )}
+                          <div className="flex-1">
+                            <p className={`font-semibold ${
+                              violation.severity === 'error'
+                                ? 'text-red-900'
+                                : violation.severity === 'warning'
+                                ? 'text-yellow-900'
+                                : 'text-blue-900'
+                            }`}>
+                              [{violation.category}] {violation.message}
+                            </p>
+                            {violation.found && violation.found.length > 0 && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                Found: {violation.found.slice(0, 3).join(', ')}
+                                {violation.found.length > 3 && ` and ${violation.found.length - 3} more`}
+                              </p>
+                            )}
+                            <p className="text-sm text-gray-700 mt-2 font-medium">
+                              💡 {violation.recommendation}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {etsyPolicyResults.violations.all.length === 0 && (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-16 w-16 text-green-600 mx-auto mb-4" />
+                  <p className="text-xl font-semibold text-gray-900 mb-2">All Clear! ✓</p>
+                  <p className="text-gray-600">Your product follows Etsy seller policies.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product FAQs Section */}
       {allFAQs.length > 0 && (
         <div className="mt-24 mb-16">
@@ -1560,6 +1896,120 @@ export default function ProductPage() {
                </div>
              </div>
       </div>
+
+      {/* Product Tags Section */}
+      {currentProduct.tags && currentProduct.tags.length > 0 && (
+        <div className="mt-16 mb-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-3xl p-8 md:p-12 shadow-xl border-2 border-indigo-100">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
+                  <Tag className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tight">
+                    Product <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Tags</span>
+                  </h2>
+                  <p className="text-gray-600 text-sm mt-1 font-medium">
+                    {currentProduct.tags.length} tag{currentProduct.tags.length !== 1 ? 's' : ''} for better discoverability
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-3">
+                {currentProduct.tags.map((tag: string, index: number) => (
+                  <span
+                    key={index}
+                    className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-white rounded-xl border-2 border-indigo-200 hover:border-indigo-400 shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-default"
+                  >
+                    <span className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                    <span className="relative text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">
+                      #{tag}
+                    </span>
+                    <div className="relative w-1.5 h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                  </span>
+                ))}
+              </div>
+              
+              {isSuperAdmin && (
+                <div className="mt-6 pt-6 border-t-2 border-indigo-200">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    {currentProduct.tags.length < 13 ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-yellow-100 rounded-lg">
+                            <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              Missing {13 - currentProduct.tags.length} tag{13 - currentProduct.tags.length !== 1 ? 's' : ''}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              Add more tags to improve search visibility (Etsy allows up to 13 tags)
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateTags(false)}
+                          disabled={isGeneratingTags}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingTags ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Tag className="h-4 w-4" />
+                              Generate More Tags
+                            </>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              Maximum tags reached (13/13)
+                            </p>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              You can regenerate all tags with new ones based on latest search data
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateTags(true)}
+                          disabled={isGeneratingTags}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingTags ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              Regenerating...
+                            </>
+                          ) : (
+                            <>
+                              <Tag className="h-4 w-4" />
+                              Regenerate All Tags
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reviews Section */}
       <ReviewList productId={productId} />
