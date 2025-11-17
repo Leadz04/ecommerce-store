@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -111,6 +111,8 @@ export default function ProductPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
+  const [isGeneratingSpecs, setIsGeneratingSpecs] = useState(false);
+  const [openFAQIndex, setOpenFAQIndex] = useState<number | null>(null);
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
@@ -119,6 +121,12 @@ export default function ProductPage() {
   
   const isSuperAdmin = user?.role?.name === 'SUPER_ADMIN';
   
+  // Verify token and fetch user on mount
+  useEffect(() => {
+    const { verifyToken } = useAuthStore.getState();
+    verifyToken();
+  }, []);
+
   // Fetch product when component mounts
   useEffect(() => {
     if (productId) {
@@ -130,14 +138,23 @@ export default function ProductPage() {
   // Initialize edit form data when product loads or edit mode is enabled
   useEffect(() => {
     if (currentProduct && isEditMode) {
-      // Convert specifications Map/Object to plain object if needed
+      // Convert specifications Map/Object to plain object if needed, filtering out questions
       let specs = {};
       if (currentProduct.specifications) {
+        let rawSpecs = {};
         if (currentProduct.specifications instanceof Map) {
-          specs = Object.fromEntries(currentProduct.specifications);
+          rawSpecs = Object.fromEntries(currentProduct.specifications);
         } else if (typeof currentProduct.specifications === 'object') {
-          specs = { ...currentProduct.specifications };
+          rawSpecs = { ...currentProduct.specifications };
         }
+        // Filter out questions from specifications in edit mode
+        specs = Object.fromEntries(
+          Object.entries(rawSpecs).filter(([_, value]) => {
+            const valueStr = String(value);
+            return !valueStr.trim().endsWith('?') && 
+                   !/^(what|how|why|when|where|who|which|can|could|should|will|would|is|are|do|does|did|has|have|had)\s/i.test(valueStr.trim());
+          })
+        );
       }
       
       // Get images array
@@ -267,6 +284,67 @@ export default function ProductPage() {
     setEditFormData({});
   };
 
+  const handleGenerateSpecs = async () => {
+    if (!productId || !isSuperAdmin) return;
+    
+    setIsGeneratingSpecs(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      const response = await fetch(`/api/products/${productId}/generate-specs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Your session has expired. Please log in again.');
+          setTimeout(() => {
+            router.push('/login');
+          }, 2000);
+        } else if (response.status === 403) {
+          toast.error('You do not have permission to generate specifications. Super admin access required.');
+        } else {
+          toast.error(data.error || 'Failed to generate specifications');
+        }
+        throw new Error(data.error || 'Failed to generate specifications');
+      }
+
+      const generatedCount = Object.keys(data.generated?.specifications || {}).length || 0;
+      const faqsCount = data.generated?.faqs?.length || 0;
+      const movedCount = data.generated?.movedToFAQs || 0;
+      
+      let message = `Generated ${generatedCount} specification${generatedCount !== 1 ? 's' : ''}`;
+      if (faqsCount > 0) message += ` and ${faqsCount} FAQ${faqsCount !== 1 ? 's' : ''}`;
+      if (movedCount > 0) message += ` (moved ${movedCount} question${movedCount !== 1 ? 's' : ''} to FAQs)`;
+      toast.success(message);
+      
+      // Refresh product data
+      fetchProduct(productId);
+      
+      // If in edit mode, update the form data
+      if (isEditMode) {
+        const existingSpecs = editFormData.specifications || {};
+        const merged = { ...existingSpecs, ...data.specifications };
+        setEditFormData({ ...editFormData, specifications: merged });
+      }
+    } catch (error) {
+      console.error('Error generating specifications:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to generate specifications');
+    } finally {
+      setIsGeneratingSpecs(false);
+    }
+  };
+
   // Log product view
   useEffect(() => {
     if (!productId) return;
@@ -326,6 +404,145 @@ export default function ProductPage() {
   const handleRelatedProductClick = (productId: string) => {
     router.push(`/products/${productId}`);
   };
+
+  // Helper function to check if a value is a question
+  const isQuestion = (text: string): boolean => {
+    const trimmed = text.trim();
+    if (trimmed.endsWith('?')) return true;
+    const questionPattern = /^(what|how|why|when|where|who|which|can|could|should|will|would|is|are|do|does|did|has|have|had)\s/i;
+    if (questionPattern.test(trimmed)) return true;
+    const questionPhrases = [
+      /what is/i, /how to/i, /how do/i, /how does/i, /how can/i, /what are/i, /what does/i,
+      /why is/i, /why are/i, /when should/i, /where can/i, /can i/i, /can you/i,
+      /should i/i, /will it/i, /does it/i, /is it/i, /are they/i
+    ];
+    return questionPhrases.some(pattern => pattern.test(trimmed));
+  };
+
+  // Generate a clear name from a specification value
+  const generateSpecName = (value: string): string => {
+    const valueStr = String(value).trim();
+    
+    if (/water\s+repellent|waterproof|water\s+resistant/i.test(valueStr)) return 'Water Resistance';
+    if (/wind\s+proof|windproof|wind\s+resistant/i.test(valueStr)) return 'Wind Resistance';
+    if (/nylon|polyester|cotton|leather|wool|suede|denim|silk|cashmere/i.test(valueStr)) {
+      const match = valueStr.match(/(nylon|polyester|cotton|leather|wool|suede|denim|silk|cashmere)/i);
+      if (match) return `Material: ${match[1].charAt(0).toUpperCase() + match[1].slice(1)}`;
+    }
+    if (/adjustable|adjust/i.test(valueStr)) return 'Adjustable Features';
+    if (/pocket|pockets/i.test(valueStr)) return 'Pockets';
+    if (/zipper|zip/i.test(valueStr)) return 'Closure Type';
+    if (/strap|handle/i.test(valueStr)) return 'Strap/Handle';
+    if (/lining|lined/i.test(valueStr)) return 'Lining';
+    if (/padding|padded/i.test(valueStr)) return 'Padding';
+    if (/breathable|breath/i.test(valueStr)) return 'Breathability';
+    if (/inch|cm|mm|dimension|size|weight|length|width|height/i.test(valueStr)) return 'Dimensions';
+    if (/premium|durable|quality|high\s+quality/i.test(valueStr)) return 'Quality';
+    if (/color|colour|black|white|blue|red|brown|gray|grey/i.test(valueStr)) return 'Color';
+    
+    if (valueStr.length < 50 && valueStr.length > 3) {
+      return valueStr.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+    
+    return 'Feature';
+  };
+
+  // Helper function to check if content is informational/non-specification content
+  const isInformationalContent = (key: string, value: string): boolean => {
+    const keyLower = key.toLowerCase();
+    const valueLower = value.toLowerCase();
+    const combined = `${keyLower} ${valueLower}`;
+    
+    // Patterns for informational content that should be removed
+    const informationalPatterns = [
+      /customer\s+care|support\s+&?\s*policies|shipping\s+policy|return\s+and\s+exchange|sizing\s+guide|track\s+your\s+order|start\s+a\s+return|contact\s+us|help\s+help|station/i,
+      /buying\s+guides?|celebrities?\s+&?\s*leather|what\s+is\s+italian\s+leather|myths?\s+about|shopping\s+online\s+vs\s+offline|lambskin\s+vs\s+cowhide|why\s+a\s+\$?\d+.*jacket|keanu\s+reeves|nvidia\s+ceo|sustainable|wilsons?\s+vs\s+angel|faux\s+leather\s+vs\s+real|beckham|celebrities?\s+&?\s*leather\s+jacket|myths?\s+about\s+leather|shopping\s+online|vs\s+offline|lambskin\s+vs\s+cowhide\s+leather|why\s+a\s+\$?\d+|keanu\s+reeves\s+leather|nvidia\s+ceo\s+&?\s*leather|sustainable\s+leather|wilsons?\s+vs\s+angel\s+jackets?|beckham'?s?\s+leather/i,
+      /how\s+to'?s?|how\s+to\s+care|how\s+to\s+identify|how\s+to\s+remove|remove\s+wrinkles|remove\s+smell|how\s+to\s+care\s+letterman|how\s+to\s+care\s+suede|how\s+to\s+care\s+faux|how\s+to\s+care\s+leather\s+skirt|remove\s+wrinkles\s+from|remove\s+smell\s+from|how\s+to\s+care\s+leather\s+jacket|how\s+to\s+identify\s+real\s+leather/i,
+      /guide|policy|policies|track|return|exchange|sizing|contact|help|support|station|care\s+instructions|instructions/i,
+      /.{200,}/, // Very long values are likely informational
+    ];
+    
+    for (const pattern of informationalPatterns) {
+      if (pattern.test(combined)) return true;
+    }
+    
+    const nonSpecKeys = [
+      'help', 'support', 'policies', 'customer care', 'shipping', 'return', 'exchange',
+      'sizing', 'guide', 'track', 'contact', 'buying guide', 'how to', 'care instructions',
+      'celebrities', 'myths', 'sustainable', 'faux', 'real leather', 'italian leather',
+      'buying guides', 'how to\'s', 'how tos', 'customer care station', 'support & policies',
+      'shipping policy', 'return and exchange', 'sizing guide', 'track your order',
+      'start a return', 'contact us', 'celebrities & leather', 'what is italian leather',
+      'myths about', 'shopping online vs offline', 'lambskin vs cowhide', 'keanu reeves',
+      'nvidia ceo', 'wilsons vs angel', 'faux leather vs real', 'beckham', 'remove wrinkles',
+      'remove smell', 'how to care letterman', 'how to care suede', 'how to care faux',
+      'how to care leather skirt', 'how to identify real leather'
+    ];
+    
+    return nonSpecKeys.some(nonSpecKey => keyLower.includes(nonSpecKey) || valueLower.includes(nonSpecKey));
+  };
+
+  // Filter out questions and informational content from specifications, and rename bullet specs
+  const cleanSpecs = product.specifications 
+    ? (() => {
+        const cleaned: Record<string, string> = {};
+        const usedNames = new Set<string>();
+        
+        for (const [key, value] of Object.entries(product.specifications)) {
+          const valueStr = String(value);
+          
+          // Skip questions and informational content
+          if (isQuestion(valueStr) || isInformationalContent(key, valueStr)) {
+            continue;
+          }
+          
+          // Check if key contains __bullet__ pattern
+          let finalKey = key;
+          if (key.includes('__bullet__') || /^__\w+__\d*$/i.test(key)) {
+            // Generate a clear name from the value
+            let newName = generateSpecName(valueStr);
+            
+            // Ensure uniqueness
+            let counter = 1;
+            while (usedNames.has(newName) || cleaned[newName]) {
+              newName = `${generateSpecName(valueStr)} ${counter}`;
+              counter++;
+            }
+            
+            finalKey = newName;
+            usedNames.add(finalKey);
+          }
+          
+          cleaned[finalKey] = valueStr;
+        }
+        
+        return cleaned;
+      })()
+    : {};
+  
+  // Get FAQs from product, filtering out informational content
+  const productFAQs = Array.isArray((product as any).faqs) 
+    ? (product as any).faqs.filter((faq: string) => !isInformationalContent('', String(faq)))
+    : [];
+  
+  // Also extract questions from specifications (but NOT informational content)
+  const questionsFromSpecs = product.specifications
+    ? Object.entries(product.specifications)
+        .filter(([key, value]) => {
+          const valueStr = String(value);
+          // Only include genuine questions, NOT informational content
+          return isQuestion(valueStr) && !isInformationalContent(key, valueStr);
+        })
+        .map(([_, value]) => {
+          let q = String(value).trim();
+          if (!q.endsWith('?')) q += '?';
+          return q;
+        })
+    : [];
+  
+  // Filter out any informational content from FAQs
+  const allFAQs = Array.from(new Set([...productFAQs, ...questionsFromSpecs]))
+    .filter(faq => !isInformationalContent('', String(faq)));
 
   const images = product.images && product.images.length > 0 ? product.images : [product.image];
   const sizes = ['XS', 'S', 'M', 'L', 'XL'];
@@ -724,17 +941,40 @@ export default function ProductPage() {
               <div className="p-5 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl border border-cyan-100">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-lg font-semibold text-gray-800">Specifications</h4>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newSpecs = { ...(editFormData.specifications || {}), '': '' };
-                      setEditFormData({ ...editFormData, specifications: newSpecs });
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm font-medium"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                    Add Specification
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateSpecs}
+                        disabled={isGeneratingSpecs}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Generate specifications from product title and description"
+                      >
+                        {isGeneratingSpecs ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Generate Specs
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSpecs = { ...(editFormData.specifications || {}), '': '' };
+                        setEditFormData({ ...editFormData, specifications: newSpecs });
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm font-medium"
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                      Add Specification
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-3">
                   {Object.entries(editFormData.specifications || {}).map(([key, value], index) => (
@@ -890,7 +1130,40 @@ export default function ProductPage() {
       </div>
 
       {/* Product Specifications */}
-      {product.specifications && Object.keys(product.specifications).length > 0 && (
+      {(!cleanSpecs || Object.keys(cleanSpecs).length === 0) && isSuperAdmin && (
+        <div className="mt-24 mb-16">
+          <div className="text-center mb-12 px-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 rounded-2xl mb-6 shadow-lg">
+              <Package className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
+              Product <span className="bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 bg-clip-text text-transparent">Specifications</span>
+            </h2>
+            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed mb-6">
+              No specifications available yet. Generate them automatically from the product title and description.
+            </p>
+            <button
+              onClick={handleGenerateSpecs}
+              disabled={isGeneratingSpecs}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              title="Generate specifications from product title and description"
+            >
+              {isGeneratingSpecs ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Generating Specifications...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  Generate Specifications
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+      {cleanSpecs && Object.keys(cleanSpecs).length > 0 && (
         <div className="mt-24 mb-16">
           {/* Header Section */}
           <div className="text-center mb-12 px-4">
@@ -900,16 +1173,36 @@ export default function ProductPage() {
             <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
               Product <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">Specifications</span>
             </h2>
-            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed">
+            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed mb-4">
               Comprehensive details to help you make an informed decision
             </p>
+            {isSuperAdmin && (
+              <button
+                onClick={handleGenerateSpecs}
+                disabled={isGeneratingSpecs}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                title="Generate additional specifications from product title and description"
+              >
+                {isGeneratingSpecs ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate More Specs
+                  </>
+                )}
+              </button>
+            )}
           </div>
           
           {/* Specifications Grid */}
           <div className="max-w-7xl mx-auto px-4">
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-2xl border border-gray-100">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(product.specifications).map(([key, value]: any, index) => {
+                {Object.entries(cleanSpecs).map(([key, value]: any, index) => {
                   // Format key for better display
                   const formattedKey = key
                     .replace(/([A-Z])/g, ' $1')
@@ -1069,6 +1362,134 @@ export default function ProductPage() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product FAQs Section */}
+      {allFAQs.length > 0 && (
+        <div className="mt-24 mb-16">
+          <div className="text-center mb-12 px-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-2xl mb-6 shadow-lg">
+              <HelpCircle className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
+              Frequently Asked <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">Questions</span>
+            </h2>
+            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed">
+              Find answers to common questions about this product
+            </p>
+          </div>
+          
+          <div className="max-w-4xl mx-auto px-4">
+            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-gray-200">
+              <div className="space-y-3">
+                {allFAQs.map((faq, index) => {
+                  // Generate a helpful answer based on the question and product info
+                  const generateAnswer = (question: string): string => {
+                    const qLower = question.toLowerCase();
+                    
+                    // Material-related questions
+                    if (qLower.includes('material') || qLower.includes('leather') || qLower.includes('fabric')) {
+                      const material = cleanSpecs.Material || cleanSpecs.material || product.brand || 'premium materials';
+                      return `This product is crafted from ${material}. You can find detailed material information in the product specifications section above. The quality and composition ensure durability and comfort.`;
+                    }
+                    
+                    // Size-related questions
+                    if (qLower.includes('size') || qLower.includes('fit') || qLower.includes('dimension')) {
+                      const size = cleanSpecs.Size || cleanSpecs.size;
+                      return size 
+                        ? `This product is available in ${size}. Please refer to the size guide in the specifications section for detailed measurements and fit information.`
+                        : `Size information is available in the product specifications above. We recommend checking the detailed measurements to ensure the perfect fit.`;
+                    }
+                    
+                    // Care/maintenance questions
+                    if (qLower.includes('care') || qLower.includes('clean') || qLower.includes('maintain') || qLower.includes('wash')) {
+                      return `Proper care instructions are essential for maintaining this product's quality. Please refer to the care instructions in the product specifications section. For best results, follow the recommended cleaning and maintenance guidelines.`;
+                    }
+                    
+                    // Quality/durability questions
+                    if (qLower.includes('quality') || qLower.includes('durable') || qLower.includes('last') || qLower.includes('premium')) {
+                      const quality = cleanSpecs.Quality || cleanSpecs.quality || 'high-quality';
+                      return `This product is made with ${quality} standards to ensure longevity and satisfaction. The quality details are outlined in the product specifications section above.`;
+                    }
+                    
+                    // Color-related questions
+                    if (qLower.includes('color') || qLower.includes('colour')) {
+                      const color = cleanSpecs.Color || cleanSpecs.color;
+                      return color 
+                        ? `This product is available in ${color}. Color information and options can be found in the product specifications above.`
+                        : `Color details are available in the product specifications section. Please refer to the product images for accurate color representation.`;
+                    }
+                    
+                    // Feature-related questions
+                    if (qLower.includes('feature') || qLower.includes('include') || qLower.includes('come with')) {
+                      const features = cleanSpecs.Features || cleanSpecs.features;
+                      return features 
+                        ? `This product includes: ${features}. For a complete list of features and specifications, please see the detailed specifications section above.`
+                        : `This product includes various features designed for your needs. Please refer to the product specifications section for a complete list of features and benefits.`;
+                    }
+                    
+                    // General/default answer
+                    return `Based on the product information, you can find relevant details in the product specifications section above. For additional assistance or specific inquiries, please don't hesitate to contact our customer service team.`;
+                  };
+                  
+                  const answer = generateAnswer(faq);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="border border-blue-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-blue-50/50 to-indigo-50/50"
+                    >
+                      <button
+                        onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)}
+                        className="w-full px-6 py-5 flex items-center justify-between text-left group"
+                        aria-expanded={openFAQIndex === index}
+                      >
+                        <span className="font-semibold text-gray-900 pr-4 text-base leading-snug group-hover:text-blue-700 transition-colors">
+                          {faq}
+                        </span>
+                        <div className="flex-shrink-0">
+                          {openFAQIndex === index ? (
+                            <ChevronUp className="h-5 w-5 text-blue-600 transition-transform" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-blue-600 transition-transform" />
+                          )}
+                        </div>
+                      </button>
+                      {openFAQIndex === index && (
+                        <div className="px-6 pb-5 pt-0 bg-white border-t border-blue-100 animate-in slide-in-from-top-2 duration-200">
+                          <div className="pt-4">
+                            <p className="text-gray-700 leading-relaxed text-[15px]">
+                              {answer}
+                            </p>
+                            {Object.keys(cleanSpecs).length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <p className="text-sm text-gray-600">
+                                  <span className="font-medium text-gray-900">Tip:</span> Check the Product Specifications section above for detailed technical information and complete product details.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Help Section */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      <span className="font-semibold text-gray-900">Need more help?</span> If you have additional questions or need personalized assistance, please contact our customer service team. We're here to help you find the perfect product.
+                    </p>
                   </div>
                 </div>
               </div>

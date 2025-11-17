@@ -17,6 +17,7 @@ export interface IProduct extends Document {
   stockCount?: number;
   tags: string[];
   specifications: Record<string, string>;
+  faqs?: string[];
   isActive: boolean;
   sourceUrl?: string;
   productType?: string;
@@ -107,6 +108,10 @@ const ProductSchema = new Schema<IProduct>({
     type: Map,
     of: String
   },
+  faqs: [{
+    type: String,
+    trim: true
+  }],
   isActive: {
     type: Boolean,
     default: true

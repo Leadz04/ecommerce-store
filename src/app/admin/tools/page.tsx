@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileCode2, Play, Wrench } from 'lucide-react';
+import { FileCode2, Play, Wrench, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -15,6 +15,9 @@ export default function AdminToolsPage() {
   const [activeScript, setActiveScript] = useState<string | null>(null);
   const [scriptOutputs, setScriptOutputs] = useState<Record<string, { exitCode: number; stdout: string; stderr: string }>>({});
   const [scriptArgs, setScriptArgs] = useState<Record<string, string>>({});
+  const [cleanSpecsDryRun, setCleanSpecsDryRun] = useState(true);
+  const [cleanSpecsLimit, setCleanSpecsLimit] = useState(1000);
+  const [cleanSpecsResult, setCleanSpecsResult] = useState<any>(null);
 
   const pollProgress = (operationId: string, label: string) => {
     console.log(`Starting progress polling for ${label} with operationId: ${operationId}`);
@@ -155,6 +158,11 @@ export default function AdminToolsPage() {
           successMessage = `Successfully synced ${total} products (${counts.created || 0} created, ${counts.updated || 0} updated, ${counts.unchanged || 0} unchanged)`;
         } else if (label === 'Backfill Specs') {
           successMessage = `Successfully updated specifications for ${data.updated || 0} products`;
+        } else if (label === 'Clean Specs') {
+          // Store result for Clean Specs
+          setCleanSpecsResult(data);
+          const summary = data.summary || {};
+          successMessage = `${data.message || 'Cleanup completed'}. Modified ${summary.cleanedProducts || 0} products, removed ${summary.totalRemoved || 0} items, renamed ${summary.totalRenamed || 0} specs, added ${summary.totalFAQsAdded || 0} FAQs`;
         } else {
           successMessage = `${label} completed successfully`;
         }
@@ -169,6 +177,44 @@ export default function AdminToolsPage() {
       toast.error(e instanceof Error ? e.message : 'Request failed');
       setLoading(null);
       setProgress(prev => ({ ...prev, [label]: { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleCleanSpecs = async () => {
+    try {
+      setLoading('Clean Specs');
+      setCleanSpecsResult(null);
+      setProgress(prev => ({ ...prev, 'Clean Specs': { current: 0, total: 0, status: 'Starting...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/clean-specs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dryRun: cleanSpecsDryRun,
+          limit: cleanSpecsLimit,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Clean specs failed');
+
+      setCleanSpecsResult(data);
+      setProgress(prev => ({ ...prev, 'Clean Specs': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+
+      const summary = data.summary || {};
+      const message = cleanSpecsDryRun
+        ? `Dry run complete. Would modify ${summary.cleanedProducts || 0} products, remove ${summary.totalRemoved || 0} items, rename ${summary.totalRenamed || 0} specs, add ${summary.totalFAQsAdded || 0} FAQs`
+        : `Cleanup complete. Modified ${summary.cleanedProducts || 0} products, removed ${summary.totalRemoved || 0} items, renamed ${summary.totalRenamed || 0} specs, added ${summary.totalFAQsAdded || 0} FAQs`;
+      
+      toast.success(message);
+    } catch (e) {
+      console.error('Error cleaning specs:', e);
+      toast.error(e instanceof Error ? e.message : 'Clean specs failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Clean Specs': { current: 0, total: 0, status: '' } }));
     }
   };
 
@@ -326,6 +372,131 @@ export default function AdminToolsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Clean Specs Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-orange-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Clean Product Specifications</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Remove informational content (buying guides, how-tos, customer support) and rename <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">__bullet__</code> keys from product specifications and FAQs.
+          </p>
+          
+          <div className="space-y-4">
+            {/* Dry Run Toggle */}
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="cleanSpecsDryRun"
+                checked={cleanSpecsDryRun}
+                onChange={(e) => setCleanSpecsDryRun(e.target.checked)}
+                disabled={loading === 'Clean Specs'}
+                className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <label htmlFor="cleanSpecsDryRun" className="text-sm text-gray-700 cursor-pointer">
+                Dry run (preview changes without applying)
+              </label>
+            </div>
+
+            {/* Limit Input */}
+            <div className="flex items-center gap-3">
+              <label htmlFor="cleanSpecsLimit" className="text-sm font-medium text-gray-700 w-32">
+                Product Limit:
+              </label>
+              <input
+                type="number"
+                id="cleanSpecsLimit"
+                value={cleanSpecsLimit}
+                onChange={(e) => setCleanSpecsLimit(Math.max(1, parseInt(e.target.value) || 1000))}
+                disabled={loading === 'Clean Specs'}
+                min="1"
+                max="10000"
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              />
+              <span className="text-xs text-gray-500">(max 10,000)</span>
+            </div>
+
+            {/* Clean Button */}
+            <button
+              onClick={handleCleanSpecs}
+              disabled={loading === 'Clean Specs'}
+              className="w-full px-4 py-3 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 transition-colors font-medium"
+            >
+              {loading === 'Clean Specs' ? 'Cleaning…' : cleanSpecsDryRun ? 'Preview Cleanup' : 'Clean All Specs'}
+            </button>
+
+            {/* Progress */}
+            {loading === 'Clean Specs' && progress['Clean Specs'] && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>{progress['Clean Specs'].status}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-orange-600 h-2 rounded-full transition-all duration-300 ease-out"
+                    style={{ 
+                      width: progress['Clean Specs'].total > 0 
+                        ? `${(progress['Clean Specs'].current / progress['Clean Specs'].total) * 100}%`
+                        : '50%'
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Results */}
+            {cleanSpecsResult && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Products:</span>
+                    <span className="font-medium">{cleanSpecsResult.summary?.totalProducts || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Products Modified:</span>
+                    <span className="font-medium text-blue-600">{cleanSpecsResult.summary?.cleanedProducts || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Items Removed:</span>
+                    <span className="font-medium text-red-600">{cleanSpecsResult.summary?.totalRemoved || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Specs Renamed:</span>
+                    <span className="font-medium text-purple-600">{cleanSpecsResult.summary?.totalRenamed || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">FAQs Added:</span>
+                    <span className="font-medium text-green-600">{cleanSpecsResult.summary?.totalFAQsAdded || 0}</span>
+                  </div>
+                  {cleanSpecsDryRun && cleanSpecsResult.detailedChanges && cleanSpecsResult.detailedChanges.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-300">
+                      <p className="text-xs text-gray-500 mb-2">Sample changes (first 5):</p>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {cleanSpecsResult.detailedChanges.slice(0, 5).map((change: any, idx: number) => (
+                          <div key={idx} className="text-xs bg-white p-2 rounded border border-gray-200">
+                            <p className="font-medium text-gray-900">{change.productName}</p>
+                            {change.changes.renamedItems && change.changes.renamedItems.length > 0 && (
+                              <p className="text-purple-600 mt-1">
+                                Renamed: {change.changes.renamedItems.slice(0, 2).join(', ')}
+                              </p>
+                            )}
+                            {change.changes.specsRemoved && change.changes.specsRemoved.length > 0 && (
+                              <p className="text-red-600 mt-1">
+                                Removed: {change.changes.specsRemoved.slice(0, 2).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
