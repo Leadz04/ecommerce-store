@@ -5632,162 +5632,455 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              {loading ? (
-                <TableSkeleton rows={8} columns={6} />
-              ) : (
-                <table className="min-w-full divide-y divide-gray-200 min-w-[1000px]">
-                  <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Product
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Brand
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Price
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Stock
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider min-w-[320px]">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {products
-                      .filter(product => {
-                        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
-                        const matchesCategory = !selectedCategory || product.category === selectedCategory;
-                        const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                        const matchesOrganized = !showOrganizedOnly || (() => {
-                          const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                          if (allImages.length === 0) return false;
-                          // A product is organized if at least one image is on Cloudinary
-                          return allImages.some((url: string) => 
-                            url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                          );
-                        })();
-                        return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
-                      })
-                      .slice((productPage - 1) * productPerPage, productPage * productPerPage)
-                      .map((product, index) => (
-                      <tr key={product._id} className={`hover:bg-blue-50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`} onClick={() => handleEditProduct(product)}>
-                        <td className="px-6 py-5 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-14 w-14">
-                              <img
-                                className="h-14 w-14 rounded-xl object-cover shadow-sm border border-gray-200"
-                                src={product.image}
-                                alt={product.name}
-                              />
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-semibold text-gray-900">
-                                {product.name}
+            {loading ? (
+              <TableSkeleton rows={8} columns={6} />
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-100">
+                      <tr>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Product
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Category
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Brand
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Stock
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider min-w-[300px]">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {products
+                        .filter(product => {
+                          const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                               product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                               product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
+                          const matchesCategory = !selectedCategory || product.category === selectedCategory;
+                          const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
+                          const matchesOrganized = !showOrganizedOnly || (() => {
+                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                            if (allImages.length === 0) return false;
+                            return allImages.some((url: string) => 
+                              url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                            );
+                          })();
+                          return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                        })
+                        .slice((productPage - 1) * productPerPage, productPage * productPerPage)
+                        .map((product, index) => (
+                        <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`} onClick={() => handleEditProduct(product)}>
+                          <td className="px-4 xl:px-6 py-4">
+                            <div className="flex items-center min-w-0">
+                              <div className="flex-shrink-0 h-12 w-12 xl:h-14 xl:w-14">
+                                <img
+                                  className="h-12 w-12 xl:h-14 xl:w-14 rounded-lg object-cover shadow-sm border border-gray-200"
+                                  src={product.image}
+                                  alt={product.name}
+                                />
                               </div>
-                              <div className="text-sm text-gray-600 truncate max-w-xs">
-                                {product.description || 'No description'}
+                              <div className="ml-3 xl:ml-4 min-w-0 flex-1">
+                                <div className="text-sm font-semibold text-gray-900 truncate">
+                                  {product.name}
+                                </div>
+                                <div className="text-xs xl:text-sm text-gray-600 truncate max-w-xs">
+                                  {product.description || 'No description'}
+                                </div>
                               </div>
                             </div>
+                          </td>
+                          <td className="px-4 xl:px-6 py-4 text-gray-700">
+                            <span className="inline-flex items-center px-2.5 xl:px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
+                              {product.category || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 xl:px-6 py-4 text-sm font-medium text-gray-700 truncate max-w-[120px]">
+                            {product.brand || 'N/A'}
+                          </td>
+                          <td className="px-4 xl:px-6 py-4 text-sm">
+                            <div className="flex items-center">
+                              <DollarSign className="h-4 w-4 text-green-500 mr-1 flex-shrink-0" />
+                              <span className="font-semibold text-gray-900">${(product.price ?? 0).toFixed(2)}</span>
+                              {product.originalPrice && product.originalPrice > (product.price ?? 0) && (
+                                <span className="ml-2 text-xs text-gray-500 line-through">
+                                  ${product.originalPrice.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 xl:px-6 py-4 text-sm">
+                            <div className="flex items-center">
+                              <Package className="h-4 w-4 text-indigo-500 mr-1 flex-shrink-0" />
+                              <span className="font-medium text-gray-700">{product.stockCount}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 xl:px-6 py-4">
+                            <div className="flex flex-col space-y-1">
+                              <span className={`inline-flex items-center px-2 xl:px-2.5 py-1 rounded-full text-xs font-medium ${
+                                product.isActive 
+                                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                                  : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}>
+                                {product.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                              {(() => {
+                                const status = (product as any).status || 'draft';
+                                const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
+                                const isScheduled = status === 'published' && publishAt && publishAt > new Date();
+                                const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
+                                const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
+                                const badgeClass = isScheduled
+                                  ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                  : isLive
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : status === 'archived'
+                                  ? 'bg-gray-100 text-gray-700 border border-gray-200'
+                                  : 'bg-purple-100 text-purple-800 border border-purple-200';
+                                return (
+                                  <span className={`inline-flex items-center px-2 xl:px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+                                    {badgeText}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          </td>
+                          <td className="px-4 xl:px-6 py-4 text-sm font-medium">
+                            <div className="flex flex-wrap gap-1.5 items-center" onClick={(e) => e.stopPropagation()}>
+                              {/* Primary Actions */}
+                              <Link
+                                href={`/products/${product._id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150"
+                                title="View product"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Link>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditProduct(product);
+                                }}
+                                className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150"
+                                title="Edit product"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              
+                              {/* Copy Actions - Quick Access */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyTitle(product);
+                                }}
+                                className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                title="Copy Title"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyDescription(product);
+                                }}
+                                className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                title="Copy Description"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyTags(product);
+                                }}
+                                className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                title="Copy Tags"
+                              >
+                                <Tag className="h-4 w-4" />
+                              </button>
+                              
+                              {/* Copy Menu for Additional Options */}
+                              <div className="relative group copy-menu-container">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
+                                      if (menu.id !== `copy-menu-${product._id}`) {
+                                        menu.classList.add('hidden');
+                                      }
+                                    });
+                                    const menu = document.getElementById(`copy-menu-${product._id}`);
+                                    if (menu) {
+                                      menu.classList.toggle('hidden');
+                                    }
+                                  }}
+                                  className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                  title="More copy options"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                                <div 
+                                  id={`copy-menu-${product._id}`}
+                                  className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => {
+                                        handleCopySpecs(product);
+                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        if (menu) menu.classList.add('hidden');
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                      <span>Copy Specifications</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        handleCopyImageUrls(product);
+                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        if (menu) menu.classList.add('hidden');
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                      <ImageIcon className="h-4 w-4" />
+                                      <span>Copy Image URLs</span>
+                                    </button>
+                                    {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
+                                      <button
+                                        onClick={() => {
+                                          handleCopyAltTexts(product);
+                                          const menu = document.getElementById(`copy-menu-${product._id}`);
+                                          if (menu) menu.classList.add('hidden');
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                      >
+                                        <Sparkles className="h-4 w-4" />
+                                        <span>Copy Alt Texts</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Image Actions */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleGenerateAltText(product._id, product.name);
+                                }}
+                                className={`p-1.5 rounded transition-colors duration-150 ${
+                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                    : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                                }`}
+                                title={
+                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                    ? 'Alt text already generated - Click to regenerate'
+                                    : 'Generate unique alt text for all images'
+                                }
+                              >
+                                <Sparkles className="h-4 w-4" />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOrganizeProductImages(product._id, product.name);
+                                }}
+                                className={`p-1.5 rounded transition-colors duration-150 ${
+                                  (() => {
+                                    const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                    const hasCloudinary = allImages.some((url: string) => 
+                                      url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                    );
+                                    return hasCloudinary
+                                      ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                      : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+                                  })()
+                                }`}
+                                title={(() => {
+                                  const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                  const hasCloudinary = allImages.some((url: string) => 
+                                    url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                  );
+                                  return hasCloudinary
+                                    ? 'Images already organized in Cloudinary'
+                                    : 'Organize images in Cloudinary';
+                                })()}
+                              >
+                                <Cloud className="h-4 w-4" />
+                              </button>
+                              
+                              {/* Delete Action */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteProduct(product._id);
+                                }}
+                                className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150"
+                                title="Delete product"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile/Tablet Card View */}
+                <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                  {products
+                    .filter(product => {
+                      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                           product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                           product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
+                      const matchesCategory = !selectedCategory || product.category === selectedCategory;
+                      const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
+                      const matchesOrganized = !showOrganizedOnly || (() => {
+                        const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                        if (allImages.length === 0) return false;
+                        return allImages.some((url: string) => 
+                          url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                        );
+                      })();
+                      return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                    })
+                    .slice((productPage - 1) * productPerPage, productPage * productPerPage)
+                    .map((product) => (
+                    <div 
+                      key={product._id} 
+                      className="bg-white rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                      onClick={() => handleEditProduct(product)}
+                    >
+                      {/* Card Header */}
+                      <div className="flex items-start p-4 space-x-4">
+                        <div className="flex-shrink-0">
+                          <img
+                            className="h-20 w-20 rounded-lg object-cover shadow-sm border border-gray-200"
+                            src={product.image}
+                            alt={product.name}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-1">
+                            {product.name}
+                          </h3>
+                          <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                            {product.description || 'No description'}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
+                              {product.category || 'N/A'}
+                            </span>
+                            {product.brand && (
+                              <span className="text-xs text-gray-600 font-medium">
+                                {product.brand}
+                              </span>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-6 py-5 text-gray-700 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
-                            {product.category || 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-sm font-medium text-gray-700">
-                          {product.brand || 'N/A'}
-                        </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-sm">
+                        </div>
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="px-4 pb-4 space-y-3">
+                        {/* Price and Stock */}
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <DollarSign className="h-4 w-4 text-green-500 mr-1" />
                             <span className="font-semibold text-gray-900">${(product.price ?? 0).toFixed(2)}</span>
                             {product.originalPrice && product.originalPrice > (product.price ?? 0) && (
-                              <span className="ml-2 text-sm text-gray-500 line-through">
+                              <span className="ml-2 text-xs text-gray-500 line-through">
                                 ${product.originalPrice.toFixed(2)}
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-sm">
                           <div className="flex items-center">
                             <Package className="h-4 w-4 text-indigo-500 mr-1" />
-                            <span className="font-medium text-gray-700">{product.stockCount}</span>
+                            <span className="text-sm font-medium text-gray-700">{product.stockCount}</span>
                           </div>
-                        </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
-                          <div className="flex flex-col space-y-1">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                              product.isActive 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                            }`}>
-                              {product.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                            {(() => {
-                              const status = (product as any).status || 'draft';
-                              const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
-                              const isScheduled = status === 'published' && publishAt && publishAt > new Date();
-                              const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
-                              const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
-                              const badgeClass = isScheduled
-                                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                : isLive
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : status === 'archived'
-                                ? 'bg-gray-100 text-gray-700 border border-gray-200'
-                                : 'bg-purple-100 text-purple-800 border border-purple-200';
-                              return (
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-                                  {badgeText}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
-                          <div className="flex flex-wrap gap-1.5 items-center">
+                        </div>
+
+                        {/* Status */}
+                        <div className="flex flex-wrap gap-2">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                            product.isActive 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            {product.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                          {(() => {
+                            const status = (product as any).status || 'draft';
+                            const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
+                            const isScheduled = status === 'published' && publishAt && publishAt > new Date();
+                            const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
+                            const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
+                            const badgeClass = isScheduled
+                              ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                              : isLive
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : status === 'archived'
+                              ? 'bg-gray-100 text-gray-700 border border-gray-200'
+                              : 'bg-purple-100 text-purple-800 border border-purple-200';
+                            return (
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+                                {badgeText}
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="pt-3 border-t border-gray-200" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-2">
                             {/* Primary Actions */}
                             <Link
                               href={`/products/${product._id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150"
-                              title="View product"
+                              className="flex-1 flex items-center justify-center px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors duration-150 border border-blue-200"
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              <span>View</span>
                             </Link>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEditProduct(product);
                               }}
-                              className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150"
-                              title="Edit product"
+                              className="flex-1 flex items-center justify-center px-3 py-2 text-sm text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors duration-150 border border-indigo-200"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit className="h-4 w-4 mr-2" />
+                              <span>Edit</span>
                             </button>
                             
-                            {/* Copy Actions - Quick Access */}
+                            {/* Quick Copy Actions */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCopyTitle(product);
                               }}
-                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150 border border-gray-200"
                               title="Copy Title"
                             >
                               <FileText className="h-4 w-4" />
@@ -5797,7 +6090,7 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleCopyDescription(product);
                               }}
-                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150 border border-gray-200"
                               title="Copy Description"
                             >
                               <FileText className="h-4 w-4" />
@@ -5807,34 +6100,34 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleCopyTags(product);
                               }}
-                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150 border border-gray-200"
                               title="Copy Tags"
                             >
                               <Tag className="h-4 w-4" />
                             </button>
                             
-                            {/* Copy Menu for Additional Options */}
-                            <div className="relative group copy-menu-container">
+                            {/* Copy Menu */}
+                            <div className="relative copy-menu-container">
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
-                                    if (menu.id !== `copy-menu-${product._id}`) {
+                                  document.querySelectorAll('[id^="copy-menu-mobile-"]').forEach(menu => {
+                                    if (menu.id !== `copy-menu-mobile-${product._id}`) {
                                       menu.classList.add('hidden');
                                     }
                                   });
-                                  const menu = document.getElementById(`copy-menu-${product._id}`);
+                                  const menu = document.getElementById(`copy-menu-mobile-${product._id}`);
                                   if (menu) {
                                     menu.classList.toggle('hidden');
                                   }
                                 }}
-                                className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150 border border-gray-200"
                                 title="More copy options"
                               >
                                 <Copy className="h-4 w-4" />
                               </button>
                               <div 
-                                id={`copy-menu-${product._id}`}
+                                id={`copy-menu-mobile-${product._id}`}
                                 className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -5842,7 +6135,7 @@ export default function AdminDashboard() {
                                   <button
                                     onClick={() => {
                                       handleCopySpecs(product);
-                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      const menu = document.getElementById(`copy-menu-mobile-${product._id}`);
                                       if (menu) menu.classList.add('hidden');
                                     }}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
@@ -5853,7 +6146,7 @@ export default function AdminDashboard() {
                                   <button
                                     onClick={() => {
                                       handleCopyImageUrls(product);
-                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      const menu = document.getElementById(`copy-menu-mobile-${product._id}`);
                                       if (menu) menu.classList.add('hidden');
                                     }}
                                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
@@ -5865,7 +6158,7 @@ export default function AdminDashboard() {
                                     <button
                                       onClick={() => {
                                         handleCopyAltTexts(product);
-                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        const menu = document.getElementById(`copy-menu-mobile-${product._id}`);
                                         if (menu) menu.classList.add('hidden');
                                       }}
                                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
@@ -5884,15 +6177,15 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleGenerateAltText(product._id, product.name);
                               }}
-                              className={`p-1.5 rounded transition-colors duration-150 ${
+                              className={`px-3 py-2 rounded-lg transition-colors duration-150 border ${
                                 (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                  ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                  : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                                  ? 'text-green-600 hover:text-green-800 hover:bg-green-50 border-green-200'
+                                  : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50 border-orange-200'
                               }`}
                               title={
                                 (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                  ? 'Alt text already generated - Click to regenerate'
-                                  : 'Generate unique alt text for all images'
+                                  ? 'Alt text already generated'
+                                  : 'Generate alt text'
                               }
                             >
                               <Sparkles className="h-4 w-4" />
@@ -5902,26 +6195,18 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleOrganizeProductImages(product._id, product.name);
                               }}
-                              className={`p-1.5 rounded transition-colors duration-150 ${
+                              className={`px-3 py-2 rounded-lg transition-colors duration-150 border ${
                                 (() => {
                                   const allImages = [product.image, ...(product.images || [])].filter(Boolean);
                                   const hasCloudinary = allImages.some((url: string) => 
                                     url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
                                   );
                                   return hasCloudinary
-                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50 border-green-200'
+                                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50 border-purple-200';
                                 })()
                               }`}
-                              title={(() => {
-                                const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                                const hasCloudinary = allImages.some((url: string) => 
-                                  url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                                );
-                                return hasCloudinary
-                                  ? 'Images already organized in Cloudinary'
-                                  : 'Organize images in Cloudinary';
-                              })()}
+                              title="Organize images"
                             >
                               <Cloud className="h-4 w-4" />
                             </button>
@@ -5932,24 +6217,24 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleDeleteProduct(product._id);
                               }}
-                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150"
+                              className="px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors duration-150 border border-red-200"
                               title="Delete product"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
 
             {/* Pagination Controls */}
             {!loading && (
-              <div className="flex items-center justify-between px-6 py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-t border-gray-200">
-                <div className="text-sm text-gray-600 font-medium">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 py-4 sm:py-6 bg-gradient-to-r from-gray-50 to-blue-50 border-t border-gray-200">
+                <div className="text-xs sm:text-sm text-gray-600 font-medium text-center sm:text-left">
                   {(() => {
                     const filteredCount = products.filter(product => {
                       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -5972,13 +6257,13 @@ export default function AdminDashboard() {
                     return `Showing ${start}-${end} of ${filteredCount} products`;
                   })()}
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600 font-medium">Show:</span>
+                    <span className="text-xs sm:text-sm text-gray-600 font-medium">Show:</span>
                     <select
                       value={productPerPage}
                       onChange={(e) => { setProductPerPage(parseInt(e.target.value)); setProductPage(1); }}
-                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                      className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                     >
                       <option value={10}>10 per page</option>
                       <option value={20}>20 per page</option>
@@ -5989,13 +6274,13 @@ export default function AdminDashboard() {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => setProductPage((p) => Math.max(1, p - 1))}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
                       disabled={productPage === 1}
                     >
                       Previous
                     </button>
                     <div className="flex items-center space-x-1">
-                      <span className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-100 rounded-lg">
+                      <span className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 bg-blue-100 rounded-lg">
                         {productPage}
                       </span>
                     </div>
@@ -6003,10 +6288,10 @@ export default function AdminDashboard() {
                       onClick={() => {
                         const filteredCount = products.filter(product => {
                           const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            product.brand.toLowerCase().includes(searchTerm.toLowerCase());
+                            product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                           const matchesCategory = !selectedCategory || product.category === selectedCategory;
-                          const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
+                          const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
                           const matchesOrganized = !showOrganizedOnly || (() => {
                             const allImages = [product.image, ...(product.images || [])].filter(Boolean);
                             if (allImages.length === 0) return false;
@@ -6020,7 +6305,7 @@ export default function AdminDashboard() {
                         const totalPages = Math.max(1, Math.ceil(filteredCount / productPerPage));
                         setProductPage((p) => Math.min(totalPages, p + 1));
                       }}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
                     >
                       Next
                     </button>
