@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, ShoppingCart, Heart } from 'lucide-react';
+import { Star, ShoppingCart, Heart, CheckCircle2, Circle } from 'lucide-react';
 import { Product } from '@/types';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { useAuthStore } from '@/store/authStore';
+import toast from 'react-hot-toast';
 
 interface ProductCardProps {
   product: Product;
@@ -15,8 +17,19 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [etsyExported, setEtsyExported] = useState<boolean>(!!product.etsyExported);
+  const [etsyExportedAt, setEtsyExportedAt] = useState<string | Date | null>(product.etsyExportedAt || null);
+  const [etsyPending, setEtsyPending] = useState(false);
   const { addItem } = useCartStore();
   const { toggleWishlist, isInWishlist } = useWishlistStore();
+  const { user } = useAuthStore();
+
+  const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
+
+  useEffect(() => {
+    setEtsyExported(!!product.etsyExported);
+    setEtsyExportedAt(product.etsyExportedAt || null);
+  }, [product.etsyExported, product.etsyExportedAt]);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -32,6 +45,42 @@ export default function ProductCard({ product }: ProductCardProps) {
       const result = await toggleWishlist(id);
       setIsLiked(result === 'added');
     } catch {}
+  };
+
+  const handleToggleExport = async (e: React.MouseEvent) => {
+    if (!isSuperAdmin) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const productId = (product as any)._id || (product as any).id;
+    if (!productId) return;
+    try {
+      setEtsyPending(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ etsyExported: !etsyExported }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update Etsy export state');
+      }
+      setEtsyExported(!!data.product?.etsyExported);
+      setEtsyExportedAt(data.product?.etsyExportedAt || null);
+      toast.success(data.product?.etsyExported ? 'Marked as exported to Etsy' : 'Marked as not exported');
+    } catch (error) {
+      console.error('Toggle export error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update Etsy export state');
+    } finally {
+      setEtsyPending(false);
+    }
   };
 
   const discountPercentage = product.originalPrice 
@@ -73,6 +122,28 @@ export default function ProductCard({ product }: ProductCardProps) {
               className={`h-4 w-4 ${(isLiked || isInWishlist((product as any)._id || (product as any).id)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} 
             />
           </button>
+
+          {/* Super Admin Etsy Export Badge */}
+          {isSuperAdmin && (
+            <button
+              onClick={handleToggleExport}
+              disabled={etsyPending}
+              className={`absolute bottom-3 left-3 inline-flex items-center space-x-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                etsyExported
+                  ? 'bg-green-50/90 border-green-200 text-green-700'
+                  : 'bg-white/90 border-gray-200 text-gray-600'
+              } ${etsyPending ? 'opacity-70 cursor-wait' : 'hover:bg-white'}`}
+            >
+              {etsyPending ? (
+                <span className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : etsyExported ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 text-gray-400" />
+              )}
+              <span>{etsyExported ? 'Etsy Exported' : 'Mark Exported'}</span>
+            </button>
+          )}
           
           {/* Stock Status */}
           {!product.inStock && (

@@ -69,7 +69,9 @@ export async function PUT(
       sourceUrl,
       variants,
       status,
-      publishAt
+      publishAt,
+      etsyExported,
+      etsyExportedAt,
     } = body;
 
     const product = await Product.findById(id);
@@ -119,6 +121,14 @@ export async function PUT(
     if (variants !== undefined) (product as any).variants = variants;
     if (status !== undefined) (product as any).status = status;
     if (publishAt !== undefined) (product as any).publishAt = publishAt ? new Date(publishAt) : null;
+    if (etsyExported !== undefined) {
+      (product as any).etsyExported = etsyExported;
+      (product as any).etsyExportedAt = etsyExported
+        ? (etsyExportedAt ? new Date(etsyExportedAt) : new Date())
+        : null;
+    } else if (etsyExportedAt !== undefined) {
+      (product as any).etsyExportedAt = etsyExportedAt ? new Date(etsyExportedAt) : null;
+    }
 
     await product.save();
 

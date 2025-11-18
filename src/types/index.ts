@@ -18,6 +18,8 @@ export interface Product {
   specifications?: Record<string, string>;
   status?: string;
   productType?: string;
+  etsyExported?: boolean;
+  etsyExportedAt?: string | Date | null;
 }
 
 export interface CartItem {

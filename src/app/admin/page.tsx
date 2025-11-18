@@ -36,7 +36,9 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  Cloud
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
@@ -88,6 +90,8 @@ interface Product {
   tags: string[];
   specifications: Record<string, string>;
   isActive: boolean;
+  etsyExported?: boolean;
+  etsyExportedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,6 +153,7 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
+  const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const allowedTabs = ['users','roles','products','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
@@ -177,6 +182,7 @@ export default function AdminDashboard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const productsFetchedRef = useRef(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [etsyExportLoading, setEtsyExportLoading] = useState<Record<string, boolean>>({});
   const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
   const [seoRawSnapshot, setSeoRawSnapshot] = useState<any>(null);
@@ -698,6 +704,35 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   
+                  {isSuperAdmin && (
+                    <div className="flex items-center justify-between p-4 border border-purple-100 rounded-lg bg-purple-50/40">
+                      <div>
+                        <h4 className="font-medium text-purple-900 mb-1">Etsy Export</h4>
+                        <p className="text-sm text-purple-700">
+                          {selectedProductForModal.etsyExported
+                            ? `Exported${selectedProductForModal.etsyExportedAt ? ` on ${new Date(selectedProductForModal.etsyExportedAt).toLocaleDateString()}` : ''}`
+                            : 'Not exported yet'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToggleEtsyExport(selectedProductForModal._id, !selectedProductForModal.etsyExported)}
+                        disabled={!!etsyExportLoading[selectedProductForModal._id]}
+                        className={`inline-flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                          selectedProductForModal.etsyExported
+                            ? 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50'
+                            : 'bg-purple-600 text-white hover:bg-purple-700'
+                        } ${etsyExportLoading[selectedProductForModal._id] ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        {etsyExportLoading[selectedProductForModal._id] ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
+                        <span>{selectedProductForModal.etsyExported ? 'Unmark' : 'Mark exported'}</span>
+                      </button>
+                    </div>
+                  )}
+                  
                   {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Tags</h4>
@@ -722,6 +757,34 @@ export default function AdminDashboard() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  
+                  {isSuperAdmin && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-gray-900">Quick Copy for Etsy</h4>
+                      {[
+                        { label: 'Title', value: selectedProductTitle },
+                        { label: 'Description', value: selectedProductDescription },
+                        { label: 'Tags', value: selectedProductTagsText },
+                        { label: 'Specifications', value: selectedProductSpecsText },
+                      ].map(section => (
+                        <div key={section.label} className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="flex-1">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">{section.label}</p>
+                            <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                              {section.value || '—'}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => copyProductSection(section.label, section.value)}
+                            className="inline-flex items-center space-x-1 rounded-md border border-purple-200 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+                          >
+                            <Copy className="h-4 w-4" />
+                            <span>Copy</span>
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                   
@@ -1279,6 +1342,38 @@ export default function AdminDashboard() {
     updateQuery({ tab: 'products', productId: product._id });
   };
 
+  const handleOrganizeProductImages = async (productId: string, productName: string) => {
+    if (!confirm(`Organize images for "${productName}"? This will upload images to Cloudinary and create a folder structure.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/products/${productId}/organize-images`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to organize images');
+      }
+
+      toast.success(
+        `Images organized! ${data.stats?.uploaded || 0} uploaded to Cloudinary folder: ${data.product?.folder || ''}`
+      );
+      
+      // Refresh products list
+      fetchProducts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to organize images');
+    }
+  };
+
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
       return;
@@ -1330,6 +1425,76 @@ export default function AdminDashboard() {
   const handleClearAll = () => {
     setSelectedProductIds([]);
     toast.success('Selection cleared');
+  };
+
+  const applyProductUpdate = (productId: string, updates: Partial<Product>) => {
+    setProducts(prev =>
+      prev.map(product =>
+        product._id === productId ? { ...product, ...updates } : product
+      )
+    );
+    setSelectedProductForModal(prev =>
+      prev && prev._id === productId ? { ...prev, ...updates } : prev
+    );
+  };
+
+  const handleToggleEtsyExport = async (productId: string, nextValue: boolean) => {
+    if (!isSuperAdmin) {
+      toast.error('Super admin access required');
+      return;
+    }
+    try {
+      setEtsyExportLoading(prev => ({ ...prev, [productId]: true }));
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token || ''}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ etsyExported: nextValue }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update Etsy export status');
+      }
+      const updatedProduct = data?.product || {};
+      applyProductUpdate(productId, {
+        etsyExported: updatedProduct.etsyExported ?? nextValue,
+        etsyExportedAt: updatedProduct.etsyExportedAt ?? (nextValue ? new Date().toISOString() : null),
+      });
+      toast.success(nextValue ? 'Marked as exported to Etsy' : 'Marked as not exported');
+    } catch (error) {
+      console.error('Toggle Etsy export error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update Etsy export status');
+    } finally {
+      setEtsyExportLoading(prev => {
+        const { [productId]: _, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  const copyProductSection = async (label: string, value?: string) => {
+    if (!isSuperAdmin) {
+      toast.error('Super admin access required');
+      return;
+    }
+    if (!value || !value.trim()) {
+      toast.error(`No ${label.toLowerCase()} to copy`);
+      return;
+    }
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      toast.error('Clipboard is not available in this browser');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied to clipboard`);
+    } catch (error) {
+      console.error('Copy clipboard error:', error);
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
+    }
   };
 
   // Order management handlers
@@ -1477,6 +1642,15 @@ export default function AdminDashboard() {
     const matchesRole = !selectedRole || user.role?.name === selectedRole;
     return matchesSearch && matchesRole;
   });
+
+  const selectedProductTitle = selectedProductForModal?.name || '';
+  const selectedProductDescription = selectedProductForModal?.description || '';
+  const selectedProductTagsText = selectedProductForModal?.tags?.join(', ') || '';
+  const selectedProductSpecsText = selectedProductForModal?.specifications
+    ? Object.entries(selectedProductForModal.specifications)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n')
+    : '';
 
   if (!isAuthenticated || !user?.permissions?.includes('system:settings')) {
     return (
@@ -2866,6 +3040,32 @@ export default function AdminDashboard() {
                                           Select
                                         </span>
                                       </label>
+                                      {isSuperAdmin && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleEtsyExport(product._id, !product.etsyExported);
+                                          }}
+                                          disabled={!!etsyExportLoading[product._id]}
+                                          className={`inline-flex items-center space-x-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
+                                            product.etsyExported
+                                              ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                              : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                          } ${etsyExportLoading[product._id] ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        >
+                                          {etsyExportLoading[product._id] ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <CheckCircle
+                                              className={`h-3 w-3 ${
+                                                product.etsyExported ? 'text-green-600' : 'text-gray-400'
+                                              }`}
+                                            />
+                                          )}
+                                          <span>{product.etsyExported ? 'Exported' : 'Mark exported'}</span>
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -5448,6 +5648,16 @@ export default function AdminDashboard() {
                               title="Edit product"
                             >
                               <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOrganizeProductImages(product._id, product.name);
+                              }}
+                              className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition-colors duration-150"
+                              title="Organize images in Cloudinary"
+                            >
+                              <Cloud className="h-4 w-4" />
                             </button>
                             <button 
                               onClick={(e) => {

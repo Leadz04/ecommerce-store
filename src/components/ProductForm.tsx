@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye, Calendar as CalendarIcon } from 'lucide-react';
+import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye, Calendar as CalendarIcon, Cloud, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -66,6 +66,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [optimizingTitle, setOptimizingTitle] = useState(false);
   const [optimizingDescription, setOptimizingDescription] = useState(false);
   const [optimizingTags, setOptimizingTags] = useState(false);
+  const [organizingImages, setOrganizingImages] = useState(false);
 
   // Fetch brands from API
   useEffect(() => {
@@ -231,6 +232,49 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
       ...prev,
       images: prev.images.filter(img => img !== imageToRemove)
     }));
+  };
+
+  const handleOrganizeImages = async () => {
+    if (!product?._id) {
+      toast.error('Please save the product first before organizing images');
+      return;
+    }
+
+    try {
+      setOrganizingImages(true);
+      const res = await fetch(`/api/admin/products/${product._id}/organize-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to organize images');
+      }
+
+      // Update form data with new image URLs
+      if (data.product) {
+        setFormData(prev => ({
+          ...prev,
+          image: data.product.image || prev.image,
+          images: data.product.images || prev.images
+        }));
+      }
+
+      toast.success(
+        `Images organized! ${data.stats?.uploaded || 0} uploaded to Cloudinary folder: ${data.product?.folder || ''}`
+      );
+      
+      // Refresh product data
+      if (onSuccess) {
+        onSuccess();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to organize images');
+    } finally {
+      setOrganizingImages(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -589,10 +633,33 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
 
             {/* Images */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Image className="h-4 w-4 inline mr-2" />
-                Product Images
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  <Image className="h-4 w-4 inline mr-2" />
+                  Product Images
+                </label>
+                {product?._id && (
+                  <button
+                    type="button"
+                    onClick={handleOrganizeImages}
+                    disabled={organizingImages}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Organize images in Cloudinary (creates folder structure)"
+                  >
+                    {organizingImages ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Organizing...
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="h-4 w-4" />
+                        Organize Images
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
               
               {/* Main Image */}
               <div className="mb-4">

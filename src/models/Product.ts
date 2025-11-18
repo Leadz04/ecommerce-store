@@ -31,6 +31,8 @@ export interface IProduct extends Document {
     available?: boolean;
     inventory?: number | null;
   }>;
+  etsyExported?: boolean;
+  etsyExportedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,6 +117,15 @@ const ProductSchema = new Schema<IProduct>({
   isActive: {
     type: Boolean,
     default: true
+  },
+  etsyExported: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  etsyExportedAt: {
+    type: Date,
+    default: null,
   },
   sourceUrl: {
     type: String,

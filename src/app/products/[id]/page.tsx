@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2 } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -117,6 +117,8 @@ export default function ProductPage() {
   const [isCheckingEtsyPolicies, setIsCheckingEtsyPolicies] = useState(false);
   const [etsyPolicyResults, setEtsyPolicyResults] = useState<any>(null);
   const [showEtsyResults, setShowEtsyResults] = useState(false);
+  const [etsyExportLoading, setEtsyExportLoading] = useState(false);
+  const [organizingImages, setOrganizingImages] = useState(false);
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
@@ -280,6 +282,42 @@ export default function ProductPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to update product');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleToggleEtsyExportStatus = async () => {
+    if (!isSuperAdmin || !productId || !currentProduct) {
+      if (!isSuperAdmin) {
+        toast.error('Super admin access required');
+      }
+      return;
+    }
+    try {
+      setEtsyExportLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ etsyExported: !currentProduct.etsyExported }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update Etsy export status');
+      }
+      await fetchProduct(productId);
+      toast.success(data.product?.etsyExported ? 'Marked as exported to Etsy' : 'Marked as not exported');
+    } catch (error) {
+      console.error('Toggle Etsy export status error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update Etsy export status');
+    } finally {
+      setEtsyExportLoading(false);
     }
   };
 
@@ -829,15 +867,53 @@ export default function ProductPage() {
         <div className="space-y-6 bg-white  p-6 rounded-xl shadow-lg border border-gray-200 ">
           {/* Edit Button for Super Admin */}
           {isSuperAdmin && (
-            <div className="flex justify-end mb-6">
+            <div className="flex justify-end gap-3 mb-6">
               {!isEditMode ? (
-                <button
-                  onClick={() => setIsEditMode(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-                >
-                  <Edit className="h-4 w-4" />
-                  Edit Product
-                </button>
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!currentProduct?._id) return;
+                      if (!confirm('Organize images for this product? This will upload images to Cloudinary.')) return;
+                      
+                      try {
+                        setOrganizingImages(true);
+                        const res = await fetch(`/api/admin/products/${currentProduct._id}/organize-images`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Failed to organize images');
+                        toast.success(`Images organized! ${data.stats?.uploaded || 0} uploaded to Cloudinary`);
+                        fetchProduct(currentProduct._id); // Refresh product
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : 'Failed to organize images');
+                      } finally {
+                        setOrganizingImages(false);
+                      }
+                    }}
+                    disabled={organizingImages || !currentProduct?._id}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    {organizingImages ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Organizing...
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="h-4 w-4" />
+                        Organize Images
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setIsEditMode(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Product
+                  </button>
+                </>
               ) : (
                 <div className="flex gap-3">
                   <button
@@ -946,6 +1022,35 @@ export default function ProductPage() {
                   Save ${(product.originalPrice - product.price).toFixed(2)}
                 </span>
               )}
+            </div>
+          )}
+
+          {isSuperAdmin && currentProduct && !isEditMode && (
+            <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50/60 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-purple-900">Etsy Export Status</p>
+                <p className="text-xs text-purple-700">
+                  {currentProduct.etsyExported
+                    ? `Exported${currentProduct.etsyExportedAt ? ` on ${new Date(currentProduct.etsyExportedAt).toLocaleDateString()}` : ''}`
+                    : 'Not exported yet'}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleEtsyExportStatus}
+                disabled={etsyExportLoading}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${
+                  currentProduct.etsyExported
+                    ? 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50'
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                } ${etsyExportLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {etsyExportLoading ? (
+                  <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                <span>{currentProduct.etsyExported ? 'Unmark Exported' : 'Mark Exported'}</span>
+              </button>
             </div>
           )}
 
