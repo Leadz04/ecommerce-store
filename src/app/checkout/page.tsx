@@ -289,66 +289,66 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/cart" className="text-slate-600 hover:text-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+              <Link href="/cart" className="text-slate-600 hover:text-slate-900 shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">Checkout</h1>
-                <p className="text-slate-600">Complete your purchase securely</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Checkout</h1>
+                <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">Complete your purchase securely</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 text-sm text-slate-600">
-              <Lock className="h-4 w-4" />
-              <span>Secure checkout</span>
+            <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm text-slate-600 shrink-0">
+              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Secure checkout</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Progress Steps */}
-            <div className="mb-8">
-              <div className="flex items-center space-x-4">
-                <div className={`flex items-center space-x-2 ${currentStep === 'shipping' ? 'text-blue-600' : currentStep === 'payment' || currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'shipping' ? 'bg-blue-600 text-white' : currentStep === 'payment' || currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                    <MapPin className="h-4 w-4" />
+            <div className="mb-6 sm:mb-8">
+              <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4 overflow-x-auto pb-2">
+                <div className={`flex items-center space-x-1 sm:space-x-2 shrink-0 ${currentStep === 'shipping' ? 'text-blue-600' : currentStep === 'payment' || currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${currentStep === 'shipping' ? 'bg-blue-600 text-white' : currentStep === 'payment' || currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
                   </div>
-                  <span className="font-medium">Shipping</span>
+                  <span className="font-medium text-xs sm:text-sm md:text-base">Shipping</span>
                 </div>
-                <div className="flex-1 h-0.5 bg-slate-200">
+                <div className="flex-1 min-w-[20px] sm:min-w-[40px] h-0.5 bg-slate-200">
                   <div className={`h-full ${currentStep === 'payment' || currentStep === 'confirmation' ? 'bg-green-600' : 'bg-slate-200'}`}></div>
                 </div>
-                <div className={`flex items-center space-x-2 ${currentStep === 'payment' ? 'text-blue-600' : currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'payment' ? 'bg-blue-600 text-white' : currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                    <CreditCard className="h-4 w-4" />
+                <div className={`flex items-center space-x-1 sm:space-x-2 shrink-0 ${currentStep === 'payment' ? 'text-blue-600' : currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${currentStep === 'payment' ? 'bg-blue-600 text-white' : currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
                   </div>
-                  <span className="font-medium">Payment</span>
+                  <span className="font-medium text-xs sm:text-sm md:text-base">Payment</span>
                 </div>
-                <div className="flex-1 h-0.5 bg-slate-200">
+                <div className="flex-1 min-w-[20px] sm:min-w-[40px] h-0.5 bg-slate-200">
                   <div className={`h-full ${currentStep === 'confirmation' ? 'bg-green-600' : 'bg-slate-200'}`}></div>
                 </div>
-                <div className={`flex items-center space-x-2 ${currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                    <CheckCircle className="h-4 w-4" />
+                <div className={`flex items-center space-x-1 sm:space-x-2 shrink-0 ${currentStep === 'confirmation' ? 'text-green-600' : 'text-slate-400'}`}>
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center ${currentStep === 'confirmation' ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                   </div>
-                  <span className="font-medium">Confirmation</span>
+                  <span className="font-medium text-xs sm:text-sm md:text-base">Confirmation</span>
                 </div>
               </div>
             </div>
 
             {/* Shipping Form */}
             {currentStep === 'shipping' && (
-              <form onSubmit={handleShippingSubmit} className="space-y-6">
-                <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">
-                  <h2 className="text-xl font-semibold text-slate-900 mb-6">Shipping Information</h2>
+              <form onSubmit={handleShippingSubmit} className="space-y-4 sm:space-y-6">
+                <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-4 sm:p-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-slate-900 mb-4 sm:mb-6">Shipping Information</h2>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">First Name *</label>
                       <input
@@ -385,7 +385,7 @@ export default function CheckoutPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">City *</label>
                       <input
@@ -421,7 +421,7 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">Country *</label>
                       <select
@@ -452,7 +452,7 @@ export default function CheckoutPage() {
 
                   <button
                     type="submit"
-                    className="w-full mt-6 bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-colors"
+                    className="w-full mt-4 sm:mt-6 bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold text-base sm:text-lg hover:bg-blue-700 transition-colors"
                   >
                     Continue to Payment
                   </button>
@@ -489,8 +489,8 @@ export default function CheckoutPage() {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6 sticky top-8">
-              <h2 className="text-xl font-semibold text-slate-900 mb-6">Order Summary</h2>
+            <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-4 sm:p-6 sticky top-4 sm:top-8">
+              <h2 className="text-lg sm:text-xl font-semibold text-slate-900 mb-4 sm:mb-6">Order Summary</h2>
               
               {/* Cart Items */}
               <div className="space-y-4 mb-6">

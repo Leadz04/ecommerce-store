@@ -46,7 +46,7 @@ export default function Header() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const previousOverflow = document.body.style.overflow;
-    if (isMenuOpen) {
+    if (isMenuOpen || isCartOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -54,15 +54,15 @@ export default function Header() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isCartOpen]);
 
   return (
     <header className="bg-white/95 backdrop-blur-md shadow-md border-b border-gray-100 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16 sm:h-20">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hover:from-blue-700 hover:to-purple-700 transition-all duration-300">
+            <Link href="/" className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hover:from-blue-700 hover:to-purple-700 transition-all duration-300">
               ShopEase
             </Link>
           </div>
@@ -96,7 +96,7 @@ export default function Header() {
           </div>
 
           {/* Right side icons */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             {/* User Account */}
             {isAuthenticated ? (
               <div className="relative" ref={userMenuRef}>
@@ -182,11 +182,11 @@ export default function Header() {
             {/* Shopping Cart */}
             <button
               onClick={() => setIsCartOpen(!isCartOpen)}
-              className="relative p-2 text-gray-700 hover:text-gray-900"
+              className="relative p-1.5 sm:p-2 text-gray-700 hover:text-gray-900"
             >
-              <ShoppingCart className="h-6 w-6" />
+              <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6" />
               {isMounted && getTotalItems() > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-red-500 text-white text-[10px] sm:text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center">
                   {getTotalItems()}
                 </span>
               )}
@@ -195,11 +195,11 @@ export default function Header() {
             {/* Mobile menu button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 text-gray-700 hover:text-gray-900"
+              className="md:hidden p-1.5 sm:p-2 text-gray-700 hover:text-gray-900"
               aria-label="Open menu"
               aria-expanded={isMenuOpen}
             >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isMenuOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 sm:h-6 sm:w-6" />}
             </button>
           </div>
         </div>
@@ -279,167 +279,344 @@ export default function Header() {
 
       {/* Cart Sidebar */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-            onClick={() => setIsCartOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="relative h-screen w-1/4 bg-white shadow-xl flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
-              <h2 className="text-lg font-bold text-gray-900">
-                Shopping Cart ({getTotalItems()})
-              </h2>
-              <button
-                onClick={() => setIsCartOpen(false)}
-                aria-label="Close cart"
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-700" />
-              </button>
-            </div>
-            
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-                {!isMounted ? (
-                  <p className="text-gray-500 text-center py-8">Loading...</p>
-                ) : items.length === 0 ? (
-                  <div className="text-center py-16">
-                    <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">Your cart is empty</p>
-                    <Link
-                      href="/products"
-                      onClick={() => setIsCartOpen(false)}
-                      className="inline-block px-6 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
-                    >
-                      Continue Shopping
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {items.map((item) => {
-                      const pid = (item.product as any)._id || (item.product as any).id;
-                      const totalPrice = item.product.price * item.quantity;
-                      const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
-                      return (
-                        <div key={item.id} className="flex gap-3 pb-6 border-b border-gray-200 last:border-b-0">
-                          {/* Product Image */}
-                          <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
-                            <img 
-                              src={item.product.image} 
-                              alt={item.product.name} 
-                              className="w-20 h-20 object-cover rounded border border-gray-200" 
-                            />
-                          </Link>
-                          
-                          {/* Product Details */}
-                          <div className="flex-1 min-w-0">
-                            <Link 
-                              href={`/products/${pid}`} 
-                              onClick={() => setIsCartOpen(false)}
-                              className="block font-bold text-gray-900 hover:text-blue-600 mb-1"
-                            >
-                              {item.product.name}
-                            </Link>
-                            
-                            {/* Size (if available) */}
-                            {(item as any).size && (
-                              <p className="text-sm text-gray-600 mb-2">Size: {(item as any).size}</p>
-                            )}
-                            
-                            {/* Price */}
-                            <div className="mb-3">
-                              {hasDiscount ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-red-600 font-bold text-lg">
-                                    ${item.product.price.toFixed(2)}
-                                  </span>
-                                  <span className="text-gray-400 line-through text-sm">
-                                    ${item.product.originalPrice?.toFixed(2)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-gray-900 font-bold text-lg">
-                                  ${item.product.price.toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* Quantity Selector */}
-                            <div className="flex items-center gap-2 mb-3">
-                              <button
-                                onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
-                                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
-                                aria-label="Decrease quantity"
-                              >
-                                −
-                              </button>
-                              <span className="w-8 text-center font-semibold text-gray-900">{item.quantity}</span>
-                              <button
-                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
-                                aria-label="Increase quantity"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* Action Icons */}
-                          <div className="flex flex-col gap-3 shrink-0">
-                            <Link
-                              href={`/products/${pid}`}
-                              onClick={() => setIsCartOpen(false)}
-                              className="p-2 hover:bg-gray-100 rounded transition-colors inline-block"
-                              aria-label="Edit item"
-                              title="Edit"
-                            >
-                              <Edit className="h-5 w-5 text-gray-600" />
-                            </Link>
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="p-2 hover:bg-red-50 rounded transition-colors"
-                              aria-label={`Remove ${item.product.name}`}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-5 w-5 text-red-600" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+        <>
+          {/* Mobile Cart - matches menu sidebar style */}
+          <div className="md:hidden fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm px-4 py-8" role="dialog" aria-modal="true">
+            <div
+              className="absolute inset-0"
+              aria-hidden="true"
+              onClick={() => setIsCartOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-100">
+              {/* Header */}
+              <div className="bg-red-600 text-white px-5 py-4 flex items-center justify-between shrink-0">
+                <span className="font-semibold tracking-wide">
+                  Shopping Cart ({getTotalItems()})
+                </span>
+                <button
+                  onClick={() => setIsCartOpen(false)}
+                  className="p-1 rounded-full hover:bg-white/20 transition-colors"
+                  aria-label="Close cart"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
               
-            {/* Footer */}
-            {isMounted && items.length > 0 && (
-              <div className="border-t px-6 py-5 bg-white shrink-0">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="font-bold text-gray-900">Subtotal</span>
-                  <span className="font-bold text-gray-900">${getTotalPrice().toFixed(2)}</span>
+              {/* Cart Items */}
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                  {!isMounted ? (
+                    <p className="text-gray-500 text-center py-8">Loading...</p>
+                  ) : items.length === 0 ? (
+                    <div className="text-center py-16">
+                      <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-600 mb-2 font-medium">Your cart is empty</p>
+                      <p className="text-gray-500 text-sm mb-6">Looks like you haven't added anything to your cart yet.</p>
+                      <Link
+                        href="/products"
+                        onClick={() => setIsCartOpen(false)}
+                        className="inline-block px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        Continue Shopping
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {items.map((item) => {
+                        const pid = (item.product as any)._id || (item.product as any).id;
+                        const totalPrice = item.product.price * item.quantity;
+                        const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
+                        return (
+                          <div key={item.id} className="flex gap-3 pb-4 border-b border-gray-200 last:border-b-0">
+                            {/* Product Image */}
+                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
+                              <img 
+                                src={item.product.image} 
+                                alt={item.product.name} 
+                                className="w-20 h-20 object-cover rounded-lg border border-gray-200" 
+                              />
+                            </Link>
+                            
+                            {/* Product Details */}
+                            <div className="flex-1 min-w-0">
+                              <Link 
+                                href={`/products/${pid}`} 
+                                onClick={() => setIsCartOpen(false)}
+                                className="block font-semibold text-gray-900 hover:text-blue-600 mb-1 text-sm line-clamp-2"
+                              >
+                                {item.product.name}
+                              </Link>
+                              
+                              {/* Size and Color (if available) */}
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {(item as any).size && (
+                                  <p className="text-xs text-gray-600">Size: <span className="font-medium">{(item as any).size}</span></p>
+                                )}
+                                {(item as any).color && (
+                                  <p className="text-xs text-gray-600">Color: <span className="font-medium">{(item as any).color}</span></p>
+                                )}
+                              </div>
+                              
+                              {/* Price */}
+                              <div className="mb-3">
+                                {hasDiscount ? (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-red-600 font-bold text-base">
+                                      ${item.product.price.toFixed(2)}
+                                    </span>
+                                    <span className="text-gray-400 line-through text-sm">
+                                      ${item.product.originalPrice?.toFixed(2)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-900 font-bold text-base">
+                                    ${item.product.price.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Quantity Selector */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <button
+                                  onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                  aria-label="Decrease quantity"
+                                >
+                                  −
+                                </button>
+                                <span className="w-8 text-center font-semibold text-gray-900">{item.quantity}</span>
+                                <button
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                  aria-label="Increase quantity"
+                                >
+                                  +
+                                </button>
+                              </div>
+                              
+                              {/* Item Total */}
+                              <p className="text-sm text-gray-600">
+                                Total: <span className="font-semibold text-gray-900">${totalPrice.toFixed(2)}</span>
+                              </p>
+                            </div>
+                            
+                            {/* Action Icons */}
+                            <div className="flex flex-col gap-2 shrink-0">
+                              <Link
+                                href={`/products/${pid}`}
+                                onClick={() => setIsCartOpen(false)}
+                                className="p-2 hover:bg-gray-100 rounded transition-colors inline-block"
+                                aria-label="Edit item"
+                                title="Edit"
+                              >
+                                <Edit className="h-4 w-4 text-gray-600" />
+                              </Link>
+                              <button
+                                onClick={() => removeItem(item.id)}
+                                className="p-2 hover:bg-red-50 rounded transition-colors"
+                                aria-label={`Remove ${item.product.name}`}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-3">
-                  <Link
-                    href="/cart"
-                    className="w-full py-3 px-4 border-2 border-gray-900 text-gray-900 font-semibold rounded text-center block hover:bg-gray-50 transition-colors"
-                    onClick={() => setIsCartOpen(false)}
-                  >
-                    View Cart
-                  </Link>
-                  <Link
-                    href="/checkout"
-                    className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded text-center block hover:bg-gray-800 transition-colors"
-                    onClick={() => setIsCartOpen(false)}
-                  >
-                    Checkout
-                  </Link>
+                
+              {/* Footer */}
+              {isMounted && items.length > 0 && (
+                <div className="border-t border-gray-200 px-5 py-4 bg-white shrink-0 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-900">Subtotal</span>
+                    <span className="font-bold text-lg text-gray-900">${getTotalPrice().toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Link
+                      href="/cart"
+                      className="w-full py-3 px-4 border-2 border-gray-900 text-gray-900 font-semibold rounded-lg text-center block hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      View Cart
+                    </Link>
+                    <Link
+                      href="/checkout"
+                      className="w-full py-3 px-4 bg-blue-600 text-white font-semibold rounded-lg text-center block hover:bg-blue-700 transition-colors"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      Checkout
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* Desktop Cart - right sidebar */}
+          <div className="hidden md:flex fixed inset-0 z-50 justify-end" role="dialog" aria-modal="true">
+            <div
+              className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setIsCartOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="relative h-screen w-96 bg-white shadow-xl flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+                <h2 className="text-lg font-bold text-gray-900">
+                  Shopping Cart ({getTotalItems()})
+                </h2>
+                <button
+                  onClick={() => setIsCartOpen(false)}
+                  aria-label="Close cart"
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-700" />
+                </button>
+              </div>
+              
+              {/* Cart Items */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {!isMounted ? (
+                    <p className="text-gray-500 text-center py-8">Loading...</p>
+                  ) : items.length === 0 ? (
+                    <div className="text-center py-16">
+                      <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 mb-4">Your cart is empty</p>
+                      <Link
+                        href="/products"
+                        onClick={() => setIsCartOpen(false)}
+                        className="inline-block px-6 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+                      >
+                        Continue Shopping
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {items.map((item) => {
+                        const pid = (item.product as any)._id || (item.product as any).id;
+                        const totalPrice = item.product.price * item.quantity;
+                        const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
+                        return (
+                          <div key={item.id} className="flex gap-3 pb-6 border-b border-gray-200 last:border-b-0">
+                            {/* Product Image */}
+                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
+                              <img 
+                                src={item.product.image} 
+                                alt={item.product.name} 
+                                className="w-20 h-20 object-cover rounded border border-gray-200" 
+                              />
+                            </Link>
+                            
+                            {/* Product Details */}
+                            <div className="flex-1 min-w-0">
+                              <Link 
+                                href={`/products/${pid}`} 
+                                onClick={() => setIsCartOpen(false)}
+                                className="block font-bold text-gray-900 hover:text-blue-600 mb-1"
+                              >
+                                {item.product.name}
+                              </Link>
+                              
+                              {/* Size (if available) */}
+                              {(item as any).size && (
+                                <p className="text-sm text-gray-600 mb-2">Size: {(item as any).size}</p>
+                              )}
+                              
+                              {/* Price */}
+                              <div className="mb-3">
+                                {hasDiscount ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-red-600 font-bold text-lg">
+                                      ${item.product.price.toFixed(2)}
+                                    </span>
+                                    <span className="text-gray-400 line-through text-sm">
+                                      ${item.product.originalPrice?.toFixed(2)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-900 font-bold text-lg">
+                                    ${item.product.price.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Quantity Selector */}
+                              <div className="flex items-center gap-2 mb-3">
+                                <button
+                                  onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                  aria-label="Decrease quantity"
+                                >
+                                  −
+                                </button>
+                                <span className="w-8 text-center font-semibold text-gray-900">{item.quantity}</span>
+                                <button
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-700 font-semibold transition-colors"
+                                  aria-label="Increase quantity"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Action Icons */}
+                            <div className="flex flex-col gap-3 shrink-0">
+                              <Link
+                                href={`/products/${pid}`}
+                                onClick={() => setIsCartOpen(false)}
+                                className="p-2 hover:bg-gray-100 rounded transition-colors inline-block"
+                                aria-label="Edit item"
+                                title="Edit"
+                              >
+                                <Edit className="h-5 w-5 text-gray-600" />
+                              </Link>
+                              <button
+                                onClick={() => removeItem(item.id)}
+                                className="p-2 hover:bg-red-50 rounded transition-colors"
+                                aria-label={`Remove ${item.product.name}`}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-5 w-5 text-red-600" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+              {/* Footer */}
+              {isMounted && items.length > 0 && (
+                <div className="border-t px-6 py-5 bg-white shrink-0">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-bold text-gray-900">Subtotal</span>
+                    <span className="font-bold text-gray-900">${getTotalPrice().toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-3">
+                    <Link
+                      href="/cart"
+                      className="w-full py-3 px-4 border-2 border-gray-900 text-gray-900 font-semibold rounded text-center block hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      View Cart
+                    </Link>
+                    <Link
+                      href="/checkout"
+                      className="w-full py-3 px-4 bg-gray-900 text-white font-semibold rounded text-center block hover:bg-gray-800 transition-colors"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      Checkout
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </header>
   );

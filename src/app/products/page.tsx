@@ -242,10 +242,10 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 sm:py-12 md:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">All Products</h1>
-          <p className="text-xl text-blue-100">Discover our complete collection of products</p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-4">All Products</h1>
+          <p className="text-base sm:text-lg md:text-xl text-blue-100">Discover our complete collection of products</p>
         </div>
       </section>
 
@@ -254,84 +254,89 @@ export default function ProductsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
           {/* Search and Controls */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-8">
+          <div className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8">
             {/* Search */}
             <div className="flex-1 relative">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search products..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
+                  className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 text-sm sm:text-base"
                 />
                 {searchInput && (
                   <button
                     onClick={clearSearch}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    <X className="h-5 w-5" />
+                    <X className="h-4 w-4 sm:h-5 sm:w-5" />
                   </button>
                 )}
               </div>
               {/* Search Status */}
               {filters.search && (
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-sm text-gray-600">
+                <div className="mt-2 flex items-center justify-between text-xs sm:text-sm">
+                  <p className="text-gray-600 truncate pr-2">
                     Searching for: <span className="font-semibold text-blue-600">"{filters.search}"</span>
                   </p>
                   <button
                     onClick={clearSearch}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    className="text-blue-600 hover:text-blue-700 font-medium shrink-0"
                   >
-                    Clear search
+                    Clear
                   </button>
                 </div>
               )}
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+            {/* Controls Row */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* View Mode Toggle */}
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 sm:p-2 rounded ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+                  aria-label="Grid view"
+                >
+                  <Grid className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 sm:p-2 rounded ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+                  aria-label="List view"
+                >
+                  <List className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+
+              {/* Sort */}
+              <select
+                value={filters.sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="flex-1 sm:flex-none min-w-[140px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 text-sm sm:text-base"
               >
-                <Grid className="h-5 w-5" />
-              </button>
+                <option value="name">Sort by Name</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="rating">Highest Rated</option>
+                <option value="newest">Newest</option>
+              </select>
+
+              {/* Filter Toggle */}
               <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+                onClick={() => setShowFilters(!showFilters)}
+                className="lg:hidden flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 text-sm sm:text-base"
+                aria-expanded={showFilters}
+                aria-controls="mobile-filter-drawer"
               >
-                <List className="h-5 w-5" />
+                <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span>
+                  Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                </span>
               </button>
             </div>
-
-            {/* Sort */}
-            <select
-              value={filters.sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-            >
-              <option value="name">Sort by Name</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
-              <option value="newest">Newest</option>
-            </select>
-
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="lg:hidden flex items-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50"
-              aria-expanded={showFilters}
-              aria-controls="mobile-filter-drawer"
-            >
-              <SlidersHorizontal className="h-5 w-5" />
-              <span>
-                Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
-              </span>
-            </button>
           </div>
 
           {showFilters && (

@@ -1830,8 +1830,8 @@ export default function AdminDashboard() {
         {/* Navigation Tabs */}
         <div className="mb-6 sm:mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <nav className="flex overflow-x-auto scrollbar-hide -mb-px" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div className="flex space-x-1 px-2 sm:px-4 py-2 min-w-max">
+            <nav className="flex overflow-x-auto lg:overflow-x-visible scrollbar-hide -mb-px" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div className="flex flex-wrap lg:flex-nowrap gap-1.5 lg:gap-2 px-2 sm:px-4 py-2.5 lg:py-3 w-full lg:w-auto">
                 <button
                   onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
                   className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
@@ -5552,7 +5552,8 @@ export default function AdminDashboard() {
               </div>
 
               {/* Search and Filters */}
-              <div className="flex flex-col lg:flex-row gap-4">
+              <div className="flex flex-col gap-3">
+                {/* Top Row: Search */}
                 <div className="flex-1">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -5561,129 +5562,144 @@ export default function AdminDashboard() {
                       placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => { setSearchTerm(e.target.value); setProductPage(1); }}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => { setSelectedCategory(e.target.value); setProductPage(1); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Categories</option>
-                  <option value="Men">Men</option>
-                  <option value="Women">Women</option>
-                  <option value="Office & Travel">Office & Travel</option>
-                  <option value="Accessories">Accessories</option>
-                  <option value="Gifting">Gifting</option>
-                </select>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
-                  disabled={brandsLoading}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">{brandsLoading ? 'Loading brands...' : 'All Brands'}</option>
-                  {availableBrands.map(brand => (
-                    <option key={brand} value={brand}>{brand}</option>
-                  ))}
-                  {!brandsLoading && availableBrands.length === 0 && (
-                    <option value="" disabled>No brands available</option>
-                  )}
-                </select>
-                <select
-                  value={selectedOrderStatus}
-                  onChange={(e) => { setSelectedOrderStatus(e.target.value); setProductPage(1); }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Product Statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="live">Live</option>
-                </select>
-                <label className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showOrganizedOnly}
-                    onChange={(e) => { setShowOrganizedOnly(e.target.checked); setProductPage(1); }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium">Organized Only</span>
-                </label>
-                <button
-                  onClick={fetchProducts}
-                  className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Refresh</span>
-                </button>
                 
-                
-                {/* CSV Export */}
-                <a
-                  href="/api/admin/products/export-csv"
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Export CSV
-                </a>
-                <a
-                  href="/api/admin/products/sample-csv"
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Sample CSV
-                </a>
-                {/* CSV Import */}
-                <label className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                  Import CSV
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const token = localStorage.getItem('token');
-                        const text = await file.text();
-                        // First do a dry-run to validate mapping
-                        let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
-                          method: 'POST',
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'text/csv',
-                          },
-                          body: text,
-                        });
-                        let data = await res.json();
-                        if (!res.ok) throw new Error(data.error || 'Validation failed');
-                        if (data.warnings?.length) {
-                          toast((t) => (
-                            <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
-                          ));
-                        }
-                        // Proceed actual import
-                        res = await fetch('/api/admin/products/import-csv', {
-                          method: 'POST',
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'text/csv',
-                          },
-                          body: text,
-                        });
-                        data = await res.json();
-                        if (!res.ok) throw new Error(data.error || 'Import failed');
-                        toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
-                        fetchProducts();
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Import failed');
-                      } finally {
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
-                </label>
+                {/* Bottom Row: Filters and Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Filter Dropdowns */}
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => { setSelectedCategory(e.target.value); setProductPage(1); }}
+                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
+                  >
+                    <option value="">All Categories</option>
+                    <option value="Men">Men</option>
+                    <option value="Women">Women</option>
+                    <option value="Office & Travel">Office & Travel</option>
+                    <option value="Accessories">Accessories</option>
+                    <option value="Gifting">Gifting</option>
+                  </select>
+                  <select
+                    value={selectedBrand}
+                    onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
+                    disabled={brandsLoading}
+                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium bg-white"
+                  >
+                    <option value="">{brandsLoading ? 'Loading brands...' : 'All Brands'}</option>
+                    {availableBrands.map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                    {!brandsLoading && availableBrands.length === 0 && (
+                      <option value="" disabled>No brands available</option>
+                    )}
+                  </select>
+                  <select
+                    value={selectedOrderStatus}
+                    onChange={(e) => { setSelectedOrderStatus(e.target.value); setProductPage(1); }}
+                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="live">Live</option>
+                  </select>
+                  
+                  {/* Checkbox Filter */}
+                  <label className="flex items-center space-x-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer bg-white">
+                    <input
+                      type="checkbox"
+                      checked={showOrganizedOnly}
+                      onChange={(e) => { setShowOrganizedOnly(e.target.checked); setProductPage(1); }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium">Organized Only</span>
+                  </label>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={fetchProducts}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm hover:shadow-md"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      <span>Refresh</span>
+                    </button>
+                    
+                    {/* CSV Actions Group */}
+                    <div className="flex items-center gap-2 border-l border-gray-300 pl-2">
+                      <a
+                        href="/api/admin/products/export-csv"
+                        className="flex items-center space-x-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm shadow-sm hover:shadow-md"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Export CSV</span>
+                      </a>
+                      <a
+                        href="/api/admin/products/sample-csv"
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm border border-gray-300"
+                      >
+                        Sample CSV
+                      </a>
+                      <label className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-sm cursor-pointer shadow-sm hover:shadow-md">
+                        <span className="flex items-center space-x-1.5">
+                          <Download className="h-4 w-4" />
+                          <span>Import CSV</span>
+                        </span>
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const token = localStorage.getItem('token');
+                              const text = await file.text();
+                              // First do a dry-run to validate mapping
+                              let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'text/csv',
+                                },
+                                body: text,
+                              });
+                              let data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Validation failed');
+                              if (data.warnings?.length) {
+                                toast((t) => (
+                                  <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
+                                ));
+                              }
+                              // Proceed actual import
+                              res = await fetch('/api/admin/products/import-csv', {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'text/csv',
+                                },
+                                body: text,
+                              });
+                              data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Import failed');
+                              toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+                              fetchProducts();
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Import failed');
+                            } finally {
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -5692,8 +5708,8 @@ export default function AdminDashboard() {
             ) : (
               <>
                 {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
+                <div className="hidden lg:block overflow-x-hidden">
+                  <table className="w-full divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-100">
                       <tr>
                         <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
@@ -5714,7 +5730,7 @@ export default function AdminDashboard() {
                         <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider min-w-[300px]">
+                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
