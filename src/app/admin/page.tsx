@@ -38,7 +38,9 @@ import {
   AlertTriangle,
   HelpCircle,
   Copy,
-  Cloud
+  Cloud,
+  ExternalLink,
+  MoreVertical
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
@@ -1401,6 +1403,61 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to delete product');
     }
   };
+
+  // Copy functions for product data
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast.error(`Failed to copy ${label}`);
+    }
+  };
+
+  const handleCopyTitle = (product: Product) => {
+    copyToClipboard(product.name || '', 'Title');
+  };
+
+  const handleCopyDescription = (product: Product) => {
+    copyToClipboard(product.description || '', 'Description');
+  };
+
+  const handleCopyTags = (product: Product) => {
+    const tagsText = (product.tags || []).join(', ');
+    copyToClipboard(tagsText, 'Tags');
+  };
+
+  const handleCopySpecs = (product: Product) => {
+    const specs = product.specifications || {};
+    const specsText = Object.entries(specs)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+    copyToClipboard(specsText || 'No specifications', 'Specifications');
+  };
+
+  const handleCopyImageUrls = (product: Product) => {
+    const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+    const imagesText = allImages.join('\n');
+    copyToClipboard(imagesText || 'No images', 'Image URLs');
+  };
+
+  // Close copy menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.copy-menu-container')) {
+        document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
+          menu.classList.add('hidden');
+        });
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   const handleProductFormSuccess = () => {
     fetchProducts();
@@ -5656,7 +5713,17 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2 items-center">
+                            <Link
+                              href={`/products/${product._id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors duration-150"
+                              title="View product"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -5667,6 +5734,90 @@ export default function AdminDashboard() {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
+                            <div className="relative group copy-menu-container">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Close all other menus first
+                                  document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
+                                    if (menu.id !== `copy-menu-${product._id}`) {
+                                      menu.classList.add('hidden');
+                                    }
+                                  });
+                                  const menu = document.getElementById(`copy-menu-${product._id}`);
+                                  if (menu) {
+                                    menu.classList.toggle('hidden');
+                                  }
+                                }}
+                                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150"
+                                title="Copy product data"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              <div 
+                                id={`copy-menu-${product._id}`}
+                                className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => {
+                                      handleCopyTitle(product);
+                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      if (menu) menu.classList.add('hidden');
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                    <span>Copy Title</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleCopyDescription(product);
+                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      if (menu) menu.classList.add('hidden');
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                    <span>Copy Description</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleCopyTags(product);
+                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      if (menu) menu.classList.add('hidden');
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                  >
+                                    <Tag className="h-4 w-4" />
+                                    <span>Copy Tags</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleCopySpecs(product);
+                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      if (menu) menu.classList.add('hidden');
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                    <span>Copy Specifications</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleCopyImageUrls(product);
+                                      const menu = document.getElementById(`copy-menu-${product._id}`);
+                                      if (menu) menu.classList.add('hidden');
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                  >
+                                    <ImageIcon className="h-4 w-4" />
+                                    <span>Copy Image URLs</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
