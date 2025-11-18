@@ -9,6 +9,7 @@ export interface IProduct extends Document {
   originalPrice?: number;
   image: string;
   images: string[];
+  imageAltTexts?: string[];
   category?: string;
   brand?: string;
   rating: number;
@@ -70,6 +71,10 @@ const ProductSchema = new Schema<IProduct>({
   },
   images: [{
     type: String
+  }],
+  imageAltTexts: [{
+    type: String,
+    trim: true
   }],
   category: {
     type: String,

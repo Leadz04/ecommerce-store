@@ -4,7 +4,7 @@
   
   This script:
   1. Connects to Cloudinary
-  2. Lists all products in Etsy_Shop folder
+  2. Lists all products in EverStyleCrafts folder
   3. Matches them with database products by title
   4. Updates product images with Cloudinary URLs
   
@@ -87,7 +87,7 @@ async function listCloudinaryProducts(config) {
   do {
     try {
       const result = await cloudinary.search
-        .expression('folder:Etsy_Shop/*')
+        .expression('folder:EverStyleCrafts/*')
         .sort_by([{ 'created_at': 'desc' }])
         .max_results(500)
         .execute();
@@ -103,7 +103,7 @@ async function listCloudinaryProducts(config) {
       try {
         const result = await cloudinary.api.resources({
           type: 'upload',
-          prefix: 'Etsy_Shop/',
+          prefix: 'EverStyleCrafts/',
           max_results: 500,
           next_cursor: nextCursor
         });
@@ -130,17 +130,17 @@ async function listCloudinaryProducts(config) {
     const publicId = resource.public_id || '';
     const folderPath = resource.folder || '';
     
-    // Extract product folder name: Etsy_Shop/product-name/view-1 -> product-name
+    // Extract product folder name: EverStyleCrafts/product-name/view-1 -> product-name
     let productFolder = '';
     
     if (folderPath) {
-      const match = folderPath.match(/Etsy_Shop\/([^\/]+)/);
+      const match = folderPath.match(/EverStyleCrafts\/([^\/]+)/);
       if (match) {
         productFolder = match[1];
       }
     } else if (publicId) {
-      // Extract from public_id: Etsy_Shop/product-name/view-1
-      const match = publicId.match(/Etsy_Shop\/([^\/]+)/);
+      // Extract from public_id: EverStyleCrafts/product-name/view-1
+      const match = publicId.match(/EverStyleCrafts\/([^\/]+)/);
       if (match) {
         productFolder = match[1];
       }
@@ -279,7 +279,7 @@ async function main() {
     const cloudinaryProducts = await listCloudinaryProducts(cloudinaryConfig);
     
     if (cloudinaryProducts.size === 0) {
-      console.log('⚠️  No products found in Cloudinary Etsy_Shop folder');
+      console.log('⚠️  No products found in Cloudinary EverStyleCrafts folder');
       return;
     }
     

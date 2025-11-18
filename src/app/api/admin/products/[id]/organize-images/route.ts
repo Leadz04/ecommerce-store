@@ -104,7 +104,7 @@ export async function POST(
     }
 
     const productName = product.name || 'product';
-    const folderName = `Etsy_Shop/${sanitizeFilename(productName)}`;
+    const folderName = `EverStyleCrafts/${sanitizeFilename(productName)}`;
     
     // Get all images (main image + images array)
     const allImages: string[] = [];

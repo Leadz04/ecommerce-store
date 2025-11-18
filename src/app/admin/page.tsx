@@ -40,7 +40,8 @@ import {
   Copy,
   Cloud,
   ExternalLink,
-  MoreVertical
+  MoreVertical,
+  Sparkles
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
@@ -1440,6 +1441,50 @@ export default function AdminDashboard() {
     const allImages = [product.image, ...(product.images || [])].filter(Boolean);
     const imagesText = allImages.join('\n');
     copyToClipboard(imagesText || 'No images', 'Image URLs');
+  };
+
+  const handleCopyAltTexts = (product: Product) => {
+    const altTexts = (product as any).imageAltTexts || [];
+    if (altTexts.length === 0) {
+      toast.error('No alt texts available. Generate them first!');
+      return;
+    }
+    const altTextsString = altTexts.map((text: string, index: number) => 
+      `Image ${index + 1}: ${text}`
+    ).join('\n');
+    copyToClipboard(altTextsString, 'Image Alt Texts');
+  };
+
+  const handleGenerateAltText = async (productId: string, productName: string) => {
+    if (!confirm(`Generate unique alt text for all images of "${productName}"?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/products/${productId}/generate-alt-text`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate alt text');
+      }
+
+      toast.success(
+        `Generated ${data.altTexts?.length || 0} unique alt texts for product images!`
+      );
+      
+      // Refresh products list
+      fetchProducts();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate alt text');
+    }
   };
 
   // Close copy menus when clicking outside
@@ -5612,7 +5657,7 @@ export default function AdminDashboard() {
                       <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider min-w-[320px]">
                         Actions
                       </th>
                     </tr>
@@ -5713,13 +5758,14 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-5 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2 items-center">
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            {/* Primary Actions */}
                             <Link
                               href={`/products/${product._id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors duration-150"
+                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150"
                               title="View product"
                             >
                               <ExternalLink className="h-4 w-4" />
@@ -5729,16 +5775,49 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleEditProduct(product);
                               }}
-                              className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors duration-150"
+                              className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150"
                               title="Edit product"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
+                            
+                            {/* Copy Actions - Quick Access */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyTitle(product);
+                              }}
+                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              title="Copy Title"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyDescription(product);
+                              }}
+                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              title="Copy Description"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyTags(product);
+                              }}
+                              className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                              title="Copy Tags"
+                            >
+                              <Tag className="h-4 w-4" />
+                            </button>
+                            
+                            {/* Copy Menu for Additional Options */}
                             <div className="relative group copy-menu-container">
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Close all other menus first
                                   document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
                                     if (menu.id !== `copy-menu-${product._id}`) {
                                       menu.classList.add('hidden');
@@ -5749,8 +5828,8 @@ export default function AdminDashboard() {
                                     menu.classList.toggle('hidden');
                                   }
                                 }}
-                                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors duration-150"
-                                title="Copy product data"
+                                className="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                title="More copy options"
                               >
                                 <Copy className="h-4 w-4" />
                               </button>
@@ -5760,39 +5839,6 @@ export default function AdminDashboard() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="py-1">
-                                  <button
-                                    onClick={() => {
-                                      handleCopyTitle(product);
-                                      const menu = document.getElementById(`copy-menu-${product._id}`);
-                                      if (menu) menu.classList.add('hidden');
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                    <span>Copy Title</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleCopyDescription(product);
-                                      const menu = document.getElementById(`copy-menu-${product._id}`);
-                                      if (menu) menu.classList.add('hidden');
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                    <span>Copy Description</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      handleCopyTags(product);
-                                      const menu = document.getElementById(`copy-menu-${product._id}`);
-                                      if (menu) menu.classList.add('hidden');
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                  >
-                                    <Tag className="h-4 w-4" />
-                                    <span>Copy Tags</span>
-                                  </button>
                                   <button
                                     onClick={() => {
                                       handleCopySpecs(product);
@@ -5815,15 +5861,48 @@ export default function AdminDashboard() {
                                     <ImageIcon className="h-4 w-4" />
                                     <span>Copy Image URLs</span>
                                   </button>
+                                  {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
+                                    <button
+                                      onClick={() => {
+                                        handleCopyAltTexts(product);
+                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        if (menu) menu.classList.add('hidden');
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                      <Sparkles className="h-4 w-4" />
+                                      <span>Copy Alt Texts</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
+                            
+                            {/* Image Actions */}
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGenerateAltText(product._id, product.name);
+                              }}
+                              className={`p-1.5 rounded transition-colors duration-150 ${
+                                (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                  ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                  : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                              }`}
+                              title={
+                                (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                  ? 'Alt text already generated - Click to regenerate'
+                                  : 'Generate unique alt text for all images'
+                              }
+                            >
+                              <Sparkles className="h-4 w-4" />
+                            </button>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOrganizeProductImages(product._id, product.name);
                               }}
-                              className={`p-2 rounded-lg transition-colors duration-150 ${
+                              className={`p-1.5 rounded transition-colors duration-150 ${
                                 (() => {
                                   const allImages = [product.image, ...(product.images || [])].filter(Boolean);
                                   const hasCloudinary = allImages.some((url: string) => 
@@ -5846,12 +5925,14 @@ export default function AdminDashboard() {
                             >
                               <Cloud className="h-4 w-4" />
                             </button>
+                            
+                            {/* Delete Action */}
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteProduct(product._id);
                               }}
-                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors duration-150"
+                              className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150"
                               title="Delete product"
                             >
                               <Trash2 className="h-4 w-4" />

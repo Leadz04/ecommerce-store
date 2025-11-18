@@ -826,7 +826,11 @@ export default function ProductPage() {
                 <div className="aspect-square overflow-hidden rounded-xl bg-white  shadow-lg border border-gray-200 ">
                   <Image
                     src={images[selectedImage]}
-                    alt={product.name}
+                    alt={
+                      (product as any).imageAltTexts && (product as any).imageAltTexts[selectedImage]
+                        ? (product as any).imageAltTexts[selectedImage]
+                        : product.name
+                    }
                     width={600}
                     height={600}
                     loader={cdnImageLoader}
@@ -849,7 +853,11 @@ export default function ProductPage() {
                       >
                         <Image
                           src={image}
-                          alt={`${product.name} ${index + 1}`}
+                          alt={
+                            (product as any).imageAltTexts && (product as any).imageAltTexts[index]
+                              ? (product as any).imageAltTexts[index]
+                              : `${product.name} ${index + 1}`
+                          }
                           width={150}
                           height={150}
                           loader={cdnImageLoader}

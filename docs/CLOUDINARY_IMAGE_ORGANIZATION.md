@@ -6,7 +6,7 @@ This script transforms your product images into a professional, organized Cloudi
 
 ## Features
 
-✅ **Organized Folder Structure**: `Etsy_Shop/Product-Name/`  
+✅ **Organized Folder Structure**: `EverStyleCrafts/Product-Name/`  
 ✅ **SEO-Friendly Filenames**: `product-name-view-1.jpg` instead of random codes  
 ✅ **Format Conversion**: Automatically converts to JPG (Etsy-compatible)  
 ✅ **Quality Optimization**: Uses Cloudinary's auto quality for optimal file sizes  
@@ -78,7 +78,7 @@ npm run organize:images -- --db
 Images are organized like this in Cloudinary:
 
 ```
-Etsy_Shop/
+EverStyleCrafts/
 ├── mens-black-cafe-racer-jacket/
 │   ├── mens-black-cafe-racer-jacket-view-1.jpg
 │   ├── mens-black-cafe-racer-jacket-view-2.jpg
@@ -92,7 +92,7 @@ Etsy_Shop/
 ### Image Processing
 
 1. **Reads** product data (from CSV or MongoDB)
-2. **Creates** folder: `Etsy_Shop/{sanitized-product-name}/`
+2. **Creates** folder: `EverStyleCrafts/{sanitized-product-name}/`
 3. **Uploads** each image to Cloudinary with SEO-friendly name
 4. **Converts** to JPG format (Etsy-compatible)
 5. **Optimizes** quality automatically
@@ -118,7 +118,7 @@ Mode: LIVE
 
 [1/766]
 📦 Processing: Men's Cognac Brown Quilted Leather Fashion Biker Jacket...
-   Folder: Etsy_Shop/mens-cognac-brown-quilted-leather-fashion-biker-jacket
+   Folder: EverStyleCrafts/mens-cognac-brown-quilted-leather-fashion-biker-jacket
    📸 Found 10 image(s)
   ✅ Uploaded: mens-cognac-brown-quilted-leather-fashion-biker-jacket-view-1
   ✅ Uploaded: mens-cognac-brown-quilted-leather-fashion-biker-jacket-view-2

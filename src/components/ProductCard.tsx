@@ -95,7 +95,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           {!imageError ? (
             <Image
               src={product.image}
-              alt={product.name}
+              alt={
+                (product as any).imageAltTexts && (product as any).imageAltTexts[0]
+                  ? (product as any).imageAltTexts[0]
+                  : product.name
+              }
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-300"
               onError={() => setImageError(true)}

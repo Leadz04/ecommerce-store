@@ -3,7 +3,7 @@
   ===============================================
   
   This script transforms your product images into a structured Cloudinary library:
-  - Creates organized folders: Etsy_Shop/Product-Name/
+  - Creates organized folders: EverStyleCrafts/Product-Name/
   - Uploads images with SEO-friendly names
   - Converts to JPG format (Etsy-compatible)
   - Updates CSV with new Cloudinary URLs
@@ -130,7 +130,7 @@ async function uploadImageToCloudinary(imageUrl, folderPath, fileName, dryRun = 
 
 async function processProductImages(product, dryRun = false) {
   const productTitle = product.Title || product.title || product.name || 'product';
-  const folderName = `Etsy_Shop/${sanitizeFilename(productTitle)}`;
+  const folderName = `EverStyleCrafts/${sanitizeFilename(productTitle)}`;
   
   console.log(`\n📦 Processing: ${productTitle.substring(0, 50)}...`);
   console.log(`   Folder: ${folderName}`);
