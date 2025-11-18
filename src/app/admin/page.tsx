@@ -41,7 +41,11 @@ import {
   Cloud,
   ExternalLink,
   MoreVertical,
-  Sparkles
+  Sparkles,
+  FileCheck,
+  History,
+  Wrench,
+  Home
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
@@ -1771,173 +1775,224 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 sm:py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600 mt-1">Manage users, roles, and system settings</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Manage users, roles, and system settings</p>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={seedRoles}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
-                Seed Roles
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline">Seed Roles</span>
+                <span className="sm:hidden">Seed</span>
               </button>
               <Link
                 href="/admin/audit-logs"
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
-                Audit Logs
+                <FileCheck className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
+                <span className="hidden sm:inline">Audit Logs</span>
+                <span className="sm:hidden">Audit</span>
               </Link>
               <Link
                 href="/admin/product-versions"
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
-                Product Changes
+                <History className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
+                <span className="hidden sm:inline">Product Changes</span>
+                <span className="sm:hidden">Changes</span>
               </Link>
               <Link
                 href="/admin/tools"
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
-                Admin Tools
+                <Wrench className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
+                <span className="hidden sm:inline">Admin Tools</span>
+                <span className="sm:hidden">Tools</span>
               </Link>
               <Link
                 href="/"
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
               >
-                Back to Store
+                <Home className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
+                <span className="hidden sm:inline">Back to Store</span>
+                <span className="sm:hidden">Store</span>
               </Link>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Navigation Tabs */}
-        <div className="mb-8">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'overview'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="h-5 w-5 inline mr-2" />
-              Overview
-            </button>
-            <button
-              onClick={() => { setActiveTab('sourcing'); updateQuery({ tab: 'sourcing' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'sourcing'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Download className="h-5 w-5 inline mr-2" />
-              Sourcing
-            </button>
-            <button
-              onClick={() => { setActiveTab('users'); updateQuery({ tab: 'users' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'users'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Users className="h-5 w-5 inline mr-2" />
-              Users
-            </button>
-            <button
-              onClick={() => { setActiveTab('roles'); updateQuery({ tab: 'roles' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'roles'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Shield className="h-5 w-5 inline mr-2" />
-              Roles & Permissions
-            </button>
-            <button
-              onClick={() => { setActiveTab('products'); updateQuery({ tab: 'products' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'products'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Package className="h-5 w-5 inline mr-2" />
-              Products
-            </button>
-            <button
-              onClick={() => { setActiveTab('orders'); updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined } as any); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'orders'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <ShoppingCart className="h-5 w-5 inline mr-2" />
-              Orders
-            </button>
-            <button
-              onClick={() => { setActiveTab('marketing'); updateQuery({ tab: 'marketing' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                ['marketing','performance','analytics','etsy'].includes(activeTab as any)
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="h-5 w-5 inline mr-2" />
-              Marketing & Performance
-            </button>
-            <button
-              onClick={() => { setActiveTab('seo'); updateQuery({ tab: 'seo' }); }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                (activeTab as any) === 'seo'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Search className="h-5 w-5 inline mr-2" />
-              SEO Research
-            </button>
-          <button
-            onClick={() => { setActiveTab('seo-raw'); updateQuery({ tab: 'seo-raw' }); }}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              (activeTab as any) === 'seo-raw'
-                ? 'border-green-500 text-green-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <Search className="h-5 w-5 inline mr-2" />
-            SEO Raw
-          </button>
-          <button
-            onClick={() => { setActiveTab('blogs'); updateQuery({ tab: 'blogs' }); }}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              (activeTab as any) === 'blogs'
-                ? 'border-purple-500 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <FileText className="h-5 w-5 inline mr-2" />
-            Blogs
-          </button>
-          <button
-            onClick={() => { setActiveTab('keyword-planner'); updateQuery({ tab: 'keyword-planner' }); }}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              (activeTab as any) === 'keyword-planner'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <Search className="h-5 w-5 inline mr-2" />
-            Keyword Planner
-          </button>
-          </nav>
+        <div className="mb-6 sm:mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <nav className="flex overflow-x-auto scrollbar-hide -mb-px" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div className="flex space-x-1 px-2 sm:px-4 py-2 min-w-max">
+                <button
+                  onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'overview'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <BarChart3 className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'overview' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Overview</span>
+                  {activeTab === 'overview' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('sourcing'); updateQuery({ tab: 'sourcing' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'sourcing'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Download className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'sourcing' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Sourcing</span>
+                  {activeTab === 'sourcing' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('users'); updateQuery({ tab: 'users' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'users'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'users' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Users</span>
+                  {activeTab === 'users' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('roles'); updateQuery({ tab: 'roles' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'roles'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Shield className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'roles' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">Roles & Permissions</span>
+                  <span className="sm:hidden">Roles</span>
+                  {activeTab === 'roles' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('products'); updateQuery({ tab: 'products' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'products'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Package className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'products' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Products</span>
+                  {activeTab === 'products' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('orders'); updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined } as any); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'orders'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <ShoppingCart className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'orders' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Orders</span>
+                  {activeTab === 'orders' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('marketing'); updateQuery({ tab: 'marketing' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    ['marketing','performance','analytics','etsy'].includes(activeTab as any)
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <BarChart3 className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${['marketing','performance','analytics','etsy'].includes(activeTab as any) ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">Marketing & Performance</span>
+                  <span className="sm:hidden">Marketing</span>
+                  {['marketing','performance','analytics','etsy'].includes(activeTab as any) && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('seo'); updateQuery({ tab: 'seo' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    (activeTab as any) === 'seo'
+                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 shadow-sm border border-green-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'seo' ? 'text-green-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">SEO Research</span>
+                  <span className="sm:hidden">SEO</span>
+                  {(activeTab as any) === 'seo' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-emerald-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('seo-raw'); updateQuery({ tab: 'seo-raw' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    (activeTab as any) === 'seo-raw'
+                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 shadow-sm border border-green-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'seo-raw' ? 'text-green-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>SEO Raw</span>
+                  {(activeTab as any) === 'seo-raw' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-emerald-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('blogs'); updateQuery({ tab: 'blogs' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    (activeTab as any) === 'blogs'
+                      ? 'bg-gradient-to-r from-purple-50 to-violet-50 text-purple-700 shadow-sm border border-purple-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <FileText className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'blogs' ? 'text-purple-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span>Blogs</span>
+                  {(activeTab as any) === 'blogs' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-violet-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('keyword-planner'); updateQuery({ tab: 'keyword-planner' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    (activeTab as any) === 'keyword-planner'
+                      ? 'bg-gradient-to-r from-orange-50 to-amber-50 text-orange-700 shadow-sm border border-orange-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'keyword-planner' ? 'text-orange-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">Keyword Planner</span>
+                  <span className="sm:hidden">Keywords</span>
+                  {(activeTab as any) === 'keyword-planner' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-500 to-amber-500"></span>
+                  )}
+                </button>
+              </div>
+            </nav>
+          </div>
         </div>
 
         {/* Sourcing Tab */}
