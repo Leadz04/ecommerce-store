@@ -234,6 +234,16 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
     }));
   };
 
+  // Check if images are already on Cloudinary
+  const areImagesOrganized = () => {
+    if (!product?._id) return false;
+    const allImages = [formData.image, ...formData.images].filter(Boolean);
+    if (allImages.length === 0) return false;
+    return allImages.some(url => 
+      typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+    );
+  };
+
   const handleOrganizeImages = async () => {
     if (!product?._id) {
       toast.error('Please save the product first before organizing images');
@@ -643,8 +653,12 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                     type="button"
                     onClick={handleOrganizeImages}
                     disabled={organizingImages}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Organize images in Cloudinary (creates folder structure)"
+                    className={`flex items-center gap-2 px-3 py-1.5 text-white text-sm rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      areImagesOrganized()
+                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                    }`}
+                    title={areImagesOrganized() ? 'Images already organized in Cloudinary' : 'Organize images in Cloudinary (creates folder structure)'}
                   >
                     {organizingImages ? (
                       <>
@@ -653,8 +667,8 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                       </>
                     ) : (
                       <>
-                        <Cloud className="h-4 w-4" />
-                        Organize Images
+                        <Cloud className={`h-4 w-4 ${areImagesOrganized() ? 'text-green-100' : ''}`} />
+                        {areImagesOrganized() ? 'Images Organized' : 'Organize Images'}
                       </>
                     )}
                   </button>

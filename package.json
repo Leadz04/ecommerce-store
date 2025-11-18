@@ -30,7 +30,8 @@
     "rss": "echo RSS available at /rss.xml",
     "dedupe:sourced": "node scripts/dedupe-sourced-products.js",
     "dedupe:products": "node scripts/remove-product-duplicates.js --dry-run",
-    "organize:images": "node scripts/organize-images-cloudinary.js"
+    "organize:images": "node scripts/organize-images-cloudinary.js",
+    "sync:cloudinary": "node scripts/sync-cloudinary-urls.js --dry-run"
   },
   "dependencies": {
     "@google/genai": "^0.6.1",

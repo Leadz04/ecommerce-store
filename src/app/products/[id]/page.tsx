@@ -892,7 +892,28 @@ export default function ProductPage() {
                       }
                     }}
                     disabled={organizingImages || !currentProduct?._id}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-lg transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
+                      (() => {
+                        if (!currentProduct) return 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700';
+                        const allImages = [currentProduct.image, ...(currentProduct.images || [])].filter(Boolean);
+                        const hasCloudinary = allImages.some((url: string) => 
+                          url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                        );
+                        return hasCloudinary
+                          ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700';
+                      })()
+                    }`}
+                    title={(() => {
+                      if (!currentProduct) return 'Organize images in Cloudinary';
+                      const allImages = [currentProduct.image, ...(currentProduct.images || [])].filter(Boolean);
+                      const hasCloudinary = allImages.some((url: string) => 
+                        url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                      );
+                      return hasCloudinary
+                        ? 'Images already organized in Cloudinary'
+                        : 'Organize images in Cloudinary';
+                    })()}
                   >
                     {organizingImages ? (
                       <>
@@ -902,7 +923,14 @@ export default function ProductPage() {
                     ) : (
                       <>
                         <Cloud className="h-4 w-4" />
-                        Organize Images
+                        {(() => {
+                          if (!currentProduct) return 'Organize Images';
+                          const allImages = [currentProduct.image, ...(currentProduct.images || [])].filter(Boolean);
+                          const hasCloudinary = allImages.some((url: string) => 
+                            url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                          );
+                          return hasCloudinary ? 'Images Organized' : 'Organize Images';
+                        })()}
                       </>
                     )}
                   </button>

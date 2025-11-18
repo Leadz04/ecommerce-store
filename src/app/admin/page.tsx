@@ -400,6 +400,7 @@ export default function AdminDashboard() {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [showOrganizedOnly, setShowOrganizedOnly] = useState(false);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
@@ -5445,6 +5446,15 @@ export default function AdminDashboard() {
                   <option value="scheduled">Scheduled</option>
                   <option value="live">Live</option>
                 </select>
+                <label className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showOrganizedOnly}
+                    onChange={(e) => { setShowOrganizedOnly(e.target.checked); setProductPage(1); }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium">Organized Only</span>
+                </label>
                 <button
                   onClick={fetchProducts}
                   className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -5558,7 +5568,15 @@ export default function AdminDashboard() {
                                              product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                         const matchesCategory = !selectedCategory || product.category === selectedCategory;
                         const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                        return matchesSearch && matchesCategory && matchesBrand;
+                        const matchesOrganized = !showOrganizedOnly || (() => {
+                          const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                          if (allImages.length === 0) return false;
+                          // A product is organized if at least one image is on Cloudinary
+                          return allImages.some((url: string) => 
+                            url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                          );
+                        })();
+                        return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
                       })
                       .slice((productPage - 1) * productPerPage, productPage * productPerPage)
                       .map((product, index) => (
@@ -5654,8 +5672,26 @@ export default function AdminDashboard() {
                                 e.stopPropagation();
                                 handleOrganizeProductImages(product._id, product.name);
                               }}
-                              className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition-colors duration-150"
-                              title="Organize images in Cloudinary"
+                              className={`p-2 rounded-lg transition-colors duration-150 ${
+                                (() => {
+                                  const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                  const hasCloudinary = allImages.some((url: string) => 
+                                    url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                  );
+                                  return hasCloudinary
+                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+                                })()
+                              }`}
+                              title={(() => {
+                                const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                const hasCloudinary = allImages.some((url: string) => 
+                                  url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                );
+                                return hasCloudinary
+                                  ? 'Images already organized in Cloudinary'
+                                  : 'Organize images in Cloudinary';
+                              })()}
                             >
                               <Cloud className="h-4 w-4" />
                             </button>
@@ -5689,7 +5725,15 @@ export default function AdminDashboard() {
                         product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                       const matchesCategory = !selectedCategory || product.category === selectedCategory;
                       const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                      return matchesSearch && matchesCategory && matchesBrand;
+                      const matchesOrganized = !showOrganizedOnly || (() => {
+                        const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                        if (allImages.length === 0) return false;
+                        // A product is organized if at least one image is on Cloudinary
+                        return allImages.some((url: string) => 
+                          url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                        );
+                      })();
+                      return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
                     }).length;
                     const start = (productPage - 1) * productPerPage + 1;
                     const end = Math.min(productPage * productPerPage, filteredCount);
@@ -5731,7 +5775,15 @@ export default function AdminDashboard() {
                             product.brand.toLowerCase().includes(searchTerm.toLowerCase());
                           const matchesCategory = !selectedCategory || product.category === selectedCategory;
                           const matchesBrand = !selectedBrand || product.brand.toLowerCase().includes(selectedBrand.toLowerCase());
-                          return matchesSearch && matchesCategory && matchesBrand;
+                          const matchesOrganized = !showOrganizedOnly || (() => {
+                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                            if (allImages.length === 0) return false;
+                            // A product is organized if at least one image is on Cloudinary
+                            return allImages.some((url: string) => 
+                              url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                            );
+                          })();
+                          return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
                         }).length;
                         const totalPages = Math.max(1, Math.ceil(filteredCount / productPerPage));
                         setProductPage((p) => Math.min(totalPages, p + 1));

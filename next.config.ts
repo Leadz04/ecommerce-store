@@ -66,6 +66,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        port: '',
+        pathname: '/**',
+      },
       // Optional: user-provided CDN
       ...(process.env.NEXT_PUBLIC_IMAGE_CDN
         ? [{ protocol: 'https', hostname: process.env.NEXT_PUBLIC_IMAGE_CDN.replace(/^https?:\/\//, '').split('/')[0], port: '', pathname: '/**' } as const]
