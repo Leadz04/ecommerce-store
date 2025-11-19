@@ -1836,8 +1836,9 @@ export default function AdminDashboard() {
         {/* Navigation Tabs */}
         <div className="mb-6 sm:mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <nav className="flex overflow-x-auto lg:overflow-x-visible scrollbar-hide -mb-px" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div className="flex flex-wrap lg:flex-nowrap gap-1.5 lg:gap-2 px-2 sm:px-4 py-2.5 lg:py-3 w-full lg:w-auto">
+            <div className="overflow-x-auto admin-tabs-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+              <nav className="flex -mb-px">
+                <div className="flex gap-1.5 lg:gap-2 px-2 sm:px-4 py-2.5 lg:py-3 min-w-max">
                 <button
                   onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
                   className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
@@ -1996,8 +1997,9 @@ export default function AdminDashboard() {
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-500 to-amber-500"></span>
                   )}
                 </button>
-              </div>
-            </nav>
+                </div>
+              </nav>
+            </div>
           </div>
         </div>
 
