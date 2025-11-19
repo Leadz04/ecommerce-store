@@ -254,7 +254,6 @@ export default function ProductsPage() {
       {/* Products Section */}
       <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
           {/* Search and Controls */}
           <div className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8">
             {/* Search */}

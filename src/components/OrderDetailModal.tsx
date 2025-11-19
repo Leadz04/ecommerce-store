@@ -19,6 +19,7 @@ import {
   Calendar
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SelectField from '@/components/SelectField';
 
 interface OrderDetailModalProps {
   order: any;
@@ -38,6 +39,7 @@ export default function OrderDetailModal({
   onDownloadInvoice
 }: OrderDetailModalProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [statusSelectOpen, setStatusSelectOpen] = useState(false);
 
   if (!isOpen || !order) return null;
 
@@ -94,67 +96,76 @@ export default function OrderDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 sm:p-6 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+            <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
               {getStatusIcon(order.status)}
-              <div>
-                <h2 className="text-2xl font-bold">Order #{order.orderNumber}</h2>
-                <p className="text-blue-100">Order ID: {order._id}</p>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold truncate">Order #{order.orderNumber}</h2>
+                <p className="text-xs sm:text-sm text-blue-100 truncate">Order ID: {order._id}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 shrink-0">
               <button
                 onClick={() => onDownloadInvoice(order._id)}
-                className="flex items-center space-x-2 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors text-sm sm:text-base"
               >
                 <Download className="h-4 w-4" />
-                <span>Invoice</span>
+                <span className="hidden sm:inline">Invoice</span>
               </button>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Close"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
             </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
               {/* Order Status */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Status</h3>
-                <div className="flex items-center justify-between">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Order Status</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
                   <div className="flex items-center space-x-3">
                     {getStatusIcon(order.status)}
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(order.status)}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium border ${getStatusColor(order.status)}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>
                   </div>
-                  <select
-                    value={order.status}
-                    onChange={(e) => handleStatusUpdate(e.target.value)}
-                    disabled={isUpdating}
-                    className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="processing">Processing</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
+                  <div className="w-full sm:w-auto sm:min-w-[180px]">
+                    <SelectField
+                      label=""
+                      options={[
+                        { value: 'pending', label: 'Pending' },
+                        { value: 'processing', label: 'Processing' },
+                        { value: 'shipped', label: 'Shipped' },
+                        { value: 'delivered', label: 'Delivered' },
+                        { value: 'cancelled', label: 'Cancelled' }
+                      ]}
+                      value={order.status}
+                      isOpen={statusSelectOpen}
+                      onOpenChange={setStatusSelectOpen}
+                      onSelect={(value) => {
+                        handleStatusUpdate(value);
+                        setStatusSelectOpen(false);
+                      }}
+                      disabled={isUpdating}
+                    />
+                  </div>
                 </div>
                 {order.notes && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-700">
+                    <p className="text-xs sm:text-sm text-gray-700 break-words">
                       <strong>Notes:</strong> {order.notes}
                     </p>
                   </div>
@@ -162,23 +173,23 @@ export default function OrderDetailModal({
               </div>
 
               {/* Order Items */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Items</h3>
-                <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Order Items</h3>
+                <div className="space-y-3 sm:space-y-4">
                   {order.items.map((item: any, index: number) => (
-                    <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                    <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
                       <img
-                        src={item.product?.image || '/placeholder-product.jpg'}
-                        alt={item.product?.name || 'Product'}
-                        className="w-16 h-16 object-cover rounded-lg"
+                        src={item.product?.image || item.image || '/placeholder-product.jpg'}
+                        alt={item.product?.name || item.name || 'Product'}
+                        className="w-full sm:w-16 h-32 sm:h-16 object-cover rounded-lg flex-shrink-0"
                       />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">{item.product?.name || 'Unknown Product'}</h4>
-                        <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
-                        <p className="text-sm text-gray-600">Price: ${item.price.toFixed(2)} each</p>
+                      <div className="flex-1 w-full sm:w-auto min-w-0">
+                        <h4 className="font-medium text-gray-900 text-sm sm:text-base truncate">{item.product?.name || item.name || 'Unknown Product'}</h4>
+                        <p className="text-xs sm:text-sm text-gray-600">Quantity: {item.quantity}</p>
+                        <p className="text-xs sm:text-sm text-gray-600">Price: ${(item.price || 0).toFixed(2)} each</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</p>
+                      <div className="text-left sm:text-right w-full sm:w-auto shrink-0">
+                        <p className="font-semibold text-gray-900 text-base sm:text-lg">${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
@@ -186,21 +197,21 @@ export default function OrderDetailModal({
               </div>
 
               {/* Payment Information */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Payment Information</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">Payment Method</p>
-                    <p className="font-medium text-gray-900">{order.paymentMethod}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Payment Method</p>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base break-words">{order.paymentMethod || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Payment Status</p>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <p className="text-xs sm:text-sm text-gray-600">Payment Status</p>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
                       order.paymentStatus === 'paid' 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {order.paymentStatus}
+                      {order.paymentStatus || 'N/A'}
                     </span>
                   </div>
                 </div>
@@ -208,42 +219,42 @@ export default function OrderDetailModal({
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Customer Information */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <User className="h-5 w-5 mr-2" />
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <User className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Customer Information
                 </h3>
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600">Name</p>
-                    <p className="font-medium text-gray-900">{order.user?.name || 'N/A'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Name</p>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base break-words">{order.user?.name || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Email</p>
-                    <p className="font-medium text-gray-900 flex items-center">
-                      <Mail className="h-4 w-4 mr-1" />
-                      {order.user?.email || 'N/A'}
+                    <p className="text-xs sm:text-sm text-gray-600">Email</p>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base flex items-center break-all">
+                      <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" />
+                      <span className="min-w-0">{order.user?.email || 'N/A'}</span>
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Phone</p>
-                    <p className="font-medium text-gray-900 flex items-center">
-                      <Phone className="h-4 w-4 mr-1" />
-                      {order.shippingAddress?.phone || 'N/A'}
+                    <p className="text-xs sm:text-sm text-gray-600">Phone</p>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base flex items-center break-words">
+                      <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" />
+                      <span>{order.shippingAddress?.phone || 'N/A'}</span>
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Shipping Address */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2" />
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Shipping Address
                 </h3>
-                <div className="text-sm text-gray-700">
+                <div className="text-xs sm:text-sm text-gray-700 break-words">
                   <p className="font-medium">{order.shippingAddress?.firstName} {order.shippingAddress?.lastName}</p>
                   <p>{order.shippingAddress?.address1}</p>
                   {order.shippingAddress?.address2 && <p>{order.shippingAddress.address2}</p>}
@@ -253,12 +264,12 @@ export default function OrderDetailModal({
               </div>
 
               {/* Billing Address */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Billing Address
                 </h3>
-                <div className="text-sm text-gray-700">
+                <div className="text-xs sm:text-sm text-gray-700 break-words">
                   <p className="font-medium">{order.billingAddress?.firstName} {order.billingAddress?.lastName}</p>
                   <p>{order.billingAddress?.address1}</p>
                   {order.billingAddress?.address2 && <p>{order.billingAddress.address2}</p>}
@@ -268,9 +279,9 @@ export default function OrderDetailModal({
               </div>
 
               {/* Order Summary */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
-                <div className="space-y-2 text-sm">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Order Summary</h3>
+                <div className="space-y-2 text-xs sm:text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal</span>
                     <span className="font-medium">${order.subtotal?.toFixed(2) || '0.00'}</span>
@@ -283,7 +294,7 @@ export default function OrderDetailModal({
                     <span className="text-gray-600">Tax</span>
                     <span className="font-medium">${order.tax?.toFixed(2) || '0.00'}</span>
                   </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold text-lg">
+                  <div className="border-t pt-2 flex justify-between font-semibold text-base sm:text-lg">
                     <span>Total</span>
                     <span>${order.total?.toFixed(2) || '0.00'}</span>
                   </div>
@@ -291,21 +302,21 @@ export default function OrderDetailModal({
               </div>
 
               {/* Order Dates */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <Calendar className="h-5 w-5 mr-2" />
+              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center">
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Order Timeline
                 </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                     <span className="text-gray-600">Order Date</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-left sm:text-right break-words">
                       {new Date(order.createdAt).toLocaleDateString()} at {new Date(order.createdAt).toLocaleTimeString()}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-0">
                     <span className="text-gray-600">Last Updated</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-left sm:text-right break-words">
                       {new Date(order.updatedAt).toLocaleDateString()} at {new Date(order.updatedAt).toLocaleTimeString()}
                     </span>
                   </div>
@@ -313,12 +324,12 @@ export default function OrderDetailModal({
               </div>
 
               {/* Admin Actions */}
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-red-900 mb-4">Admin Actions</h3>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-red-900 mb-3 sm:mb-4">Admin Actions</h3>
                 <div className="space-y-2">
                   <button
                     onClick={handleDelete}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm sm:text-base"
                   >
                     <Trash2 className="h-4 w-4" />
                     <span>Delete Order</span>

@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { ProfileSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
+import BackButton from '@/components/BackButton';
 import { AuthUser } from '@/types';
 
 export default function ProfilePage() {
@@ -217,10 +218,17 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl md:text-5xl font-bold">My Profile</h1>
-          <p className="text-xl text-blue-100 mt-2">Manage your account settings and preferences</p>
+          <div className="mb-4 sm:mb-6">
+            <BackButton 
+              href="/" 
+              variant="with-label" 
+              className="text-white/80 hover:text-white border-white/20 hover:bg-white/10"
+            />
+          </div>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold">My Profile</h1>
+          <p className="text-lg sm:text-xl text-blue-100 mt-2">Manage your account settings and preferences</p>
         </div>
       </section>
 

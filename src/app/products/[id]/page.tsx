@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
 import { sampleProducts } from '@/data/products';
 import SelectField from '@/components/SelectField';
+import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 import ReviewList from '@/components/ReviewList';
 
@@ -718,8 +719,12 @@ export default function ProductPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 ">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {/* Back Button */}
+        <div className="mb-4 sm:mb-6">
+          <BackButton href="/products" variant="with-label" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-12">
           {/* Product Images */}
           <div className="space-y-4">
             {isEditMode ? (

@@ -25,10 +25,10 @@ async function getBlogs() {
 export default async function BlogIndexPage() {
   const blogs = await getBlogs();
   return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-purple-900">Blog</h1>
-        <p className="text-gray-600">Insights, announcements, and tips from ShopEase.</p>
+    <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-purple-900">Blog</h1>
+        <p className="text-sm sm:text-base text-gray-600 mt-1">Insights, announcements, and tips from ShopEase.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {blogs.map((b: any) => {

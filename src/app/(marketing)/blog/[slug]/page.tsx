@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import connectDB from '@/lib/mongodb';
 import Blog from '@/models/Blog';
+import BlogBackButton from './BlogBackButton';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -90,6 +91,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         )}
         <div className="max-w-5xl mx-auto px-4 -mt-24 md:-mt-28">
           <div className="bg-white/95 backdrop-blur shadow-xl border rounded-2xl p-6 md:p-8">
+            <BlogBackButton />
             <div className="mb-3 text-xs text-purple-700">
               <Link href="/blog" className="hover:underline">Blog</Link>
               <span className="mx-2">/</span>

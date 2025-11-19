@@ -158,10 +158,10 @@ export default function CategoriesPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">Shop by Category</h1>
-          <p className="text-xl text-blue-100 max-w-3xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">Shop by Category</h1>
+          <p className="text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto">
             Discover our wide range of products organized by category. 
             Find exactly what you're looking for with ease.
           </p>

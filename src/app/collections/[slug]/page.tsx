@@ -34,8 +34,8 @@ export default function CollectionPage() {
   }, [collection]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-semibold mb-6">{title}</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <h1 className="text-2xl sm:text-3xl font-semibold mb-6">{title}</h1>
 
       {error && <p className="text-red-600 mb-4">{error}</p>}
 
