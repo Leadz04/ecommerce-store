@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Search, Filter, Calendar, TrendingUp, Package, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 
 export default function SeoHistoryPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -10,6 +11,7 @@ export default function SeoHistoryPage() {
   const [page, setPage] = useState(1);
   const [type, setType] = useState<'all' | 'keywords' | 'products'>('all');
   const [queryFilter, setQueryFilter] = useState('');
+  const [openSelect, setOpenSelect] = useState<'type' | null>(null);
 
   const pageSize = 12;
 
@@ -78,17 +80,19 @@ export default function SeoHistoryPage() {
                 className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-slate-50/50 transition-all duration-200"
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <select 
-                value={type} 
-                onChange={(e) => setType(e.target.value as any)} 
-                className="pl-10 pr-8 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-slate-50/50 transition-all duration-200 appearance-none"
-              >
-                <option value="all">All Research</option>
-                <option value="keywords">Keywords Only</option>
-                <option value="products">Products Only</option>
-              </select>
+            <div className="w-full sm:w-auto">
+              <SelectField
+                options={[
+                  { value: 'all', label: 'All Research' },
+                  { value: 'keywords', label: 'Keywords Only' },
+                  { value: 'products', label: 'Products Only' },
+                ]}
+                value={type}
+                isOpen={openSelect === 'type'}
+                onOpenChange={(open) => setOpenSelect(open ? 'type' : null)}
+                onSelect={(value) => setType(value as any)}
+                className="w-full sm:w-auto"
+              />
             </div>
           </div>
         </div>

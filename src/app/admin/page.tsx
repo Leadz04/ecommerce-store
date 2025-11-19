@@ -56,6 +56,7 @@ import RoleForm from '@/components/RoleForm';
 import ProductForm from '@/components/ProductForm';
 import OrderDetailModal from '@/components/OrderDetailModal';
 import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
+import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -411,6 +412,7 @@ export default function AdminDashboard() {
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -5351,19 +5353,22 @@ export default function AdminDashboard() {
                     />
                   </div>
                 </div>
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Roles</option>
-                  {roles.map(role => (
-                    <option key={role._id} value={role.name}>{role.name}</option>
-                  ))}
-                </select>
+                <div className="w-full sm:w-auto">
+                  <SelectField
+                    options={[
+                      { value: '', label: 'All Roles' },
+                      ...roles.map(role => ({ value: role.name, label: role.name })),
+                    ]}
+                    value={selectedRole}
+                    isOpen={openSelect === 'role'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'role' : null)}
+                    onSelect={(value) => setSelectedRole(value)}
+                    className="w-full sm:w-auto"
+                  />
+                </div>
                 <button
                   onClick={fetchUsers}
-                  className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors w-full sm:w-auto"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span>Refresh</span>
@@ -5575,44 +5580,48 @@ export default function AdminDashboard() {
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
                   {/* Filter Dropdowns */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 flex-1 w-full">
-                  <select
+                  <SelectField
+                    options={[
+                      { value: '', label: 'All Categories' },
+                      { value: 'Men', label: 'Men' },
+                      { value: 'Women', label: 'Women' },
+                      { value: 'Office & Travel', label: 'Office & Travel' },
+                      { value: 'Accessories', label: 'Accessories' },
+                      { value: 'Gifting', label: 'Gifting' },
+                    ]}
                     value={selectedCategory}
-                    onChange={(e) => { setSelectedCategory(e.target.value); setProductPage(1); }}
-                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
-                  >
-                    <option value="">All Categories</option>
-                    <option value="Men">Men</option>
-                    <option value="Women">Women</option>
-                    <option value="Office & Travel">Office & Travel</option>
-                    <option value="Accessories">Accessories</option>
-                    <option value="Gifting">Gifting</option>
-                  </select>
-                  <select
+                    isOpen={openSelect === 'category'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'category' : null)}
+                    onSelect={(value) => { setSelectedCategory(value); setProductPage(1); }}
+                    className="w-full"
+                  />
+                  <SelectField
+                    options={[
+                      { value: '', label: brandsLoading ? 'Loading brands...' : availableBrands.length === 0 ? 'No brands available' : 'All Brands' },
+                      ...availableBrands.map(brand => ({ value: brand, label: brand })),
+                    ]}
                     value={selectedBrand}
-                    onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
+                    isOpen={openSelect === 'brand'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'brand' : null)}
+                    onSelect={(value) => { setSelectedBrand(value); setProductPage(1); }}
                     disabled={brandsLoading}
-                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium bg-white"
-                  >
-                    <option value="">{brandsLoading ? 'Loading brands...' : 'All Brands'}</option>
-                    {availableBrands.map(brand => (
-                      <option key={brand} value={brand}>{brand}</option>
-                    ))}
-                    {!brandsLoading && availableBrands.length === 0 && (
-                      <option value="" disabled>No brands available</option>
-                    )}
-                  </select>
-                  <select
+                    className="w-full"
+                  />
+                  <SelectField
+                    options={[
+                      { value: '', label: 'All Statuses' },
+                      { value: 'draft', label: 'Draft' },
+                      { value: 'published', label: 'Published' },
+                      { value: 'archived', label: 'Archived' },
+                      { value: 'scheduled', label: 'Scheduled' },
+                      { value: 'live', label: 'Live' },
+                    ]}
                     value={selectedOrderStatus}
-                    onChange={(e) => { setSelectedOrderStatus(e.target.value); setProductPage(1); }}
-                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="live">Live</option>
-                  </select>
+                    isOpen={openSelect === 'status'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+                    onSelect={(value) => { setSelectedOrderStatus(value); setProductPage(1); }}
+                    className="w-full"
+                  />
                   
                   {/* Checkbox Filter */}
                   <label className="flex items-center justify-between sm:justify-start space-x-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer bg-white">
@@ -6422,18 +6431,23 @@ export default function AdminDashboard() {
                     />
                   </div>
                 </div>
-                <select
-                  value={selectedOrderStatus}
-                  onChange={(e) => setSelectedOrderStatus(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                <div className="w-full lg:w-auto">
+                  <SelectField
+                    options={[
+                      { value: '', label: 'All Statuses' },
+                      { value: 'pending', label: 'Pending' },
+                      { value: 'processing', label: 'Processing' },
+                      { value: 'shipped', label: 'Shipped' },
+                      { value: 'delivered', label: 'Delivered' },
+                      { value: 'cancelled', label: 'Cancelled' },
+                    ]}
+                    value={selectedOrderStatus}
+                    isOpen={openSelect === 'orderStatus'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'orderStatus' : null)}
+                    onSelect={(value) => setSelectedOrderStatus(value)}
+                    className="w-full lg:w-auto"
+                  />
+                </div>
               </div>
             </div>
 

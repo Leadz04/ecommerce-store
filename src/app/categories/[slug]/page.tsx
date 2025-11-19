@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton, CategoryDetailSkeleton } from '@/components/LoadingSkeleton';
+import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
 
 // Pure, memoized header to avoid re-render during search/filter updates
@@ -65,7 +66,9 @@ const SearchAndControls = memo(({
   categoryName, 
   viewMode, 
   setViewMode, 
-  handleSortChange 
+  handleSortChange,
+  openSelect,
+  setOpenSelect
 }: {
   searchInput: string;
   setSearchInput: (value: string) => void;
@@ -75,6 +78,8 @@ const SearchAndControls = memo(({
   viewMode: 'grid' | 'list';
   setViewMode: (mode: 'grid' | 'list') => void;
   handleSortChange: (sortBy: string) => void;
+  openSelect: 'sort' | null;
+  setOpenSelect: (value: 'sort' | null) => void;
 }) => {
   return (
     <div className="flex flex-col lg:flex-row gap-4 mb-8">
@@ -131,16 +136,21 @@ const SearchAndControls = memo(({
       </div>
 
       {/* Sort */}
-      <select
-        value={filters.sortBy}
-        onChange={(e) => handleSortChange(e.target.value)}
-        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-      >
-        <option value="name">Sort by Name</option>
-        <option value="price-low">Price: Low to High</option>
-        <option value="price-high">Price: High to Low</option>
-        <option value="rating">Highest Rated</option>
-      </select>
+      <div className="w-full lg:w-auto">
+        <SelectField
+          options={[
+            { value: 'name', label: 'Sort by Name' },
+            { value: 'price-low', label: 'Price: Low to High' },
+            { value: 'price-high', label: 'Price: High to Low' },
+            { value: 'rating', label: 'Highest Rated' },
+          ]}
+          value={filters.sortBy}
+          isOpen={openSelect === 'sort'}
+          onOpenChange={(open) => setOpenSelect(open ? 'sort' : null)}
+          onSelect={(value) => handleSortChange(value)}
+          className="w-full lg:w-auto"
+        />
+      </div>
     </div>
   );
 });
@@ -505,6 +515,7 @@ export default function CategoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
   const priceDebounceRef = useRef<number | null>(null);
   const initializationRef = useRef(false);
   const [stableTotal, setStableTotal] = useState(0);
@@ -714,6 +725,8 @@ export default function CategoryPage() {
             viewMode={viewMode}
             setViewMode={setViewMode}
             handleSortChange={handleSortChange}
+            openSelect={openSelect}
+            setOpenSelect={setOpenSelect}
           />
 
           {/* Filter Toggle for Mobile */}

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, Grid, List, SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton } from '@/components/LoadingSkeleton';
+import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
 
 export default function ProductsPage() {
@@ -26,6 +27,7 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
+  const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -312,17 +314,22 @@ export default function ProductsPage() {
               </div>
 
               {/* Sort */}
-              <select
-                value={filters.sortBy}
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="flex-1 sm:flex-none min-w-[140px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 text-sm sm:text-base"
-              >
-                <option value="name">Sort by Name</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
-                <option value="newest">Newest</option>
-              </select>
+              <div className="flex-1 sm:flex-none min-w-[140px]">
+                <SelectField
+                  options={[
+                    { value: 'name', label: 'Sort by Name' },
+                    { value: 'price-low', label: 'Price: Low to High' },
+                    { value: 'price-high', label: 'Price: High to Low' },
+                    { value: 'rating', label: 'Highest Rated' },
+                    { value: 'newest', label: 'Newest' },
+                  ]}
+                  value={filters.sortBy}
+                  isOpen={openSelect === 'sort'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'sort' : null)}
+                  onSelect={(value) => handleSortChange(value)}
+                  className="w-full"
+                />
+              </div>
 
               {/* Filter Toggle */}
               <button

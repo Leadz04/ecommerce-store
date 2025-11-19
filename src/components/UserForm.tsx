@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, User, Mail, Phone, MapPin, Shield, Settings, Eye, EyeOff } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -77,6 +78,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [openSelect, setOpenSelect] = useState<'role' | 'theme' | 'language' | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -281,19 +283,17 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   <Shield className="h-4 w-4 inline mr-2" />
                   Role *
                 </label>
-                <select
-                  required
+                <SelectField
+                  options={[
+                    { value: '', label: 'Select a role' },
+                    ...roles.map(role => ({ value: role._id, label: `${role.name} - ${role.description}` })),
+                  ]}
                   value={formData.roleId}
-                  onChange={(e) => handleInputChange('roleId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select a role</option>
-                  {roles.map(role => (
-                    <option key={role._id} value={role._id}>
-                      {role.name} - {role.description}
-                    </option>
-                  ))}
-                </select>
+                  isOpen={openSelect === 'role'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'role' : null)}
+                  onSelect={(value) => handleInputChange('roleId', value)}
+                  required
+                />
               </div>
 
               {!user && (
@@ -433,33 +433,33 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                   </label>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Theme
-                  </label>
-                  <select
+                  <SelectField
+                    label="Theme"
+                    options={[
+                      { value: 'light', label: 'Light' },
+                      { value: 'dark', label: 'Dark' },
+                      { value: 'system', label: 'System' },
+                    ]}
                     value={formData.settings.theme}
-                    onChange={(e) => handleInputChange('settings.theme', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="system">System</option>
-                  </select>
+                    isOpen={openSelect === 'theme'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'theme' : null)}
+                    onSelect={(value) => handleInputChange('settings.theme', value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Language
-                  </label>
-                  <select
+                  <SelectField
+                    label="Language"
+                    options={[
+                      { value: 'en', label: 'English' },
+                      { value: 'es', label: 'Spanish' },
+                      { value: 'fr', label: 'French' },
+                      { value: 'de', label: 'German' },
+                    ]}
                     value={formData.settings.language}
-                    onChange={(e) => handleInputChange('settings.language', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-700 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Spanish</option>
-                    <option value="fr">French</option>
-                    <option value="de">German</option>
-                  </select>
+                    isOpen={openSelect === 'language'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'language' : null)}
+                    onSelect={(value) => handleInputChange('settings.language', value)}
+                  />
                 </div>
               </div>
             </div>

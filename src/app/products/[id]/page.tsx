@@ -13,6 +13,7 @@ import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
 import { sampleProducts } from '@/data/products';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 import ReviewList from '@/components/ReviewList';
 
@@ -21,6 +22,7 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (value: str
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [customBrand, setCustomBrand] = useState('');
+  const [openSelect, setOpenSelect] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -44,22 +46,22 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (value: str
 
   return (
     <div className="space-y-2">
-      <select
+      <SelectField
+        options={[
+          { value: '', label: loading ? 'Loading brands...' : 'Select a brand' },
+          ...brands.map(brand => ({ value: brand, label: brand })),
+        ]}
         value={isCustomBrand ? '' : value}
-        onChange={(e) => {
-          if (e.target.value) {
-            onChange(e.target.value);
+        isOpen={openSelect}
+        onOpenChange={setOpenSelect}
+        onSelect={(val) => {
+          if (val) {
+            onChange(val);
             setCustomBrand('');
           }
         }}
         disabled={loading}
-        className="w-full px-4 py-2.5 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white text-gray-900 disabled:opacity-50"
-      >
-        <option value="">{loading ? 'Loading brands...' : 'Select a brand'}</option>
-        {brands.map(brand => (
-          <option key={brand} value={brand}>{brand}</option>
-        ))}
-      </select>
+      />
       {isCustomBrand && (
         <div className="flex items-center gap-2">
           <input
@@ -115,6 +117,7 @@ export default function ProductPage() {
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const [openFAQIndex, setOpenFAQIndex] = useState<number | null>(null);
   const [isCheckingEtsyPolicies, setIsCheckingEtsyPolicies] = useState(false);
+  const [openEditSelect, setOpenEditSelect] = useState<'category' | 'status' | 'inStock' | null>(null);
   const [etsyPolicyResults, setEtsyPolicyResults] = useState<any>(null);
   const [showEtsyResults, setShowEtsyResults] = useState(false);
   const [etsyExportLoading, setEtsyExportLoading] = useState(false);
@@ -1133,22 +1136,24 @@ export default function ProductPage() {
           {/* Additional Edit Fields for Super Admin */}
           {isEditMode && (
             <div className="space-y-6 pt-6 border-t-2 border-gray-200">
-              <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-100">
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-100">
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">Product Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">Category</label>
-                    <select
+                    <SelectField
+                      label="Category"
+                      options={[
+                        { value: 'Men', label: 'Men' },
+                        { value: 'Women', label: 'Women' },
+                        { value: 'Office & Travel', label: 'Office & Travel' },
+                        { value: 'Accessories', label: 'Accessories' },
+                        { value: 'Gifting', label: 'Gifting' },
+                      ]}
                       value={editFormData.category || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                      className="w-full px-4 py-2.5 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all bg-white text-gray-900"
-                    >
-                      <option value="Men">Men</option>
-                      <option value="Women">Women</option>
-                      <option value="Office & Travel">Office & Travel</option>
-                      <option value="Accessories">Accessories</option>
-                      <option value="Gifting">Gifting</option>
-                    </select>
+                      isOpen={openEditSelect === 'category'}
+                      onOpenChange={(open) => setOpenEditSelect(open ? 'category' : null)}
+                      onSelect={(value) => setEditFormData({ ...editFormData, category: value })}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-800 mb-2">Product Type</label>
@@ -1170,27 +1175,31 @@ export default function ProductPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">Status</label>
-                    <select
+                    <SelectField
+                      label="Status"
+                      options={[
+                        { value: 'draft', label: 'Draft' },
+                        { value: 'published', label: 'Published' },
+                        { value: 'archived', label: 'Archived' },
+                      ]}
                       value={editFormData.status || 'published'}
-                      onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
-                      className="w-full px-4 py-2.5 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all bg-white text-gray-900"
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                      <option value="archived">Archived</option>
-                    </select>
+                      isOpen={openEditSelect === 'status'}
+                      onOpenChange={(open) => setOpenEditSelect(open ? 'status' : null)}
+                      onSelect={(value) => setEditFormData({ ...editFormData, status: value })}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">In Stock</label>
-                    <select
+                    <SelectField
+                      label="In Stock"
+                      options={[
+                        { value: 'true', label: 'Yes' },
+                        { value: 'false', label: 'No' },
+                      ]}
                       value={editFormData.inStock ? 'true' : 'false'}
-                      onChange={(e) => setEditFormData({ ...editFormData, inStock: e.target.value === 'true' })}
-                      className="w-full px-4 py-2.5 border-2 border-amber-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all bg-white text-gray-900"
-                    >
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
+                      isOpen={openEditSelect === 'inStock'}
+                      onOpenChange={(open) => setOpenEditSelect(open ? 'inStock' : null)}
+                      onSelect={(value) => setEditFormData({ ...editFormData, inStock: value === 'true' })}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-800 mb-2">Tags (comma-separated)</label>
@@ -1206,26 +1215,27 @@ export default function ProductPage() {
               </div>
 
               {/* Specifications Editor */}
-              <div className="p-5 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl border border-cyan-100">
-                <div className="flex items-center justify-between mb-4">
+              <div className="p-4 sm:p-5 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl border border-cyan-100">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                   <h4 className="text-lg font-semibold text-gray-800">Specifications</h4>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleCheckEtsyPolicies}
                       disabled={isCheckingEtsyPolicies}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 transition-colors text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                       title="Check if product follows Etsy seller policies"
                     >
                       {isCheckingEtsyPolicies ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          Checking...
+                          <span className="hidden sm:inline">Checking...</span>
                         </>
                       ) : (
                         <>
                           <ShieldCheck className="h-4 w-4" />
-                          Check Etsy Policies
+                          <span className="hidden sm:inline">Check Etsy Policies</span>
+                          <span className="sm:hidden">Etsy</span>
                         </>
                       )}
                     </button>
@@ -1235,18 +1245,19 @@ export default function ProductPage() {
                           type="button"
                           onClick={handleGenerateSpecs}
                           disabled={isGeneratingSpecs}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           title="Generate specifications from product title and description"
                         >
                           {isGeneratingSpecs ? (
                             <>
                               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                              Generating...
+                              <span className="hidden sm:inline">Generating...</span>
                             </>
                           ) : (
                             <>
                               <Sparkles className="h-4 w-4" />
-                              Generate Specs
+                              <span className="hidden sm:inline">Generate Specs</span>
+                              <span className="sm:hidden">Specs</span>
                             </>
                           )}
                         </button>
@@ -1254,7 +1265,7 @@ export default function ProductPage() {
                           type="button"
                           onClick={() => handleGenerateTags(false)}
                           disabled={isGeneratingTags}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-colors text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           title={
                             (currentProduct.tags?.length || 0) >= 13
                               ? `Product has maximum tags (13/13). Click to regenerate all tags.`
@@ -1264,12 +1275,13 @@ export default function ProductPage() {
                           {isGeneratingTags ? (
                             <>
                               <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                              Generating...
+                              <span className="hidden sm:inline">Generating...</span>
                             </>
                           ) : (
                             <>
                               <Tag className="h-4 w-4" />
-                              {(currentProduct.tags?.length || 0) >= 13 ? 'Regenerate Tags' : `Generate Tags (${currentProduct.tags?.length || 0}/13)`}
+                              <span className="hidden sm:inline">{(currentProduct.tags?.length || 0) >= 13 ? 'Regenerate Tags' : `Generate Tags (${currentProduct.tags?.length || 0}/13)`}</span>
+                              <span className="sm:hidden">Tags</span>
                             </>
                           )}
                         </button>
@@ -1281,16 +1293,17 @@ export default function ProductPage() {
                         const newSpecs = { ...(editFormData.specifications || {}), '': '' };
                         setEditFormData({ ...editFormData, specifications: newSpecs });
                       }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm font-medium"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
                     >
                       <PlusCircle className="h-4 w-4" />
-                      Add Specification
+                      <span className="hidden sm:inline">Add Specification</span>
+                      <span className="sm:hidden">Add</span>
                     </button>
                   </div>
                 </div>
                 <div className="space-y-3">
                   {Object.entries(editFormData.specifications || {}).map(([key, value], index) => (
-                    <div key={index} className="flex gap-2 items-start">
+                    <div key={index} className="flex flex-col sm:flex-row gap-2 items-start">
                       <input
                         type="text"
                         value={key}
@@ -1302,7 +1315,7 @@ export default function ProductPage() {
                           setEditFormData({ ...editFormData, specifications: newSpecs });
                         }}
                         placeholder="Specification name"
-                        className="flex-1 px-4 py-2.5 border-2 border-cyan-200 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 transition-all bg-white text-gray-900 placeholder-gray-400"
+                        className="flex-1 w-full sm:w-auto px-4 py-2.5 border-2 border-cyan-200 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 transition-all bg-white text-gray-900 placeholder-gray-400 text-sm"
                       />
                       <input
                         type="text"
@@ -1313,7 +1326,7 @@ export default function ProductPage() {
                           setEditFormData({ ...editFormData, specifications: newSpecs });
                         }}
                         placeholder="Specification value"
-                        className="flex-1 px-4 py-2.5 border-2 border-cyan-200 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 transition-all bg-white text-gray-900 placeholder-gray-400"
+                        className="flex-1 w-full sm:w-auto px-4 py-2.5 border-2 border-cyan-200 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 transition-all bg-white text-gray-900 placeholder-gray-400 text-sm"
                       />
                       <button
                         type="button"
@@ -1322,7 +1335,7 @@ export default function ProductPage() {
                           delete newSpecs[key];
                           setEditFormData({ ...editFormData, specifications: newSpecs });
                         }}
-                        className="px-3 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        className="px-3 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shrink-0 w-full sm:w-auto flex items-center justify-center sm:justify-start"
                         title="Remove specification"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -2057,24 +2070,24 @@ export default function ProductPage() {
                 </div>
               </div>
               
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 {currentProduct.tags.map((tag: string, index: number) => (
                   <span
                     key={index}
-                    className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-white rounded-xl border-2 border-indigo-200 hover:border-indigo-400 shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-default"
+                    className="group relative inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-white rounded-xl border-2 border-indigo-200 hover:border-indigo-400 shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-default max-w-full"
                   >
                     <span className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                    <span className="relative text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">
+                    <span className="relative text-xs sm:text-sm font-bold text-gray-800 group-hover:text-indigo-700 transition-colors truncate">
                       #{tag}
                     </span>
-                    <div className="relative w-1.5 h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative w-1.5 h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 opacity-60 group-hover:opacity-100 transition-opacity shrink-0"></div>
                   </span>
                 ))}
               </div>
               
               {isSuperAdmin && (
                 <div className="mt-6 pt-6 border-t-2 border-indigo-200">
-                  <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     {currentProduct.tags.length < 13 ? (
                       <>
                         <div className="flex items-center gap-3">

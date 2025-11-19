@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Filter } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 export default function AuditLogsPage() {
@@ -20,6 +21,7 @@ export default function AuditLogsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [totalPages, setTotalPages] = useState(1);
+  const [openSelect, setOpenSelect] = useState<'limit' | null>(null);
 
   const fetchLogs = async () => {
     try {
@@ -114,11 +116,18 @@ export default function AuditLogsPage() {
           <div className="flex gap-2">
             <button disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
             <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-            <select value={limit} onChange={(e) => { setLimit(parseInt(e.target.value)); setPage(1); }} className="px-2 py-1 border rounded text-sm">
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
+            <SelectField
+              options={[
+                { value: '10', label: '10' },
+                { value: '20', label: '20' },
+                { value: '50', label: '50' },
+              ]}
+              value={String(limit)}
+              isOpen={openSelect === 'limit'}
+              onOpenChange={(open) => setOpenSelect(open ? 'limit' : null)}
+              onSelect={(value) => { setLimit(parseInt(value)); setPage(1); }}
+              className="w-auto min-w-[80px]"
+            />
           </div>
         </div>
       </div>

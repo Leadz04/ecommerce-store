@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import SelectField from '@/components/SelectField';
 
 interface KeywordResult {
   keyword: string;
@@ -127,6 +128,7 @@ export default function KeywordPlanner({ onClose }: KeywordPlannerProps) {
   const [country, setCountry] = useState('US');
   const [language, setLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
+  const [openSelect, setOpenSelect] = useState<'country' | 'language' | null>(null);
   const [results, setResults] = useState<KeywordResult[]>([]);
   const [expandedKeyword, setExpandedKeyword] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<string | null>(null);
@@ -388,42 +390,42 @@ export default function KeywordPlanner({ onClose }: KeywordPlannerProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-blue-800 mb-3">
-              Country
-            </label>
-            <select
+            <SelectField
+              label="Country"
+              options={[
+                { value: 'US', label: 'United States' },
+                { value: 'GB', label: 'United Kingdom' },
+                { value: 'CA', label: 'Canada' },
+                { value: 'AU', label: 'Australia' },
+                { value: 'DE', label: 'Germany' },
+                { value: 'FR', label: 'France' },
+                { value: 'ES', label: 'Spain' },
+                { value: 'IT', label: 'Italy' },
+              ]}
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-all duration-200 bg-white/80 backdrop-blur-sm text-black"
+              isOpen={openSelect === 'country'}
+              onOpenChange={(open) => setOpenSelect(open ? 'country' : null)}
+              onSelect={(value) => setCountry(value)}
               disabled={loading}
-            >
-              <option value="US">United States</option>
-              <option value="GB">United Kingdom</option>
-              <option value="CA">Canada</option>
-              <option value="AU">Australia</option>
-              <option value="DE">Germany</option>
-              <option value="FR">France</option>
-              <option value="ES">Spain</option>
-              <option value="IT">Italy</option>
-            </select>
+            />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-blue-800 mb-3">
-              Language
-            </label>
-            <select
+            <SelectField
+              label="Language"
+              options={[
+                { value: 'en', label: 'English' },
+                { value: 'es', label: 'Spanish' },
+                { value: 'fr', label: 'French' },
+                { value: 'de', label: 'German' },
+                { value: 'it', label: 'Italian' },
+              ]}
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-all duration-200 bg-white/80 backdrop-blur-sm text-black"
+              isOpen={openSelect === 'language'}
+              onOpenChange={(open) => setOpenSelect(open ? 'language' : null)}
+              onSelect={(value) => setLanguage(value)}
               disabled={loading}
-            >
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
-              <option value="de">German</option>
-              <option value="it">Italian</option>
-            </select>
+            />
           </div>
         </div>
 

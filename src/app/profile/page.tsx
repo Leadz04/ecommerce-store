@@ -8,6 +8,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { ProfileSkeleton } from '@/components/LoadingSkeleton';
+import SelectField from '@/components/SelectField';
 import { AuthUser } from '@/types';
 
 export default function ProfilePage() {
@@ -18,6 +19,7 @@ export default function ProfilePage() {
   const [editData, setEditData] = useState<Partial<AuthUser>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [activeSection, setActiveSection] = useState<'profile' | 'wishlist' | 'settings'>('profile');
+  const [openSelect, setOpenSelect] = useState<'country' | null>(null);
 
 
   // Wishlist
@@ -434,17 +436,22 @@ export default function ProfilePage() {
                             }`}
                             placeholder="ZIP Code"
                           />
-                          <select
-                            name="address.country"
+                          <SelectField
+                            options={[
+                              { value: 'United States', label: 'United States' },
+                              { value: 'Canada', label: 'Canada' },
+                              { value: 'United Kingdom', label: 'United Kingdom' },
+                              { value: 'Australia', label: 'Australia' },
+                            ]}
                             value={editData.address?.country || 'United States'}
-                            onChange={handleInputChange}
-                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-                          >
-                            <option value="United States">United States</option>
-                            <option value="Canada">Canada</option>
-                            <option value="United Kingdom">United Kingdom</option>
-                            <option value="Australia">Australia</option>
-                          </select>
+                            isOpen={openSelect === 'country'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'country' : null)}
+                            onSelect={(value) => setEditData(prev => ({
+                              ...prev,
+                              address: { ...prev.address, country: value } as any
+                            }))}
+                            className="w-full"
+                          />
                         </div>
                         {Object.keys(validationErrors).filter(key => key.startsWith('address')).map(key => (
                           <p key={key} className="text-sm text-red-600">{validationErrors[key]}</p>

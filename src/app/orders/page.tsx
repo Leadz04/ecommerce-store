@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -23,6 +23,7 @@ import {
 import { useOrderStore } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
 import { OrderCardSkeleton } from '@/components/LoadingSkeleton';
+import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface OrderFilters {
@@ -30,6 +31,9 @@ interface OrderFilters {
   dateRange: string;
   search: string;
 }
+
+type SelectKey = 'status' | 'dateRange';
+type SelectOption = { value: string; label: string };
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -46,6 +50,24 @@ export default function OrdersPage() {
   const [searchInput, setSearchInput] = useState('');
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<any>(null);
+  const [openSelect, setOpenSelect] = useState<SelectKey | null>(null);
+
+  const statusOptions = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'processing', label: 'Processing' },
+    { value: 'shipped', label: 'Shipped' },
+    { value: 'delivered', label: 'Delivered' },
+    { value: 'cancelled', label: 'Cancelled' },
+  ];
+
+  const dateRangeOptions = [
+    { value: 'all', label: 'All Time' },
+    { value: '7', label: 'Last 7 days' },
+    { value: '30', label: 'Last 30 days' },
+    { value: '90', label: 'Last 3 months' },
+    { value: '365', label: 'Last year' },
+  ];
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -217,22 +239,22 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
               <p className="text-gray-600 mt-1">Track and manage your orders</p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
               <button
                 onClick={handleRefresh}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:text-gray-900 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors bg-white font-medium"
+                className="flex items-center justify-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors bg-white font-medium w-full sm:w-auto"
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>Refresh</span>
               </button>
               <Link
                 href="/profile"
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm w-full sm:w-auto"
               >
                 <Eye className="h-4 w-4" />
                 <span>View Profile</span>
@@ -247,7 +269,7 @@ export default function OrdersPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search */}
-            <div className="flex-1">
+            <div className="flex-1 w-full">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
                 <input
@@ -263,7 +285,7 @@ export default function OrdersPage() {
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 px-4 py-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors bg-white text-gray-700 font-medium"
+              className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors bg-white text-gray-700 font-medium w-full lg:w-auto"
             >
               <Filter className="h-5 w-5" />
               <span>Filters</span>
@@ -274,36 +296,23 @@ export default function OrdersPage() {
           {/* Filter Options */}
           {showFilters && (
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-800 mb-3">Status</label>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium transition-colors"
-                  >
-                    <option value="all" className="text-gray-900">All Statuses</option>
-                    <option value="pending" className="text-gray-900">Pending</option>
-                    <option value="processing" className="text-gray-900">Processing</option>
-                    <option value="shipped" className="text-gray-900">Shipped</option>
-                    <option value="delivered" className="text-gray-900">Delivered</option>
-                    <option value="cancelled" className="text-gray-900">Cancelled</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-800 mb-3">Date Range</label>
-                  <select
-                    value={filters.dateRange}
-                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium transition-colors"
-                  >
-                    <option value="all" className="text-gray-900">All Time</option>
-                    <option value="7" className="text-gray-900">Last 7 days</option>
-                    <option value="30" className="text-gray-900">Last 30 days</option>
-                    <option value="90" className="text-gray-900">Last 3 months</option>
-                    <option value="365" className="text-gray-900">Last year</option>
-                  </select>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <SelectField
+                  label="Status"
+                  options={statusOptions}
+                  value={filters.status}
+                  isOpen={openSelect === 'status'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+                  onSelect={(value) => handleFilterChange('status', value)}
+                />
+                <SelectField
+                  label="Date Range"
+                  options={dateRangeOptions}
+                  value={filters.dateRange}
+                  isOpen={openSelect === 'dateRange'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'dateRange' : null)}
+                  onSelect={(value) => handleFilterChange('dateRange', value)}
+                />
               </div>
             </div>
           )}
@@ -373,7 +382,7 @@ export default function OrdersPage() {
                     }
                   }}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-center space-x-4">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900">
@@ -385,12 +394,12 @@ export default function OrdersPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-6">
+                    <div className="flex flex-wrap items-center gap-4 lg:flex-nowrap lg:space-x-6">
                       <div className={`px-4 py-2 rounded-full border-2 text-sm font-semibold flex items-center space-x-2 ${getStatusColor(order.status)}`}>
                         {getStatusIcon(order.status)}
                         <span className="capitalize">{order.status}</span>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left lg:text-right">
                         <p className="text-xl font-bold text-gray-900">
                           ${order.total.toFixed(2)}
                         </p>
@@ -403,7 +412,7 @@ export default function OrdersPage() {
                           e.stopPropagation();
                           setExpandedOrder(expandedOrder === order._id ? null : order._id);
                         }}
-                        className="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="ml-auto p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         {expandedOrder === order._id ? (
                           <ChevronUp className="h-5 w-5" />
@@ -499,17 +508,17 @@ export default function OrdersPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="mt-8 flex space-x-4">
+                        <div className="mt-8 flex flex-col sm:flex-row gap-4">
                           <button 
                             onClick={() => handleDownloadInvoice(order._id)}
-                            className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors font-semibold text-gray-700"
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors font-semibold text-gray-700"
                           >
                             <Download className="h-5 w-5" />
                             <span>Download Invoice</span>
                           </button>
                           <button 
                             onClick={() => handleTrackOrder(order._id)}
-                            className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
                           >
                             <Eye className="h-5 w-5" />
                             <span>Track Order</span>
@@ -650,3 +659,4 @@ export default function OrdersPage() {
     </div>
   );
 }
+

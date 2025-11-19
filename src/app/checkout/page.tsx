@@ -11,6 +11,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import StripePaymentForm from '@/components/StripePaymentForm';
 import PaymentConfirmation from '@/components/PaymentConfirmation';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 export default function CheckoutPage() {
@@ -37,6 +38,7 @@ export default function CheckoutPage() {
   const [createdOrder, setCreatedOrder] = useState<any>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<'shipping' | 'payment' | 'confirmation'>('shipping');
+  const [openSelect, setOpenSelect] = useState<'country' | null>(null);
 
   // Check authentication and pre-fill user data
   useEffect(() => {
@@ -423,19 +425,20 @@ export default function CheckoutPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Country *</label>
-                      <select
-                        name="country"
+                      <SelectField
+                        label="Country"
+                        options={[
+                          { value: 'United States', label: 'United States' },
+                          { value: 'Canada', label: 'Canada' },
+                          { value: 'United Kingdom', label: 'United Kingdom' },
+                          { value: 'Australia', label: 'Australia' },
+                        ]}
                         value={formData.country}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                        isOpen={openSelect === 'country'}
+                        onOpenChange={(open) => setOpenSelect(open ? 'country' : null)}
+                        onSelect={(value) => setFormData(prev => ({ ...prev, country: value }))}
                         required
-                      >
-                        <option value="United States" className="text-slate-900">United States</option>
-                        <option value="Canada" className="text-slate-900">Canada</option>
-                        <option value="United Kingdom" className="text-slate-900">United Kingdom</option>
-                        <option value="Australia" className="text-slate-900">Australia</option>
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">Phone *</label>

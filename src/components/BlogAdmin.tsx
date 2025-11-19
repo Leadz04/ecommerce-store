@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { PERMISSIONS } from '@/lib/permissions';
 import BlogForm from '@/components/BlogForm';
 import { Plus, Edit, Trash2, Search, ExternalLink } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface Blog {
@@ -24,6 +25,7 @@ export default function BlogAdmin() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [openSelect, setOpenSelect] = useState<'status' | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingBlog, setEditingBlog] = useState<Blog | null>(null);
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; message: string; onConfirm: (() => void) | null }>({ open: false, title: '', message: '', onConfirm: null });
@@ -236,12 +238,21 @@ export default function BlogAdmin() {
             <Search className="h-4 w-4" />
           </button>
         </div>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-purple-900">
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-          <option value="archived">Archived</option>
-        </select>
+        <div className="w-full sm:w-auto">
+          <SelectField
+            options={[
+              { value: '', label: 'All statuses' },
+              { value: 'draft', label: 'Draft' },
+              { value: 'published', label: 'Published' },
+              { value: 'archived', label: 'Archived' },
+            ]}
+            value={status}
+            isOpen={openSelect === 'status'}
+            onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+            onSelect={(value) => setStatus(value)}
+            className="w-full sm:w-auto"
+          />
+        </div>
       </div>
 
       {/* Grid layout similar to blog homepage */}
@@ -346,6 +357,7 @@ function AIGenerateForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [openSelect, setOpenSelect] = useState(false);
   return (
     <div className="p-5">
       <div className="space-y-4">
@@ -358,15 +370,21 @@ function AIGenerateForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2 border rounded-lg" rows={3} placeholder="One or two sentences" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category (optional)</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
-            <option value="">None</option>
-            <option value="Men">Men</option>
-            <option value="Women">Women</option>
-            <option value="Office & Travel">Office & Travel</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Gifting">Gifting</option>
-          </select>
+          <SelectField
+            label="Category (optional)"
+            options={[
+              { value: '', label: 'None' },
+              { value: 'Men', label: 'Men' },
+              { value: 'Women', label: 'Women' },
+              { value: 'Office & Travel', label: 'Office & Travel' },
+              { value: 'Accessories', label: 'Accessories' },
+              { value: 'Gifting', label: 'Gifting' },
+            ]}
+            value={category}
+            isOpen={openSelect}
+            onOpenChange={setOpenSelect}
+            onSelect={(value) => setCategory(value)}
+          />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-5">

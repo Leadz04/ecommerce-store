@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle, AlertCircle, Loader2, Star } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 export default function ContactPage() {
@@ -17,6 +18,7 @@ export default function ContactPage() {
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [submitError, setSubmitError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [openSelect, setOpenSelect] = useState<'inquiryType' | null>(null);
 
   // Simulate loading for better UX
   useEffect(() => {
@@ -359,24 +361,22 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="inquiryType" className="block text-sm font-medium text-gray-700 mb-2">
-                      Inquiry Type
-                    </label>
-                    <select
-                      id="inquiryType"
-                      name="inquiryType"
+                    <SelectField
+                      label="Inquiry Type"
+                      options={[
+                        { value: 'general', label: 'General Inquiry' },
+                        { value: 'support', label: 'Technical Support' },
+                        { value: 'billing', label: 'Billing Question' },
+                        { value: 'order', label: 'Order Status' },
+                        { value: 'return', label: 'Return/Exchange' },
+                        { value: 'feedback', label: 'Feedback' },
+                        { value: 'partnership', label: 'Partnership' },
+                      ]}
                       value={formData.inquiryType}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="general">General Inquiry</option>
-                      <option value="support">Technical Support</option>
-                      <option value="billing">Billing Question</option>
-                      <option value="order">Order Status</option>
-                      <option value="return">Return/Exchange</option>
-                      <option value="feedback">Feedback</option>
-                      <option value="partnership">Partnership</option>
-                    </select>
+                      isOpen={openSelect === 'inquiryType'}
+                      onOpenChange={(open) => setOpenSelect(open ? 'inquiryType' : null)}
+                      onSelect={(value) => setFormData(prev => ({ ...prev, inquiryType: value }))}
+                    />
                   </div>
 
                   <div>

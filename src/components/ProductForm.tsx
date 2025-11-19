@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye, Calendar as CalendarIcon, Cloud, Loader2 } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface Product {
@@ -67,6 +68,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [optimizingDescription, setOptimizingDescription] = useState(false);
   const [optimizingTags, setOptimizingTags] = useState(false);
   const [organizingImages, setOrganizingImages] = useState(false);
+  const [openSelect, setOpenSelect] = useState<'brand' | 'category' | 'status' | null>(null);
 
   // Fetch brands from API
   useEffect(() => {
@@ -324,44 +326,37 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Brand *
-                </label>
-                <select
-                  required
+                <SelectField
+                  label="Brand"
+                  options={[
+                    { value: '', label: brandsLoading ? 'Loading brands...' : brands.length === 0 ? 'No brands available' : 'Select a brand' },
+                    ...brands.map(brand => ({ value: brand, label: brand })),
+                  ]}
                   value={formData.brand}
-                  onChange={(e) => handleInputChange('brand', e.target.value)}
+                  isOpen={openSelect === 'brand'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'brand' : null)}
+                  onSelect={(value) => handleInputChange('brand', value)}
                   disabled={brandsLoading}
-                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">{brandsLoading ? 'Loading brands...' : 'Select a brand'}</option>
-                  {brands.map(brand => (
-                    <option key={brand} value={brand}>{brand}</option>
-                  ))}
-                  {!brandsLoading && brands.length === 0 && (
-                    <option value="" disabled>No brands available</option>
-                  )}
-                </select>
+                  required
+                />
                 {formData.brand && !brands.includes(formData.brand) && (
                   <p className="text-xs text-gray-500 mt-1">Custom brand: {formData.brand}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category *
-                </label>
-                <select
-                  required
+                <SelectField
+                  label="Category"
+                  options={[
+                    { value: '', label: 'Select a category' },
+                    ...CATEGORIES.map(category => ({ value: category, label: category })),
+                  ]}
                   value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select a category</option>
-                  {CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
+                  isOpen={openSelect === 'category'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'category' : null)}
+                  onSelect={(value) => handleInputChange('category', value)}
+                  required
+                />
               </div>
 
               <div>
@@ -615,17 +610,19 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
             {/* Publication */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select
+                <SelectField
+                  label="Status"
+                  options={[
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'published', label: 'Published' },
+                    { value: 'archived', label: 'Archived' },
+                  ]}
                   value={formData.status}
-                  onChange={(e) => handleInputChange('status', e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </select>
-                <p className="text-xs text-gray-500">Published items are visible when publish date is now or past.</p>
+                  isOpen={openSelect === 'status'}
+                  onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+                  onSelect={(value) => handleInputChange('status', value as any)}
+                />
+                <p className="text-xs text-gray-500 mt-2">Published items are visible when publish date is now or past.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

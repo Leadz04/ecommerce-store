@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { RefreshCw, Filter, ChevronDown, ChevronRight, Search, ExternalLink } from 'lucide-react';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface VersionEntry {
@@ -45,6 +46,7 @@ export default function ProductVersionsPage() {
   const [to, setTo] = useState('');
   const [pages, setPages] = useState(1);
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
+  const [openSelect, setOpenSelect] = useState<'action' | 'limit' | null>(null);
 
   const fetchVersions = async () => {
     try {
@@ -103,12 +105,21 @@ export default function ProductVersionsPage() {
               className="w-full pl-9 pr-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder:text-gray-400"
             />
           </div>
-          <select value={action} onChange={(e) => setAction(e.target.value)} className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
-            <option value="">All Actions</option>
-            <option value="created">Created</option>
-            <option value="updated">Updated</option>
-            <option value="unchanged">Unchanged</option>
-          </select>
+          <div className="w-full">
+            <SelectField
+              options={[
+                { value: '', label: 'All Actions' },
+                { value: 'created', label: 'Created' },
+                { value: 'updated', label: 'Updated' },
+                { value: 'unchanged', label: 'Unchanged' },
+              ]}
+              value={action}
+              isOpen={openSelect === 'action'}
+              onOpenChange={(open) => setOpenSelect(open ? 'action' : null)}
+              onSelect={(value) => setAction(value)}
+              className="w-full"
+            />
+          </div>
           <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Source (e.g., wolveyes)" className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
           <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="External ID" className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
@@ -198,11 +209,18 @@ export default function ProductVersionsPage() {
         <div className="flex gap-2">
           <button disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-50">Prev</button>
           <button disabled={page >= pages} onClick={() => setPage((p) => Math.min(pages, p + 1))} className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-50">Next</button>
-          <select value={limit} onChange={(e) => { setLimit(parseInt(e.target.value)); setPage(1); }} className="px-2 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700">
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
+          <SelectField
+            options={[
+              { value: '10', label: '10' },
+              { value: '20', label: '20' },
+              { value: '50', label: '50' },
+            ]}
+            value={String(limit)}
+            isOpen={openSelect === 'limit'}
+            onOpenChange={(open) => setOpenSelect(open ? 'limit' : null)}
+            onSelect={(value) => { setLimit(parseInt(value)); setPage(1); }}
+            className="w-auto min-w-[80px]"
+          />
         </div>
       </div>
     </div>
