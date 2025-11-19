@@ -5568,12 +5568,13 @@ export default function AdminDashboard() {
                 </div>
                 
                 {/* Bottom Row: Filters and Actions */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
                   {/* Filter Dropdowns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2 flex-1 w-full">
                   <select
                     value={selectedCategory}
                     onChange={(e) => { setSelectedCategory(e.target.value); setProductPage(1); }}
-                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
+                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
                   >
                     <option value="">All Categories</option>
                     <option value="Men">Men</option>
@@ -5586,7 +5587,7 @@ export default function AdminDashboard() {
                     value={selectedBrand}
                     onChange={(e) => { setSelectedBrand(e.target.value); setProductPage(1); }}
                     disabled={brandsLoading}
-                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium bg-white"
+                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium bg-white"
                   >
                     <option value="">{brandsLoading ? 'Loading brands...' : 'All Brands'}</option>
                     {availableBrands.map(brand => (
@@ -5599,7 +5600,7 @@ export default function AdminDashboard() {
                   <select
                     value={selectedOrderStatus}
                     onChange={(e) => { setSelectedOrderStatus(e.target.value); setProductPage(1); }}
-                    className="px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
+                    className="w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm font-medium bg-white"
                   >
                     <option value="">All Statuses</option>
                     <option value="draft">Draft</option>
@@ -5610,7 +5611,7 @@ export default function AdminDashboard() {
                   </select>
                   
                   {/* Checkbox Filter */}
-                  <label className="flex items-center space-x-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer bg-white">
+                  <label className="flex items-center justify-between sm:justify-start space-x-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer bg-white">
                     <input
                       type="checkbox"
                       checked={showOrganizedOnly}
@@ -5619,9 +5620,10 @@ export default function AdminDashboard() {
                     />
                     <span className="text-sm font-medium">Organized Only</span>
                   </label>
-                  
+                  </div>
+
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-between xl:justify-end">
                     <button
                       onClick={fetchProducts}
                       className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm hover:shadow-md"
@@ -5708,29 +5710,29 @@ export default function AdminDashboard() {
             ) : (
               <>
                 {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-hidden">
-                  <table className="w-full divide-y divide-gray-200">
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full table-fixed divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-100">
                       <tr>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[30%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Product
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[12%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Category
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[14%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Brand
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[10%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Price
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[8%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Stock
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[12%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                        <th className="w-[14%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -5755,7 +5757,7 @@ export default function AdminDashboard() {
                         .slice((productPage - 1) * productPerPage, productPage * productPerPage)
                         .map((product, index) => (
                         <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`} onClick={() => handleEditProduct(product)}>
-                          <td className="px-4 xl:px-6 py-4">
+                          <td className="w-[30%] px-4 xl:px-6 py-4">
                             <div className="flex items-center min-w-0">
                               <div className="flex-shrink-0 h-12 w-12 xl:h-14 xl:w-14">
                                 <img
@@ -5774,15 +5776,15 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 xl:px-6 py-4 text-gray-700">
+                          <td className="w-[12%] px-4 xl:px-6 py-4 text-gray-700">
                             <span className="inline-flex items-center px-2.5 xl:px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200">
                               {product.category || 'N/A'}
                             </span>
                           </td>
-                          <td className="px-4 xl:px-6 py-4 text-sm font-medium text-gray-700 truncate max-w-[120px]">
+                          <td className="w-[14%] px-4 xl:px-6 py-4 text-sm font-medium text-gray-700 truncate">
                             {product.brand || 'N/A'}
                           </td>
-                          <td className="px-4 xl:px-6 py-4 text-sm">
+                          <td className="w-[10%] px-4 xl:px-6 py-4 text-sm">
                             <div className="flex items-center">
                               <DollarSign className="h-4 w-4 text-green-500 mr-1 flex-shrink-0" />
                               <span className="font-semibold text-gray-900">${(product.price ?? 0).toFixed(2)}</span>
@@ -5793,13 +5795,13 @@ export default function AdminDashboard() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 xl:px-6 py-4 text-sm">
+                          <td className="w-[8%] px-4 xl:px-6 py-4 text-sm">
                             <div className="flex items-center">
                               <Package className="h-4 w-4 text-indigo-500 mr-1 flex-shrink-0" />
                               <span className="font-medium text-gray-700">{product.stockCount}</span>
                             </div>
                           </td>
-                          <td className="px-4 xl:px-6 py-4">
+                          <td className="w-[12%] px-4 xl:px-6 py-4">
                             <div className="flex flex-col space-y-1">
                               <span className={`inline-flex items-center px-2 xl:px-2.5 py-1 rounded-full text-xs font-medium ${
                                 product.isActive 
@@ -5829,7 +5831,7 @@ export default function AdminDashboard() {
                               })()}
                             </div>
                           </td>
-                          <td className="px-4 xl:px-6 py-4 text-sm font-medium">
+                          <td className="w-[14%] px-4 xl:px-6 py-4 text-sm font-medium">
                             <div className="flex flex-wrap gap-1.5 items-center" onClick={(e) => e.stopPropagation()}>
                               {/* Primary Actions */}
                               <Link
