@@ -1780,10 +1780,12 @@ export default function AdminDashboard() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
               <p className="text-sm sm:text-base text-gray-600 mt-1">Manage users, roles, and system settings</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <button
+            <div className="w-full sm:w-auto">
+              <div className="p-3 rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-gray-50 to-gray-100 shadow-sm">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                  <button
                 onClick={seedRoles}
-                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow hover:shadow-md font-medium text-sm w-full sm:w-auto"
               >
                 <Shield className="h-4 w-4" />
                 <span className="hidden sm:inline">Seed Roles</span>
@@ -1791,7 +1793,7 @@ export default function AdminDashboard() {
               </button>
               <Link
                 href="/admin/audit-logs"
-                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
               >
                 <FileCheck className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
                 <span className="hidden sm:inline">Audit Logs</span>
@@ -1799,7 +1801,7 @@ export default function AdminDashboard() {
               </Link>
               <Link
                 href="/admin/product-versions"
-                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
               >
                 <History className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
                 <span className="hidden sm:inline">Product Changes</span>
@@ -1807,7 +1809,7 @@ export default function AdminDashboard() {
               </Link>
               <Link
                 href="/admin/tools"
-                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
               >
                 <Wrench className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
                 <span className="hidden sm:inline">Admin Tools</span>
@@ -1815,12 +1817,14 @@ export default function AdminDashboard() {
               </Link>
               <Link
                 href="/"
-                className="group flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm"
+                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
               >
                 <Home className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
                 <span className="hidden sm:inline">Back to Store</span>
                 <span className="sm:hidden">Store</span>
               </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>
