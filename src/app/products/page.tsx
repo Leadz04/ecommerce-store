@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, Grid, List, SlidersHorizontal, X, Search } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
@@ -56,12 +56,20 @@ export default function ProductsPage() {
   const categories = ['all', 'Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'];
   const currentPriceRange = filters.priceRange || [0, 1000];
 
-  // Initialize from URL params
+  // Initialize from URL params - use ref to prevent duplicate calls
+  const hasInitialized = useRef(false);
   useEffect(() => {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || 'all';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
+    
+    // Only fetch if params actually changed or on first mount
+    const paramsKey = `${search}-${category}-${sortBy}-${page}`;
+    if (hasInitialized.current && paramsKey === hasInitialized.current) {
+      return;
+    }
+    hasInitialized.current = paramsKey;
     
     setSearchInput(search);
     setFilters({ 

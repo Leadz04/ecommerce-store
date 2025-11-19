@@ -17,6 +17,7 @@ import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 import ReviewList from '@/components/ReviewList';
+import ProductVisitorCounter from '@/components/ProductVisitorCounter';
 
 // Brand Select Component
 function BrandSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -526,10 +527,26 @@ export default function ProductPage() {
     } catch {}
   }, [productId]);
 
-  // Fetch all products for related products
+  // Fetch related products only when current product is loaded and only fetch a limited set
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    if (currentProduct?.category) {
+      // Only fetch related products from the same category, limit to 4
+      const fetchRelated = async () => {
+        await fetchProducts({ 
+          category: currentProduct.category, 
+          limit: 4,
+          page: 1 
+        });
+        // Filter out current product and limit to 4
+        const related = products
+          .filter(p => (p._id || p.id) !== (currentProduct._id || currentProduct.id))
+          .slice(0, 4);
+        setRelatedProducts(related);
+      };
+      fetchRelated();
+    }
+  }, [currentProduct?.category, currentProduct?._id, fetchProducts, products]);
   
   if (isLoading || !currentProduct) {
     return <ProductDetailSkeleton />;
@@ -1029,6 +1046,11 @@ export default function ProductPage() {
               {product.rating} ({product.reviewCount} reviews)
             </span>
           </div>
+
+          {/* Real-time Visitor Counter */}
+          {!isEditMode && productId && (
+            <ProductVisitorCounter productId={productId} />
+          )}
 
           {/* Price */}
           {isEditMode ? (
@@ -2000,9 +2022,7 @@ export default function ProductPage() {
               </h2>
               <p className="text-gray-600 mb-8">You might also like</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {products
-                  .filter(p => p._id !== product._id && p.category === product.category)
-                  .slice(0, 4)
+                {relatedProducts
                   .map((relatedProduct: any) => (
               <div 
                 key={(relatedProduct._id || relatedProduct.id) as string} 

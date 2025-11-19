@@ -19,19 +19,23 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || '';
     const brand = searchParams.get('brand') || '';
     const status = searchParams.get('status') || '';
+    const organized = searchParams.get('organized') || ''; // 'all', 'organized', 'unorganized'
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
     // Build query
     const query: any = {};
+    const andConditions: any[] = [];
     
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { brand: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } }
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+          { brand: { $regex: search, $options: 'i' } },
+          { tags: { $in: [new RegExp(search, 'i')] } }
+        ]
+      });
     }
     
     if (category) {
@@ -50,7 +54,54 @@ export async function GET(request: NextRequest) {
         query.publishAt = { $gt: new Date() };
       } else if (status === 'live') {
         query.status = 'published';
-        query.$or = [{ publishAt: null }, { publishAt: { $lte: new Date() } }];
+        andConditions.push({
+          $or: [{ publishAt: null }, { publishAt: { $lte: new Date() } }]
+        });
+      }
+    }
+
+    // Filter by organized status (products with Cloudinary images)
+    if (organized && organized !== 'all') {
+      const cloudinaryRegex = { $regex: 'cloudinary\\.com', $options: 'i' };
+      if (organized === 'organized') {
+        // Products that have at least one Cloudinary image
+        // Check if image field exists and matches, or if images array has at least one match
+        andConditions.push({
+          $or: [
+            { image: { $exists: true, $ne: null, $regex: 'cloudinary\\.com', $options: 'i' } },
+            { images: { $exists: true, $ne: null, $elemMatch: cloudinaryRegex } }
+          ]
+        });
+      } else if (organized === 'unorganized') {
+        // Products that don't have any Cloudinary images
+        // Use $nor to ensure neither image nor any image in images array contains cloudinary.com
+        // Handle cases where fields might not exist or be null
+        andConditions.push({
+          $nor: [
+            { image: { $exists: true, $ne: null, $regex: 'cloudinary\\.com', $options: 'i' } },
+            { images: { $exists: true, $ne: null, $elemMatch: cloudinaryRegex } }
+          ]
+        });
+      }
+    }
+
+    // Combine all conditions with $and if needed
+    // MongoDB will automatically combine top-level conditions with $and,
+    // but we need explicit $and when we have multiple $or/$nor conditions
+    if (andConditions.length > 0) {
+      // If we have other query conditions, combine them with $and
+      const otherConditions: any = {};
+      Object.keys(query).forEach(key => {
+        if (key !== '$and') {
+          otherConditions[key] = query[key];
+          delete query[key];
+        }
+      });
+      
+      if (Object.keys(otherConditions).length > 0) {
+        query.$and = [otherConditions, ...andConditions];
+      } else {
+        query.$and = andConditions;
       }
     }
 
@@ -58,16 +109,34 @@ export async function GET(request: NextRequest) {
     const sort: any = {};
     sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // Debug: Log query structure in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Products API] Query:', JSON.stringify(query, null, 2));
+    }
+
     // Get products with pagination
     const skip = (page - 1) * limit;
-    const productsRaw = await Product.find(query)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    let productsRaw;
+    try {
+      productsRaw = await Product.find(query)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    } catch (dbError) {
+      console.error('[Products API] Database query error:', dbError);
+      throw new Error(`Database query failed: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+    }
 
     // Apply deduplication to ensure unique products
     const products = applyDeduplication(productsRaw, 'products');
+    
+    // Ensure totalViews is included (default to 0 if not set)
+    products.forEach((product: any) => {
+      if (product.totalViews === undefined || product.totalViews === null) {
+        product.totalViews = 0;
+      }
+    });
 
     const total = await Product.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
@@ -95,12 +164,23 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Get products error:', error);
     if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       if (error.message.includes('No token provided') || error.message.includes('Invalid token')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
       if (error.message.includes('Insufficient permissions')) {
         return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
       }
+      // Return error details for debugging
+      return NextResponse.json({ 
+        error: 'Internal server error',
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }, { status: 500 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

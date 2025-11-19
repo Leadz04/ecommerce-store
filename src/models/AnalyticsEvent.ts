@@ -1,11 +1,15 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IAnalyticsEvent extends Document {
-  type: 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase' | 'page_view';
+  type: 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase' | 'page_view' | 'email_open' | 'email_click' | 'email_visit';
   userId?: string;
   sessionId?: string;
   productId?: string;
   orderId?: string;
+  email?: string; // For email tracking events
+  emailTrackingId?: string; // Reference to EmailTracking
+  page?: string; // Page path
+  pageType?: 'home' | 'product' | 'category' | 'cart' | 'checkout' | 'other';
   value?: number; // revenue for purchase
   currency?: string;
   metadata?: Record<string, unknown>;

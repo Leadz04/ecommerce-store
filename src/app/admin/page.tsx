@@ -45,11 +45,13 @@ import {
   FileCheck,
   History,
   Wrench,
-  Home
+  Home,
+  Mail
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
 import KeywordPlanner from '@/components/KeywordPlanner';
+import EmailTrackingDashboard from '@/components/EmailTrackingDashboard';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -162,10 +164,10 @@ export default function AdminDashboard() {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
-  const allowedTabs = ['users','roles','products','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing'] as const;
+  const allowedTabs = ['users','roles','products','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -408,11 +410,11 @@ export default function AdminDashboard() {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
-  const [showOrganizedOnly, setShowOrganizedOnly] = useState(false);
+  const [organizedFilter, setOrganizedFilter] = useState<'all' | 'organized' | 'unorganized'>('all');
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
-  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | null>(null);
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -434,6 +436,15 @@ export default function AdminDashboard() {
   } | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsDays, setMetricsDays] = useState<7 | 30 | 90>(30);
+
+  // Helper function to check if a product is organized (has Cloudinary images)
+  const isProductOrganized = (product: Product): boolean => {
+    const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+    if (allImages.length === 0) return false;
+    return allImages.some((url: string) => 
+      url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+    );
+  };
 
   // Reusable collapsible JSON tree viewer
   const JsonTree: React.FC<{ data: any; defaultOpen?: boolean; label?: string }> = ({ data, defaultOpen = false }) => {
@@ -1167,35 +1178,47 @@ export default function AdminDashboard() {
     }
   };
 
-  // Fetch products
-  const fetchProducts = async () => {
+  // Fetch products - only fetch current page, not all pages
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [totalProductPages, setTotalProductPages] = useState(1);
+  const fetchProducts = async (pageToFetch?: number) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      // Fetch all pages from the API to include every product
-      const perPage = 500; // API allows up to 1000; use 500 to keep responses reasonable
-      let page = 1;
-      let all: any[] = [];
-      let safety = 0;
-      while (true) {
-        const res = await fetch(`/api/admin/products?page=${page}&limit=${perPage}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const err = await res.text().catch(() => '');
-          throw new Error(`Failed to fetch products (page ${page}): ${res.status} ${err}`);
-        }
-        const json = await res.json();
-        const items = Array.isArray(json.products) ? json.products : [];
-        all = all.concat(items);
-        const hasNext = !!json?.pagination?.hasNext;
-        if (!hasNext) break;
-        page += 1;
-        safety += 1;
-        if (safety > 50) break; // hard stop to avoid infinite loops
+      const page = pageToFetch || productPage;
+      const limit = productPerPage;
+      
+      // Build query params including organized filter
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (organizedFilter && organizedFilter !== 'all') {
+        params.append('organized', organizedFilter);
       }
-      setProducts(all);
-      setProductPage(1);
+      const res = await fetch(`/api/admin/products?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => '');
+        throw new Error(`Failed to fetch products (page ${page}): ${res.status} ${err}`);
+      }
+      // Check if response has content before parsing JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid response format (page ${page}): ${text.substring(0, 100)}`);
+      }
+      const json = await res.json().catch((err) => {
+        throw new Error(`Failed to parse JSON response (page ${page}): ${err.message}`);
+      });
+      const items = Array.isArray(json.products) ? json.products : [];
+      setProducts(items);
+      setTotalProducts(json.pagination?.total || items.length);
+      setTotalProductPages(json.pagination?.pages || 1);
+      if (pageToFetch) {
+        setProductPage(pageToFetch);
+      }
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
@@ -1744,6 +1767,14 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, user, activeTab, metricsDays]);
 
+  // Refetch products when organized filter or productPage changes
+  useEffect(() => {
+    if (activeTab === 'products' && isAuthenticated) {
+      fetchProducts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizedFilter, productPage, productPerPage]);
+
   // Filter users
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1937,6 +1968,21 @@ export default function AdminDashboard() {
                   <span className="sm:hidden">Marketing</span>
                   {['marketing','performance','analytics','etsy'].includes(activeTab as any) && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('email-tracking'); updateQuery({ tab: 'email-tracking' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'email-tracking'
+                      ? 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 shadow-sm border border-purple-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Mail className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'email-tracking' ? 'text-purple-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">Email Tracking</span>
+                  <span className="sm:hidden">Email</span>
+                  {activeTab === 'email-tracking' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500"></span>
                   )}
                 </button>
                 <button
@@ -3583,6 +3629,10 @@ export default function AdminDashboard() {
 
             {/* End sub-navigation moved to top */}
           </div>
+        )}
+
+        {activeTab === 'email-tracking' && (
+          <EmailTrackingDashboard />
         )}
 
         {/* SEO Research Tab (SerpAPI) */}
@@ -5625,16 +5675,19 @@ export default function AdminDashboard() {
                     className="w-full"
                   />
                   
-                  {/* Checkbox Filter */}
-                  <label className="flex items-center justify-between sm:justify-start space-x-2 px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all cursor-pointer bg-white">
-                    <input
-                      type="checkbox"
-                      checked={showOrganizedOnly}
-                      onChange={(e) => { setShowOrganizedOnly(e.target.checked); setProductPage(1); }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium">Organized Only</span>
-                  </label>
+                  {/* Organized Filter Dropdown */}
+                  <SelectField
+                    options={[
+                      { value: 'all', label: 'All Products' },
+                      { value: 'organized', label: 'Organized Products' },
+                      { value: 'unorganized', label: 'Unorganized Products' },
+                    ]}
+                    value={organizedFilter}
+                    isOpen={openSelect === 'organized'}
+                    onOpenChange={(open) => setOpenSelect(open ? 'organized' : null)}
+                    onSelect={(value) => { setOrganizedFilter(value as 'all' | 'organized' | 'unorganized'); setProductPage(1); }}
+                    className="w-full"
+                  />
                   </div>
 
                   {/* Action Buttons */}
@@ -5744,6 +5797,9 @@ export default function AdminDashboard() {
                         <th className="w-[8%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Stock
                         </th>
+                        <th className="w-[8%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                          Views
+                        </th>
                         <th className="w-[12%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Status
                         </th>
@@ -5760,14 +5816,8 @@ export default function AdminDashboard() {
                                                product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                           const matchesCategory = !selectedCategory || product.category === selectedCategory;
                           const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                          const matchesOrganized = !showOrganizedOnly || (() => {
-                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                            if (allImages.length === 0) return false;
-                            return allImages.some((url: string) => 
-                              url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                            );
-                          })();
-                          return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                          // Organized filter is now handled at database level, so no need to filter here
+                          return matchesSearch && matchesCategory && matchesBrand;
                         })
                         .slice((productPage - 1) * productPerPage, productPage * productPerPage)
                         .map((product, index) => (
@@ -5814,6 +5864,12 @@ export default function AdminDashboard() {
                             <div className="flex items-center">
                               <Package className="h-4 w-4 text-indigo-500 mr-1 flex-shrink-0" />
                               <span className="font-medium text-gray-700">{product.stockCount}</span>
+                            </div>
+                          </td>
+                          <td className="w-[8%] px-4 xl:px-6 py-4 text-sm">
+                            <div className="flex items-center">
+                              <Eye className="h-4 w-4 text-purple-500 mr-1 flex-shrink-0" />
+                              <span className="font-medium text-gray-700">{(product as any).totalViews || 0}</span>
                             </div>
                           </td>
                           <td className="w-[12%] px-4 xl:px-6 py-4">
@@ -6043,14 +6099,8 @@ export default function AdminDashboard() {
                                            product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                       const matchesCategory = !selectedCategory || product.category === selectedCategory;
                       const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                      const matchesOrganized = !showOrganizedOnly || (() => {
-                        const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                        if (allImages.length === 0) return false;
-                        return allImages.some((url: string) => 
-                          url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                        );
-                      })();
-                      return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                      // Organized filter is now handled at database level, so no need to filter here
+                      return matchesSearch && matchesCategory && matchesBrand;
                     })
                     .slice((productPage - 1) * productPerPage, productPage * productPerPage)
                     .map((product) => (
@@ -6090,7 +6140,7 @@ export default function AdminDashboard() {
 
                       {/* Card Body */}
                       <div className="px-4 pb-4 space-y-3">
-                        {/* Price and Stock */}
+                        {/* Price, Stock, and Views */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <DollarSign className="h-4 w-4 text-green-500 mr-1" />
@@ -6101,9 +6151,15 @@ export default function AdminDashboard() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center">
-                            <Package className="h-4 w-4 text-indigo-500 mr-1" />
-                            <span className="text-sm font-medium text-gray-700">{product.stockCount}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center">
+                              <Package className="h-4 w-4 text-indigo-500 mr-1" />
+                              <span className="text-sm font-medium text-gray-700">{product.stockCount}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <Eye className="h-4 w-4 text-purple-500 mr-1" />
+                              <span className="text-sm font-medium text-gray-700">{(product as any).totalViews || 0}</span>
+                            </div>
                           </div>
                         </div>
 
@@ -6330,15 +6386,8 @@ export default function AdminDashboard() {
                         product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                       const matchesCategory = !selectedCategory || product.category === selectedCategory;
                       const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                      const matchesOrganized = !showOrganizedOnly || (() => {
-                        const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                        if (allImages.length === 0) return false;
-                        // A product is organized if at least one image is on Cloudinary
-                        return allImages.some((url: string) => 
-                          url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                        );
-                      })();
-                      return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                      // Organized filter is now handled at database level, so no need to filter here
+                      return matchesSearch && matchesCategory && matchesBrand;
                     }).length;
                     const start = (productPage - 1) * productPerPage + 1;
                     const end = Math.min(productPage * productPerPage, filteredCount);
@@ -6361,7 +6410,11 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                      onClick={() => {
+                        const prevPage = Math.max(1, productPage - 1);
+                        setProductPage(prevPage);
+                        fetchProducts(prevPage);
+                      }}
                       className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
                       disabled={productPage === 1}
                     >
@@ -6380,15 +6433,8 @@ export default function AdminDashboard() {
                             product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
                           const matchesCategory = !selectedCategory || product.category === selectedCategory;
                           const matchesBrand = !selectedBrand || product.brand?.toLowerCase().includes(selectedBrand.toLowerCase());
-                          const matchesOrganized = !showOrganizedOnly || (() => {
-                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                            if (allImages.length === 0) return false;
-                            // A product is organized if at least one image is on Cloudinary
-                            return allImages.some((url: string) => 
-                              url && typeof url === 'string' && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                            );
-                          })();
-                          return matchesSearch && matchesCategory && matchesBrand && matchesOrganized;
+                          // Organized filter is now handled at database level, so no need to filter here
+                          return matchesSearch && matchesCategory && matchesBrand;
                         }).length;
                         const totalPages = Math.max(1, Math.ceil(filteredCount / productPerPage));
                         setProductPage((p) => Math.min(totalPages, p + 1));

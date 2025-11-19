@@ -34,6 +34,7 @@ export interface IProduct extends Document {
   }>;
   etsyExported?: boolean;
   etsyExportedAt?: Date | null;
+  totalViews?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -158,7 +159,12 @@ const ProductSchema = new Schema<IProduct>({
     originalPrice: { type: Number, min: 0 },
     available: { type: Boolean },
     inventory: { type: Number, min: 0, required: false },
-  }]
+  }],
+  totalViews: {
+    type: Number,
+    default: 0,
+    min: 0
+  }
 }, {
   timestamps: true
 });

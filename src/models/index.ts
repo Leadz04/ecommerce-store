@@ -18,6 +18,9 @@ import SeoProduct from './SeoProduct';
 import Blog from './Blog';
 import KeywordResearch from './KeywordResearch';
 import Review from './Review';
+import EmailSubscriber from './EmailSubscriber';
+import EmailTracking from './EmailTracking';
+import ProductView from './ProductView';
 
 // Export all models for easy importing
 export { default as User } from './User';
@@ -39,6 +42,9 @@ export { default as SeoProduct } from './SeoProduct';
 export { default as Blog } from './Blog';
 export { default as KeywordResearch } from './KeywordResearch';
 export { default as Review } from './Review';
+export { default as EmailSubscriber } from './EmailSubscriber';
+export { default as EmailTracking } from './EmailTracking';
+export { default as ProductView } from './ProductView';
 
 // Export interfaces
 export type { IUser } from './User';
@@ -57,3 +63,6 @@ export type { ISeoKeyword } from './SeoKeyword';
 export type { ISeoProduct } from './SeoProduct';
 export type { IKeywordResearch } from './KeywordResearch';
 export type { IReview } from './Review';
+export type { IEmailSubscriber } from './EmailSubscriber';
+export type { IEmailTracking } from './EmailTracking';
+export type { IProductView } from './ProductView';

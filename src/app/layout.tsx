@@ -3,6 +3,7 @@ import { defaultOpenGraph, defaultTwitter } from "@/lib/seo";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClientBridge from "@/components/ClientBridge";
+import VisitorEmailTracker from "@/components/VisitorEmailTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -58,7 +59,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        <ClientBridge>{children}</ClientBridge>
+        <ClientBridge>
+          <VisitorEmailTracker />
+          {children}
+        </ClientBridge>
       </body>
     </html>
   );
