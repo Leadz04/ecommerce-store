@@ -70,8 +70,13 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [organizingImages, setOrganizingImages] = useState(false);
   const [openSelect, setOpenSelect] = useState<'brand' | 'category' | 'status' | null>(null);
 
-  // Fetch brands from API
+  // Fetch brands from API only when modal is open
   useEffect(() => {
+    if (!isOpen) return; // Don't fetch if modal is closed
+    
+    // Skip if brands already loaded
+    if (brands.length > 0) return;
+    
     const fetchBrands = async () => {
       try {
         setBrandsLoading(true);
@@ -87,7 +92,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
       }
     };
     fetchBrands();
-  }, []);
+  }, [isOpen, brands.length]);
 
   useEffect(() => {
     if (product) {

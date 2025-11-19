@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { 
   Mail, 
   Eye, 
@@ -103,7 +103,14 @@ export default function EmailTrackingDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [daysSelectOpen, setDaysSelectOpen] = useState(false);
 
+  const fetchDataRef = useRef<string | null>(null);
+  
   const fetchData = async () => {
+    const cacheKey = `email-tracking-${days}`;
+    // Prevent duplicate calls for the same days value
+    if (fetchDataRef.current === cacheKey) return;
+    fetchDataRef.current = cacheKey;
+    
     try {
       setLoading(true);
       setError(null);
@@ -122,6 +129,7 @@ export default function EmailTrackingDashboard() {
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      fetchDataRef.current = null; // Reset on error to allow retry
     } finally {
       setLoading(false);
     }

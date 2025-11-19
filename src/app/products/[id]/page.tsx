@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -16,8 +16,6 @@ import { sampleProducts } from '@/data/products';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
-import ReviewList from '@/components/ReviewList';
-import ProductVisitorCounter from '@/components/ProductVisitorCounter';
 
 // Brand Select Component
 function BrandSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -27,6 +25,9 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (value: str
   const [openSelect, setOpenSelect] = useState(false);
 
   useEffect(() => {
+    // Skip if brands already loaded
+    if (brands.length > 0) return;
+    
     const fetchBrands = async () => {
       try {
         setLoading(true);
@@ -42,7 +43,7 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (value: str
       }
     };
     fetchBrands();
-  }, []);
+  }, [brands.length]);
 
   const isCustomBrand = value && !brands.includes(value);
 
@@ -529,24 +530,37 @@ export default function ProductPage() {
 
   // Fetch related products only when current product is loaded and only fetch a limited set
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+  const lastProductIdRef = useRef<string | null>(null);
+  const lastCategoryRef = useRef<string | null>(null);
+  
   useEffect(() => {
-    if (currentProduct?.category) {
+    // Only fetch if product ID or category actually changed
+    const productId = currentProduct?._id;
+    const category = currentProduct?.category;
+    
+    if (productId && category && 
+        (productId !== lastProductIdRef.current || category !== lastCategoryRef.current)) {
+      lastProductIdRef.current = productId;
+      lastCategoryRef.current = category;
+      
       // Only fetch related products from the same category, limit to 4
-      const fetchRelated = async () => {
-        await fetchProducts({ 
-          category: currentProduct.category, 
-          limit: 4,
-          page: 1 
-        });
+      fetchProducts({ 
+        category: category, 
+        limit: 4,
+        page: 1 
+      }).then(() => {
+        // Get products from store after fetch completes
+        const storeProducts = useProductStore.getState().products;
         // Filter out current product and limit to 4
-        const related = products
-          .filter(p => (p._id || p.id) !== (currentProduct._id || currentProduct.id))
+        const related = storeProducts
+          .filter(p => (p._id || p.id) !== productId)
           .slice(0, 4);
         setRelatedProducts(related);
-      };
-      fetchRelated();
+      }).catch(() => {
+        // Silently fail
+      });
     }
-  }, [currentProduct?.category, currentProduct?._id, fetchProducts, products]);
+  }, [currentProduct?._id, currentProduct?.category, fetchProducts]);
   
   if (isLoading || !currentProduct) {
     return <ProductDetailSkeleton />;
@@ -1046,11 +1060,6 @@ export default function ProductPage() {
               {product.rating} ({product.reviewCount} reviews)
             </span>
           </div>
-
-          {/* Real-time Visitor Counter */}
-          {!isEditMode && productId && (
-            <ProductVisitorCounter productId={productId} />
-          )}
 
           {/* Price */}
           {isEditMode ? (
@@ -2189,9 +2198,6 @@ export default function ProductPage() {
           </div>
         </div>
       )}
-
-      {/* Reviews Section */}
-      <ReviewList productId={productId} />
 
       {/* Structured Data: Product JSON-LD */}
       <Script id="product-jsonld" type="application/ld+json"

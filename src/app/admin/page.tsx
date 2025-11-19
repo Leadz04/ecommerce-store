@@ -1075,11 +1075,13 @@ export default function AdminDashboard() {
     }
   }, [searchParams, activeTab, orders]);
 
-  // Fetch brands on mount
+  // Fetch brands only when products tab is active or when ProductForm might be needed
   useEffect(() => {
-    fetchBrands();
+    if (activeTab === 'products' && isAuthenticated) {
+      fetchBrands();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeTab, isAuthenticated]);
 
   useEffect(() => {
     const userId = searchParams.get('userId');
@@ -5797,9 +5799,6 @@ export default function AdminDashboard() {
                         <th className="w-[8%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Stock
                         </th>
-                        <th className="w-[8%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                          Views
-                        </th>
                         <th className="w-[12%] px-4 xl:px-6 py-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                           Status
                         </th>
@@ -5864,12 +5863,6 @@ export default function AdminDashboard() {
                             <div className="flex items-center">
                               <Package className="h-4 w-4 text-indigo-500 mr-1 flex-shrink-0" />
                               <span className="font-medium text-gray-700">{product.stockCount}</span>
-                            </div>
-                          </td>
-                          <td className="w-[8%] px-4 xl:px-6 py-4 text-sm">
-                            <div className="flex items-center">
-                              <Eye className="h-4 w-4 text-purple-500 mr-1 flex-shrink-0" />
-                              <span className="font-medium text-gray-700">{(product as any).totalViews || 0}</span>
                             </div>
                           </td>
                           <td className="w-[12%] px-4 xl:px-6 py-4">
@@ -6151,15 +6144,9 @@ export default function AdminDashboard() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center">
-                              <Package className="h-4 w-4 text-indigo-500 mr-1" />
-                              <span className="text-sm font-medium text-gray-700">{product.stockCount}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <Eye className="h-4 w-4 text-purple-500 mr-1" />
-                              <span className="text-sm font-medium text-gray-700">{(product as any).totalViews || 0}</span>
-                            </div>
+                          <div className="flex items-center">
+                            <Package className="h-4 w-4 text-indigo-500 mr-1" />
+                            <span className="text-sm font-medium text-gray-700">{product.stockCount}</span>
                           </div>
                         </div>
 

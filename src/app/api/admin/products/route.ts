@@ -130,13 +130,6 @@ export async function GET(request: NextRequest) {
 
     // Apply deduplication to ensure unique products
     const products = applyDeduplication(productsRaw, 'products');
-    
-    // Ensure totalViews is included (default to 0 if not set)
-    products.forEach((product: any) => {
-      if (product.totalViews === undefined || product.totalViews === null) {
-        product.totalViews = 0;
-      }
-    });
 
     const total = await Product.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
