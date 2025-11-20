@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
 import { AnalyticsEvent } from '@/models';
+import mongoose from 'mongoose';
 
 /**
  * Track email opens using tracking pixel
@@ -52,10 +53,35 @@ export async function GET(request: NextRequest) {
       const normalizedEmail = email.toLowerCase().trim();
       const now = new Date();
 
+      // Convert trackingId string to ObjectId
+      let trackingObjectId: mongoose.Types.ObjectId;
+      try {
+        trackingObjectId = new mongoose.Types.ObjectId(trackingId);
+      } catch (error) {
+        console.error('Invalid trackingId format:', trackingId);
+        // Return pixel even if invalid ID
+        return new NextResponse(
+          Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
+          {
+            headers: {
+              'Content-Type': 'image/gif',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          }
+        );
+      }
+
       // Find or create email tracking record
       let emailTracking = await EmailTracking.findOne({
-        _id: trackingId,
+        _id: trackingObjectId,
         email: normalizedEmail
+      });
+
+      console.log('[Email Track Open]', {
+        trackingId: trackingId,
+        trackingObjectId: trackingObjectId.toString(),
+        email: normalizedEmail,
+        found: !!emailTracking
       });
 
       if (!emailTracking) {
@@ -103,8 +129,8 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // Return 1x1 transparent GIF pixel
-      return new NextResponse(
+      // Return 1x1 transparent GIF pixel with email cookie
+      const response = new NextResponse(
         Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'),
         {
           headers: {
@@ -115,6 +141,17 @@ export async function GET(request: NextRequest) {
           }
         }
       );
+      
+      // Set cookie with email for VisitorEmailTracker to use
+      response.cookies.set('visitor_email', normalizedEmail, {
+        httpOnly: false, // Allow client-side access
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/'
+      });
+
+      return response;
 
     } catch (error) {
       console.error('Error decoding email open token:', error);

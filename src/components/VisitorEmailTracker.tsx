@@ -24,10 +24,21 @@ export default function VisitorEmailTracker() {
     // Only track on client side
     if (typeof window === 'undefined') return;
 
+    // Prevent duplicate tracking
+    if (tracked) return;
+
     // Get email from various sources (you can customize this)
     const email = getVisitorEmail();
 
+    console.log('[VisitorEmailTracker]', {
+      email,
+      pathname,
+      searchParams: Object.fromEntries(searchParams.entries()),
+      cookies: document.cookie
+    });
+
     if (!email) {
+      console.log('[VisitorEmailTracker] No email found, skipping tracking');
       return; // No email found, can't track
     }
 
@@ -41,6 +52,9 @@ export default function VisitorEmailTracker() {
     // Determine page type
     const pageType = detectPageType(pathname);
 
+    // Mark as tracked to prevent duplicates
+    setTracked(true);
+
     // Track visitor visit with full details
     trackVisitor(email, {
       page: pathname,
@@ -49,7 +63,7 @@ export default function VisitorEmailTracker() {
       trackingId: emailTrackingId || undefined,
       fromEmail
     });
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, tracked]);
 
   return null; // This component doesn't render anything
 }
@@ -65,19 +79,22 @@ export default function VisitorEmailTracker() {
 function getVisitorEmail(): string | null {
   if (typeof window === 'undefined') return null;
 
-  // Check localStorage (if you store email there)
-  const storedEmail = localStorage.getItem('visitor_email');
-  if (storedEmail && isValidEmail(storedEmail)) {
-    return storedEmail;
-  }
-
-  // Check cookies
+  // Check cookies first (set by track-click or track-open endpoints)
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=');
     if (name === 'visitor_email' && value && isValidEmail(value)) {
-      return decodeURIComponent(value);
+      const email = decodeURIComponent(value);
+      // Also store in localStorage for persistence
+      localStorage.setItem('visitor_email', email);
+      return email;
     }
+  }
+
+  // Check localStorage (if you store email there)
+  const storedEmail = localStorage.getItem('visitor_email');
+  if (storedEmail && isValidEmail(storedEmail)) {
+    return storedEmail;
   }
 
   // Check URL parameters (if email is passed in URL)
@@ -103,24 +120,32 @@ async function trackVisitor(email: string, options?: {
   fromEmail?: boolean;
 }) {
   try {
+    const visitData = {
+      email,
+      page: options?.page || window.location.pathname,
+      pageType: options?.pageType,
+      productId: options?.productId,
+      trackingId: options?.trackingId,
+      fromEmail: options?.fromEmail || false,
+    };
+
+    console.log('[VisitorEmailTracker] Tracking visit:', visitData);
+
     // Track page visit
     const visitResponse = await fetch('/api/email/track-visit', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email,
-        page: options?.page || window.location.pathname,
-        pageType: options?.pageType,
-        productId: options?.productId,
-        trackingId: options?.trackingId,
-        fromEmail: options?.fromEmail || false,
-      }),
+      body: JSON.stringify(visitData),
     });
 
     if (!visitResponse.ok) {
-      console.error('Failed to track visit');
+      const errorText = await visitResponse.text();
+      console.error('[VisitorEmailTracker] Failed to track visit:', visitResponse.status, errorText);
+    } else {
+      const result = await visitResponse.json();
+      console.log('[VisitorEmailTracker] Visit tracked successfully:', result);
     }
 
     // Also track basic visitor (for email sending logic)

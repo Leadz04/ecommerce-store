@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
 import { AnalyticsEvent } from '@/models';
+import mongoose from 'mongoose';
 
 /**
  * Track page visits from email subscribers
@@ -30,16 +31,37 @@ export async function POST(request: NextRequest) {
     // Find email tracking record if trackingId provided
     let emailTracking = null;
     if (trackingId) {
-      emailTracking = await EmailTracking.findOne({
-        _id: trackingId,
-        email: normalizedEmail
-      });
-    } else {
-      // Find most recent email tracking for this email
+      // Convert trackingId string to ObjectId
+      let trackingObjectId: mongoose.Types.ObjectId;
+      try {
+        trackingObjectId = new mongoose.Types.ObjectId(trackingId);
+        emailTracking = await EmailTracking.findOne({
+          _id: trackingObjectId,
+          email: normalizedEmail
+        });
+      } catch (error) {
+        console.error('Invalid trackingId format:', trackingId);
+        // Fall through to find by email only
+      }
+    }
+    
+    // If no tracking found by ID, find most recent email tracking for this email
+    if (!emailTracking) {
       emailTracking = await EmailTracking.findOne({
         email: normalizedEmail
       }).sort({ emailSentAt: -1 });
     }
+
+    console.log('[Email Track Visit]', {
+      email: normalizedEmail,
+      page,
+      pageType: detectedPageType,
+      productId,
+      trackingId,
+      fromEmail,
+      found: !!emailTracking,
+      trackingRecordId: emailTracking?._id.toString()
+    });
 
     // Update email tracking if found
     if (emailTracking) {

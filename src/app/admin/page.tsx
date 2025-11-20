@@ -58,6 +58,7 @@ import BlogAdmin from '@/components/BlogAdmin';
 import KeywordPlanner from '@/components/KeywordPlanner';
 import EmailTrackingDashboard from '@/components/EmailTrackingDashboard';
 import AdminProductCard, { AdminProductCardBadge, AdminProductCardStat } from '@/components/AdminProductCard';
+import ProductEmailMarketing from '@/components/ProductEmailMarketing';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -470,6 +471,12 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productPage, setProductPage] = useState(1);
   const [productPerPage, setProductPerPage] = useState(20);
+  const [productEmailStats, setProductEmailStats] = useState<Record<string, {
+    totalSent: number;
+    totalOpened: number;
+    totalClicked: number;
+    lastSentAt: string;
+  }>>({});
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -489,6 +496,8 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [showEmailMarketing, setShowEmailMarketing] = useState(false);
+  const [emailMarketingProduct, setEmailMarketingProduct] = useState<Product | null>(null);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [deletingRole, setDeletingRole] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<string | null>(null);
@@ -1296,11 +1305,37 @@ export default function AdminDashboard() {
       setTotalProducts(total);
       setTotalProductPages(calculatedPages);
       setProductPage(page);
+
+      // Fetch product email stats
+      fetchProductEmailStats(items.map(p => p._id));
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProductEmailStats = async (productIds: string[]) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/products/email-stats', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.productStats) {
+          const statsMap: Record<string, any> = {};
+          data.productStats.forEach((stat: any) => {
+            statsMap[stat.productId] = stat;
+          });
+          setProductEmailStats(statsMap);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching product email stats:', error);
+      // Don't show error toast for this, it's not critical
     }
   };
 
@@ -6366,6 +6401,12 @@ export default function AdminDashboard() {
                               }`}>
                                 {product.isActive ? 'Active' : 'Inactive'}
                               </span>
+                              {productEmailStats[product._id] && (
+                                <span className="inline-flex items-center gap-1 px-2 xl:px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200" title={`${productEmailStats[product._id].totalSent} emails sent`}>
+                                  <Mail className="h-3 w-3" />
+                                  {productEmailStats[product._id].totalSent} sent
+                                </span>
+                              )}
                               {(() => {
                                 const status = (product as any).status || 'draft';
                                 const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
@@ -6409,6 +6450,17 @@ export default function AdminDashboard() {
                                 title="Edit product"
                               >
                                 <Edit className="h-4 w-4" />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEmailMarketingProduct(product);
+                                  setShowEmailMarketing(true);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors duration-150"
+                                title="Send promotional email"
+                              >
+                                <Mail className="h-4 w-4" />
                               </button>
                               
                               {/* Copy Actions - Quick Access */}
@@ -7704,6 +7756,21 @@ export default function AdminDashboard() {
           onDeleteOrder={handleDeleteOrder}
           onDownloadInvoice={handleDownloadInvoice}
         />
+
+        {/* Product Email Marketing Modal */}
+        {showEmailMarketing && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <ProductEmailMarketing
+                product={emailMarketingProduct}
+                onClose={() => {
+                  setShowEmailMarketing(false);
+                  setEmailMarketingProduct(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

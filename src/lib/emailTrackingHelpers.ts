@@ -65,21 +65,35 @@ export function wrapLinksWithTracking(html: string, email: string, trackingId: s
 
 /**
  * Add tracking pixel to email HTML
+ * Uses multiple hiding techniques to work across all email clients
  */
 export function addTrackingPixel(html: string, email: string, trackingId: string, siteUrl?: string): string {
   if (!trackingId) return html;
   
   const pixelUrl = generateTrackingPixelUrl(email, trackingId, siteUrl);
   
+  // Create tracking pixel with multiple hiding techniques for maximum compatibility
+  // This works in Gmail, Outlook, Apple Mail, Yahoo, and other email clients
+  const trackingPixel = `
+    <img 
+      src="${pixelUrl}" 
+      width="1" 
+      height="1" 
+      alt="" 
+      border="0" 
+      style="display:block!important;width:1px!important;height:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important;visibility:hidden!important;opacity:0!important;position:absolute!important;left:-9999px!important;"
+      hidden="true"
+    />`;
+  
   // Add tracking pixel before closing body tag
   if (html.includes('</body>')) {
     return html.replace(
       '</body>',
-      `<img src="${pixelUrl}" width="1" height="1" style="display:none;" alt="" />\n</body>`
+      `${trackingPixel}\n</body>`
     );
   }
   
   // If no body tag, add at the end
-  return html + `\n<img src="${pixelUrl}" width="1" height="1" style="display:none;" alt="" />`;
+  return html + trackingPixel;
 }
 

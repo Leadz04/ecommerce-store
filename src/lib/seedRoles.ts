@@ -56,12 +56,12 @@ export async function seedRoles() {
     // Create default super admin user if it doesn't exist
     const superAdminRole = await Role.findOne({ name: 'SUPER_ADMIN' });
     if (superAdminRole) {
-      const existingSuperAdmin = await User.findOne({ email: 'admin@shopease.com' });
+      const existingSuperAdmin = await User.findOne({ email: 'testleadz04@gmail.com' });
       
       if (!existingSuperAdmin) {
         const superAdminUser = new User({
           name: 'Super Admin',
-          email: 'admin@shopease.com',
+          email: 'testleadz04@gmail.com',
           password: 'admin123', // This will be hashed by the pre-save hook
           role: superAdminRole._id,
           permissions: ROLE_PERMISSIONS.SUPER_ADMIN,
@@ -76,7 +76,7 @@ export async function seedRoles() {
         });
 
         await superAdminUser.save();
-        console.log('✅ Default super admin user created (admin@shopease.com / admin123)');
+        console.log('✅ Default super admin user created (testleadz04@gmail.com / admin123)');
       } else {
         // Update existing user to have super admin role
         existingSuperAdmin.role = superAdminRole._id;

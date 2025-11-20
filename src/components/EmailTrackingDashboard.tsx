@@ -102,6 +102,8 @@ export default function EmailTrackingDashboard() {
   const [days, setDays] = useState(30);
   const [error, setError] = useState<string | null>(null);
   const [daysSelectOpen, setDaysSelectOpen] = useState(false);
+  const [productEmails, setProductEmails] = useState<any>(null);
+  const [loadingProductEmails, setLoadingProductEmails] = useState(false);
 
   const fetchDataRef = useRef<string | null>(null);
   
@@ -137,7 +139,29 @@ export default function EmailTrackingDashboard() {
 
   useEffect(() => {
     fetchData();
+    fetchProductEmails();
   }, [days]);
+
+  const fetchProductEmails = async () => {
+    try {
+      setLoadingProductEmails(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/products/email-stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setProductEmails(result);
+      }
+    } catch (err) {
+      console.error('Error fetching product emails:', err);
+    } finally {
+      setLoadingProductEmails(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -512,6 +536,135 @@ export default function EmailTrackingDashboard() {
               </p>
               <p className="text-xs text-gray-500 mt-1">Average</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Promotional Emails Section */}
+      {productEmails && productEmails.productStats && productEmails.productStats.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Package className="h-4 w-4 sm:h-5 sm:w-5" />
+              Product Promotional Emails
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">Emails sent for specific products</p>
+          </div>
+          <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+            <table className="w-full min-w-[800px]">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Sent</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Opened</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Clicked</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Visited</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Converted</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Open Rate</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase">Last Sent</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {productEmails.productStats.map((stat: any) => (
+                  <tr key={stat.productId} className="hover:bg-gray-50">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{stat.productName || stat.productId}</p>
+                        <p className="text-xs text-gray-500">ID: {stat.productId.slice(-8)}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">{stat.totalSent}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">{stat.totalOpened}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">{stat.totalClicked}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">{stat.totalVisited}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">{stat.totalConverted}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-green-600 text-right font-medium">
+                      {stat.openRate.toFixed(1)}%
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 text-right">
+                      {stat.lastSentAt ? new Date(stat.lastSentAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Product Promotional Emails */}
+      {productEmails && productEmails.recentEmails && productEmails.recentEmails.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Mail className="h-4 w-4 sm:h-5 sm:w-5" />
+              Recent Product Promotional Emails
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">Latest promotional emails sent for products</p>
+          </div>
+          <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+            <table className="w-full min-w-[800px]">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Sent</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">Opened</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">Clicked</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">Visited</th>
+                  <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">Converted</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {productEmails.recentEmails.map((email: any) => (
+                  <tr key={email._id} className="hover:bg-gray-50">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 break-all">{email.email}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{email.productName || email.productId}</p>
+                        {email.discountCode && (
+                          <p className="text-xs text-gray-500">Code: {email.discountCode}</p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
+                      {new Date(email.emailSentAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center">
+                      {email.opened ? (
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 mx-auto" />
+                      ) : (
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mx-auto" />
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">{email.openCount}x</p>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center">
+                      {email.clicked ? (
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 mx-auto" />
+                      ) : (
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mx-auto" />
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">{email.clickCount}x</p>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center">
+                      {email.visited ? (
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mx-auto" />
+                      ) : (
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mx-auto" />
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">{email.visitCount}x</p>
+                    </td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center">
+                      {email.converted ? (
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600 mx-auto" />
+                      ) : (
+                        <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 mx-auto" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -20,13 +20,14 @@ async function verifyAdmin(request: NextRequest) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await verifyAdmin(request);
     await connectDB();
 
-    const tracking = await EmailTracking.findById(params.id)
+    const { id } = await params;
+    const tracking = await EmailTracking.findById(id)
       .populate('subscriberId', 'email firstName lastName visitCount converted')
       .lean();
 

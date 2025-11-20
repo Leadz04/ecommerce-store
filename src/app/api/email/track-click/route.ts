@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
 import { AnalyticsEvent } from '@/models';
+import mongoose from 'mongoose';
 
 /**
  * Track email link clicks and redirect to destination
@@ -35,14 +36,34 @@ export async function GET(request: NextRequest) {
       const normalizedEmail = email.toLowerCase().trim();
       const now = new Date();
 
+      // Convert trackingId string to ObjectId
+      let trackingObjectId: mongoose.Types.ObjectId;
+      try {
+        trackingObjectId = new mongoose.Types.ObjectId(trackingId);
+      } catch (error) {
+        console.error('Invalid trackingId format:', trackingId);
+        // Still redirect to URL even if invalid ID
+        return NextResponse.redirect(new URL(url, request.url));
+      }
+
       // Determine link type
       const linkType = getLinkType(url);
       const productId = extractProductId(url);
 
       // Find email tracking record
       let emailTracking = await EmailTracking.findOne({
-        _id: trackingId,
+        _id: trackingObjectId,
         email: normalizedEmail
+      });
+
+      console.log('[Email Track Click]', {
+        trackingId: trackingId,
+        trackingObjectId: trackingObjectId.toString(),
+        email: normalizedEmail,
+        url,
+        linkType,
+        productId,
+        found: !!emailTracking
       });
 
       if (!emailTracking) {
@@ -114,7 +135,17 @@ export async function GET(request: NextRequest) {
       destinationUrl.searchParams.set('utm_campaign', emailTracking.emailType);
       destinationUrl.searchParams.set('email_tracking', trackingId);
 
-      return NextResponse.redirect(destinationUrl.toString());
+      // Set cookie with email for VisitorEmailTracker to use
+      const response = NextResponse.redirect(destinationUrl.toString());
+      response.cookies.set('visitor_email', normalizedEmail, {
+        httpOnly: false, // Allow client-side access
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/'
+      });
+
+      return response;
 
     } catch (error) {
       console.error('Error tracking email click:', error);

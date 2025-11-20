@@ -64,8 +64,7 @@ const EmailTrackingSchema = new Schema<IEmailTracking>({
   },
   subscriberId: {
     type: Schema.Types.ObjectId,
-    ref: 'EmailSubscriber',
-    index: true
+    ref: 'EmailSubscriber'
   },
   emailType: {
     type: String,

@@ -5,6 +5,9 @@ import mongoose from 'mongoose';
 
 // Import all models to ensure proper schema registration
 import { Order, Product, OrderCounter } from '@/models';
+import User from '@/models/User';
+import EmailTracking from '@/models/EmailTracking';
+import EmailSubscriber from '@/models/EmailSubscriber';
 import { applyDeduplication } from '@/lib/deduplication';
 
 // Helper function to verify JWT token
@@ -237,6 +240,190 @@ export async function POST(request: NextRequest) {
     }
 
     await order.save();
+
+    // Track email conversion for this order
+    try {
+      // Get user email - try multiple sources
+      const user = await User.findById(userId).select('email').lean();
+      let normalizedEmail: string | null = null;
+      
+      if (user && user.email) {
+        normalizedEmail = user.email.toLowerCase().trim();
+      }
+      
+      // Also check if there's an email in billing address (some orders might have it)
+      if (!normalizedEmail && order.billingAddress && (order.billingAddress as any).email) {
+        normalizedEmail = ((order.billingAddress as any).email as string).toLowerCase().trim();
+      }
+      
+      if (!normalizedEmail) {
+        console.log('[Order Conversion Tracking] No email found for user:', userId);
+        // Still continue - conversion tracking is optional
+      } else {
+        const now = new Date();
+        
+        // Get product IDs from order items (handle both ObjectId and string formats)
+        const productIds: string[] = [];
+        const productObjectIds: mongoose.Types.ObjectId[] = [];
+        
+        for (const item of order.items) {
+          if (mongoose.Types.ObjectId.isValid(item.productId)) {
+            const objId = new mongoose.Types.ObjectId(item.productId);
+            productObjectIds.push(objId);
+            productIds.push(item.productId.toString());
+            productIds.push(objId.toString());
+          } else {
+            productIds.push(item.productId);
+          }
+        }
+        
+        console.log('[Order Conversion Tracking] Starting conversion tracking', {
+          email: normalizedEmail,
+          orderId: order._id.toString(),
+          orderNumber: order.orderNumber,
+          productIds,
+          productObjectIds: productObjectIds.map(id => id.toString()),
+          itemCount: order.items.length
+        });
+        
+        // First, let's check what EmailTracking records exist for this email and products
+        const existingTracking = await EmailTracking.find({
+          email: normalizedEmail,
+          emailType: 'promotional',
+          'metadata.productId': { $exists: true }
+        }).select('metadata.productId metadata.productName converted _id').lean();
+        
+        console.log('[Order Conversion Tracking] Existing promotional emails found:', {
+          count: existingTracking.length,
+          records: existingTracking.map(t => ({
+            trackingId: t._id.toString(),
+            productId: t.metadata?.productId,
+            productIdType: typeof t.metadata?.productId,
+            productName: t.metadata?.productName,
+            converted: t.converted
+          }))
+        });
+        
+        // Build comprehensive product ID matching
+        // The productId in metadata might be stored as string (from route param) or ObjectId
+        const allProductIdVariants: any[] = [];
+        
+        // Add all string variants
+        productIds.forEach(id => {
+          allProductIdVariants.push(id);
+          allProductIdVariants.push(String(id));
+          // If it's an ObjectId string, also try as ObjectId
+          if (mongoose.Types.ObjectId.isValid(id)) {
+            allProductIdVariants.push(new mongoose.Types.ObjectId(id));
+            allProductIdVariants.push(id.toString());
+          }
+        });
+        
+        // Add ObjectId variants
+        productObjectIds.forEach(objId => {
+          allProductIdVariants.push(objId);
+          allProductIdVariants.push(objId.toString());
+          allProductIdVariants.push(String(objId));
+        });
+        
+        // Remove duplicates
+        const uniqueProductIds = [...new Set(allProductIdVariants.map(id => 
+          id instanceof mongoose.Types.ObjectId ? id.toString() : String(id)
+        ))];
+        
+        console.log('[Order Conversion Tracking] Product ID variants to match:', {
+          original: productIds,
+          uniqueVariants: uniqueProductIds,
+          count: uniqueProductIds.length
+        });
+        
+        // First, try to match by product ID (most specific)
+        let promotionalUpdates = await EmailTracking.updateMany(
+          {
+            email: normalizedEmail,
+            emailType: 'promotional',
+            converted: false,
+            'metadata.productId': { $in: uniqueProductIds }
+          },
+          {
+            $set: {
+              converted: true,
+              convertedAt: now,
+              orderId: order._id.toString()
+            }
+          }
+        );
+        
+        console.log('[Order Conversion Tracking] Promotional emails updated (by product ID):', {
+          matched: promotionalUpdates.matchedCount,
+          modified: promotionalUpdates.modifiedCount
+        });
+        
+        // If no matches, try updating ALL promotional emails for this email
+        // This is a fallback in case product ID format doesn't match exactly
+        if (promotionalUpdates.matchedCount === 0) {
+          console.log('[Order Conversion Tracking] No matches with product IDs, trying all promotional emails for this email');
+          promotionalUpdates = await EmailTracking.updateMany(
+            {
+              email: normalizedEmail,
+              emailType: 'promotional',
+              converted: false
+            },
+            {
+              $set: {
+                converted: true,
+                convertedAt: now,
+                orderId: order._id.toString()
+              }
+            }
+          );
+          console.log('[Order Conversion Tracking] Fallback update (all promotional):', {
+            matched: promotionalUpdates.matchedCount,
+            modified: promotionalUpdates.modifiedCount
+          });
+        }
+        
+        // Also update any other EmailTracking records for this email that haven't been converted
+        // This catches cases where they came from welcome/return/urgent emails
+        const otherEmailUpdates = await EmailTracking.updateMany(
+          {
+            email: normalizedEmail,
+            converted: false,
+            emailType: { $ne: 'promotional' } // Don't double-count promotional emails
+          },
+          {
+            $set: {
+              converted: true,
+              convertedAt: now,
+              orderId: order._id.toString()
+            }
+          }
+        );
+        
+        console.log('[Order Conversion Tracking] Other emails updated:', {
+          matched: otherEmailUpdates.matchedCount,
+          modified: otherEmailUpdates.modifiedCount
+        });
+        
+        // Update EmailSubscriber if exists
+        await EmailSubscriber.findOneAndUpdate(
+          { email: normalizedEmail },
+          {
+            $set: {
+              converted: true,
+              conversionDate: now
+            }
+          },
+          { upsert: false }
+        );
+        
+        console.log('[Order Conversion Tracking] Conversion tracking completed for:', normalizedEmail);
+      }
+    } catch (conversionError) {
+      // Don't fail order creation if conversion tracking fails
+      console.error('[Order Conversion Tracking] Error:', conversionError);
+      console.error('[Order Conversion Tracking] Error stack:', (conversionError as Error).stack);
+    }
 
     // Fire server-side analytics purchase event (without blocking)
     try {
