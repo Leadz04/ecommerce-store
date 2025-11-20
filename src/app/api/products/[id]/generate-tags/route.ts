@@ -5,10 +5,44 @@ import { PERMISSIONS } from '@/lib/permissions';
 import Product from '@/models/Product';
 import axios from 'axios';
 
+// Helper function to break long phrases into multiple phrasal tags (per Etsy guidelines)
+// If a desired keyword phrase is longer than 20 characters, break it into multiple phrasal tags
+function breakLongPhraseIntoTags(phrase: string, maxLength: number = 20): string[] {
+  if (phrase.length <= maxLength) {
+    return [phrase];
+  }
+  
+  const words = phrase.trim().split(/\s+/);
+  const tags: string[] = [];
+  let currentTag = '';
+  
+  words.forEach(word => {
+    const testTag = currentTag ? `${currentTag} ${word}` : word;
+    if (testTag.length <= maxLength) {
+      currentTag = testTag;
+    } else {
+      // Current tag is complete, start a new one
+      if (currentTag) {
+        tags.push(currentTag);
+      }
+      currentTag = word.length <= maxLength ? word : word.substring(0, maxLength);
+    }
+  });
+  
+  if (currentTag) {
+    tags.push(currentTag);
+  }
+  
+  return tags.filter(tag => tag.length >= 3 && tag.length <= maxLength);
+}
+
 // Helper function to create multi-word tags following Etsy SEO (max 20 chars per tag)
+// ANTI-KEYWORD-STUFFING: Ensures tags are relevant, specific, and avoid repetition
+// ETSY GUIDELINES: Multi-word phrases encouraged, max 20 chars, break long phrases into multiple tags
 function createEtsyTags(keywords: string[], maxTags: number = 13): string[] {
   const tags: string[] = [];
   const usedWords = new Set<string>();
+  const usedPhrases = new Set<string>(); // Track full phrases to avoid repetition
   const stopWords = new Set(['the', 'and', 'for', 'with', 'from', 'this', 'that', 'your', 'have', 'will', 'been', 'were', 'them', 'they', 'their', 'are', 'was', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'cannot']);
   
   // Sort keywords by length and frequency (longer, more specific first)
@@ -17,14 +51,41 @@ function createEtsyTags(keywords: string[], maxTags: number = 13): string[] {
     .sort((a, b) => b.length - a.length);
 
   // First pass: Use complete phrases from related searches (these are already natural language)
-  const phrases = keywords.filter(k => k.includes(' ') && k.length <= 20);
+  // ETSY GUIDELINE: Multi-word phrases encouraged, break long phrases (>20 chars) into multiple tags
+  // ANTI-KEYWORD-STUFFING: Check for phrase repetition to avoid stuffing
+  const phrases = keywords.filter(k => k.includes(' '));
   phrases.forEach(phrase => {
-    if (tags.length < maxTags && phrase.length <= 20) {
-      const words = phrase.toLowerCase().split(/\s+/);
+    if (tags.length >= maxTags) return;
+    
+    const normalizedPhrase = phrase.toLowerCase().trim();
+    
+    // ETSY GUIDELINE: If phrase > 20 chars, break into multiple phrasal tags
+    if (normalizedPhrase.length > 20) {
+      const brokenTags = breakLongPhraseIntoTags(normalizedPhrase, 20);
+      brokenTags.forEach(brokenTag => {
+        if (tags.length >= maxTags) return;
+        if (!usedPhrases.has(brokenTag) && !tags.includes(brokenTag)) {
+          const words = brokenTag.split(/\s+/);
+          const hasNewWords = words.some(w => !usedWords.has(w));
+          if (hasNewWords) {
+            tags.push(brokenTag);
+            words.forEach(w => usedWords.add(w));
+            usedPhrases.add(brokenTag);
+          }
+        }
+      });
+    } else if (normalizedPhrase.length <= 20) {
+      // Phrase fits in one tag
+      // Avoid repeating the same phrase (keyword stuffing)
+      if (usedPhrases.has(normalizedPhrase)) {
+        return; // Skip duplicate phrases
+      }
+      const words = normalizedPhrase.split(/\s+/);
       const hasNewWords = words.some(w => !usedWords.has(w));
       if (hasNewWords) {
-        tags.push(phrase.toLowerCase().trim());
+        tags.push(normalizedPhrase);
         words.forEach(w => usedWords.add(w));
+        usedPhrases.add(normalizedPhrase); // Track to prevent repetition
       }
     }
   });
@@ -63,15 +124,21 @@ function createEtsyTags(keywords: string[], maxTags: number = 13): string[] {
   ];
 
   // Add combinations that fit Etsy requirements
+  // ANTI-KEYWORD-STUFFING: Prevent phrase repetition
   combinations.forEach(combo => {
     if (tags.length >= maxTags) return;
     const tag = combo.toLowerCase().trim();
     if (tag.length <= 20 && tag.length > 3) {
+      // Skip if this exact phrase was already used (prevents keyword stuffing)
+      if (usedPhrases.has(tag)) {
+        return;
+      }
       const words = tag.split(/\s+/);
       const hasNewWords = words.some(w => !usedWords.has(w));
       if (hasNewWords && !tags.includes(tag)) {
         tags.push(tag);
         words.forEach(w => usedWords.add(w));
+        usedPhrases.add(tag); // Track to prevent repetition
       }
     }
   });
@@ -108,14 +175,46 @@ function createEtsyTags(keywords: string[], maxTags: number = 13): string[] {
   });
 
   // Final cleanup: ensure all tags are <= 20 chars and unique
-  return tags
-    .map(tag => tag.trim().substring(0, 20))
-    .filter(tag => tag.length >= 3)
-    .filter((tag, index, self) => self.indexOf(tag) === index) // Remove duplicates
+  // ETSY GUIDELINE: Break long phrases (>20 chars) into multiple phrasal tags
+  // ANTI-KEYWORD-STUFFING: Final validation to remove any remaining duplicates or overly similar tags
+  const processedTags: string[] = [];
+  
+  tags.forEach(tag => {
+    const trimmed = tag.trim();
+    if (trimmed.length > 20) {
+      // ETSY GUIDELINE: Break long phrases into multiple phrasal tags
+      const broken = breakLongPhraseIntoTags(trimmed, 20);
+      broken.forEach(brokenTag => {
+        if (processedTags.length < maxTags && !processedTags.includes(brokenTag)) {
+          processedTags.push(brokenTag);
+        }
+      });
+    } else if (trimmed.length >= 3) {
+      processedTags.push(trimmed);
+    }
+  });
+  
+  const cleaned = processedTags
+    .filter((tag, index, self) => self.indexOf(tag) === index) // Remove exact duplicates
+    .filter((tag, index, self) => {
+      // Remove tags that are too similar (prevents keyword stuffing variations)
+      const tagWords = tag.split(/\s+/);
+      return !self.slice(0, index).some(existing => {
+        const existingWords = existing.split(/\s+/);
+        // If tags share more than 50% of words, consider it a duplicate (keyword stuffing)
+        const sharedWords = tagWords.filter(w => existingWords.includes(w)).length;
+        return sharedWords > 0 && (sharedWords / Math.max(tagWords.length, existingWords.length)) > 0.5;
+      });
+    })
     .slice(0, maxTags);
+  
+  return cleaned;
 }
 
 // Extract tags from Google Shopping results following Etsy SEO policies
+// ETSY SEARCH PHASE 1 (Query Matching): Uses holistic view of listing (title, tags, attributes, categories, descriptions)
+// ANTI-KEYWORD-STUFFING: Uses real user search queries and competitor titles
+// Only extracts natural, relevant phrases - no random keyword generation
 async function extractTagsFromGoogle(productName: string, productDescription: string): Promise<string[]> {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey || apiKey === 'demo') {
@@ -271,11 +370,20 @@ async function extractTagsFromGoogle(productName: string, productDescription: st
 }
 
 // Generate tags from product data (fallback if SerpAPI fails) - following Etsy SEO
+// ETSY SEARCH PHASE 1 (Query Matching): Holistic view includes title, tags, attributes, categories, descriptions
+// ANTI-KEYWORD-STUFFING: Only extracts relevant, specific phrases from actual product content
+// No random keywords, no repetition, focuses on buyer-relevant terms
 function generateTagsFromProduct(product: any): string[] {
-  const name = (product.name || '').toLowerCase();
-  const description = (product.description || '').toLowerCase();
-  const descriptionHtml = ((product as any).descriptionHtml || '').toLowerCase();
-  const combined = `${name} ${description} ${descriptionHtml}`.replace(/<[^>]*>/g, ' ');
+  // ETSY HOLISTIC VIEW: Consider all listing aspects for Query Matching phase
+  const name = (product.name || '').toLowerCase(); // Title
+  const description = (product.description || '').toLowerCase(); // Description
+  const descriptionHtml = ((product as any).descriptionHtml || '').toLowerCase(); // Description (HTML)
+  const category = (product.category || '').toLowerCase(); // Category
+  const brand = (product.brand || '').toLowerCase(); // Attributes (brand)
+  const productType = ((product as any).productType || '').toLowerCase(); // Attributes (type)
+  
+  // Combine all listing aspects for holistic keyword extraction
+  const combined = `${name} ${description} ${descriptionHtml} ${category} ${brand} ${productType}`.replace(/<[^>]*>/g, ' ');
   const keywords: string[] = [];
 
   // Extract meaningful phrases from product name (2-3 word combinations)

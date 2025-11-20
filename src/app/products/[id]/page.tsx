@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2 } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -125,6 +125,27 @@ export default function ProductPage() {
   const [showEtsyResults, setShowEtsyResults] = useState(false);
   const [etsyExportLoading, setEtsyExportLoading] = useState(false);
   const [organizingImages, setOrganizingImages] = useState(false);
+  const aiReview = etsyPolicyResults?.aiReview;
+  const getRiskBadgeClass = (riskLevel?: string) => {
+    switch ((riskLevel || '').toLowerCase()) {
+      case 'low':
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+      case 'high':
+        return 'border-red-200 bg-red-50 text-red-700';
+      default:
+        return 'border-amber-200 bg-amber-50 text-amber-700';
+    }
+  };
+  const getIssueAccent = (severity?: string) => {
+    const level = (severity || '').toLowerCase();
+    if (level === 'critical') {
+      return 'border-red-200 bg-red-50 text-red-900';
+    }
+    if (level === 'warning') {
+      return 'border-amber-200 bg-amber-50 text-amber-900';
+    }
+    return 'border-blue-200 bg-blue-50 text-blue-900';
+  };
   
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
@@ -1783,6 +1804,153 @@ export default function ProductPage() {
                   <p className="text-2xl font-bold text-blue-600">{etsyPolicyResults.summary.recommendations}</p>
                 </div>
               </div>
+
+              {/* Gemini AI Review */}
+              {aiReview && (
+                <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 md:p-6 space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase font-semibold text-indigo-700 tracking-wider flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Gemini Etsy Policy Review
+                      </p>
+                      <h3 className="text-xl font-bold text-gray-900 mt-1">AI Compliance Insights</h3>
+                      <p className="text-sm text-gray-600">
+                        Powered by {aiReview.model || 'Gemini 2.5 Pro'}
+                      </p>
+                    </div>
+                    {aiReview.handbookUrl && (
+                      <Link
+                        href={aiReview.handbookUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 hover:text-indigo-900"
+                      >
+                        Open Seller Handbook
+                        <ExternalLink className="h-4 w-4" />
+                      </Link>
+                    )}
+                  </div>
+
+                  {aiReview.status === 'complete' ? (
+                    <div className="space-y-5">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="p-4 bg-white rounded-xl border border-indigo-100">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            AI Score
+                          </p>
+                          <p className="text-3xl font-black text-gray-900 mt-1">
+                            {typeof aiReview.score === 'number' ? aiReview.score : '—'}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-2">
+                            Gemini compliance estimate
+                          </p>
+                        </div>
+                        <div className="p-4 bg-white rounded-xl border border-indigo-100 space-y-3">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Risk Level
+                          </p>
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${getRiskBadgeClass(aiReview.riskLevel)}`}
+                          >
+                            {(aiReview.riskLevel || 'medium').toUpperCase()}
+                          </span>
+                          <p className="text-sm text-gray-600">
+                            {aiReview.summary || 'Gemini did not return a summary.'}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-white rounded-xl border border-indigo-100">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            References
+                          </p>
+                          <p className="text-sm text-gray-600 mt-2">
+                            Gemini cites sections from Etsy&apos;s Seller Handbook. Always double-check
+                            before publishing.
+                          </p>
+                        </div>
+                      </div>
+
+                      {aiReview.strengths && aiReview.strengths.length > 0 && (
+                        <div className="bg-white rounded-xl border border-emerald-100 p-4">
+                          <p className="text-sm font-semibold text-emerald-800 mb-2">
+                            What&apos;s already compliant
+                          </p>
+                          <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+                            {aiReview.strengths.map((strength: string, idx: number) => (
+                              <li key={`ai-strength-${idx}`}>{strength}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-gray-600" />
+                          Gemini Policy Callouts
+                        </p>
+                        {aiReview.issues && aiReview.issues.length > 0 ? (
+                          aiReview.issues.map((issue: any, idx: number) => (
+                            <div
+                              key={`ai-issue-${idx}`}
+                              className={`p-4 rounded-xl border ${getIssueAccent(issue.severity)}`}
+                            >
+                              <div className="flex flex-col gap-1">
+                                <p className="text-sm font-semibold">
+                                  [{(issue.policy || 'Unknown Policy').toUpperCase()}]{' '}
+                                  {issue.description || 'Gemini did not include a description.'}
+                                </p>
+                                {issue.fix && (
+                                  <p className="text-sm text-gray-700">
+                                    <span className="font-medium text-gray-900">Fix:</span> {issue.fix}
+                                  </p>
+                                )}
+                                {issue.handbookReference && (
+                                  <p className="text-xs text-gray-600">
+                                    Reference: {issue.handbookReference}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900">
+                            Gemini did not flag any additional Etsy policy risks.
+                          </div>
+                        )}
+                      </div>
+
+                      {aiReview.nextSteps && aiReview.nextSteps.length > 0 && (
+                        <div className="bg-white rounded-xl border border-indigo-100 p-4">
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Next steps</p>
+                          <ul className="list-decimal pl-5 space-y-1 text-sm text-gray-700">
+                            {aiReview.nextSteps.map((step: string, idx: number) => (
+                              <li key={`ai-next-${idx}`}>{step}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className={`p-4 rounded-2xl border ${
+                        aiReview.status === 'skipped'
+                          ? 'border-amber-200 bg-amber-50 text-amber-900'
+                          : 'border-red-200 bg-red-50 text-red-900'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold">
+                        Gemini review {aiReview.status === 'skipped' ? 'unavailable' : 'failed'}.
+                      </p>
+                      <p className="text-sm">
+                        {aiReview.reason ||
+                          (aiReview.status === 'skipped'
+                            ? 'Add a Gemini API key to enable AI policy reviews.'
+                            : 'Gemini could not process this request. Try again later.')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Compliance Status */}
               <div className="mb-6">

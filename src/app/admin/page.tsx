@@ -11,6 +11,7 @@ import {
   BarChart3, 
   Settings, 
   Shield,
+  ShieldCheck,
   UserPlus,
   UserCheck,
   UserX,
@@ -46,12 +47,17 @@ import {
   History,
   Wrench,
   Home,
-  Mail
+  Mail,
+  Activity,
+  ListChecks,
+  Type,
+  AlignLeft
 } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
 import KeywordPlanner from '@/components/KeywordPlanner';
 import EmailTrackingDashboard from '@/components/EmailTrackingDashboard';
+import AdminProductCard, { AdminProductCardBadge, AdminProductCardStat } from '@/components/AdminProductCard';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -158,16 +164,70 @@ interface Order {
   updatedAt: string;
 }
 
+interface PolicyReviewResult {
+  score: number;
+  complianceRate: number;
+  summary: {
+    totalViolations: number;
+    criticalIssues: number;
+    warnings: number;
+    recommendations: number;
+    isCompliant: boolean;
+  };
+  aiReview?: {
+    status?: 'complete' | 'skipped' | 'error';
+    summary?: string;
+    riskLevel?: string;
+    score?: number;
+    issues?: Array<{
+      policy?: string;
+      severity?: string;
+      description?: string;
+      fix?: string;
+      handbookReference?: string;
+    }>;
+  };
+}
+
+interface ProductImprovementBlock {
+  suggestion?: string;
+  reasoning?: string;
+  checklist?: string[];
+}
+
+interface ProductImprovementResult {
+  summary?: string;
+  notes?: string[];
+  title?: ProductImprovementBlock;
+  description?: ProductImprovementBlock;
+  tags?: {
+    suggestion?: string[];
+    reasoning?: string;
+  };
+}
+
+interface ProductImprovementState {
+  loading: boolean;
+  applying?: boolean;
+  error?: string;
+  data?: ProductImprovementResult;
+  selection?: {
+    title: boolean;
+    description: boolean;
+    tags: boolean;
+  };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
-  const allowedTabs = ['users','roles','products','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking'] as const;
+  const allowedTabs = ['users','roles','products','policy-review','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -198,6 +258,10 @@ export default function AdminDashboard() {
   const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
   const [seoRawSnapshot, setSeoRawSnapshot] = useState<any>(null);
+  const [policyReviewSearch, setPolicyReviewSearch] = useState('');
+  const [policyReviewFilter, setPolicyReviewFilter] = useState<'all' | 'compliant' | 'risk'>('all');
+  const [policyReviewStatus, setPolicyReviewStatus] = useState<Record<string, { loading: boolean; error?: string; result?: PolicyReviewResult }>>({});
+  const [policyImprovements, setPolicyImprovements] = useState<Record<string, ProductImprovementState>>({});
   const [rawSearchItems, setRawSearchItems] = useState<any[]>([]);
   
   // Google & Google Shopping Analytics state
@@ -1063,7 +1127,7 @@ export default function AdminDashboard() {
 
   // Deep-link: set tab/status from URL
   useEffect(() => {
-    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | null;
+    const tabParam = searchParams.get('tab') as 'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | null;
     if (tabParam) setActiveTab(tabParam);
     if (tabParam === 'orders') setSelectedOrderStatus(searchParams.get('status') || '');
   }, [searchParams]);
@@ -1079,11 +1143,12 @@ export default function AdminDashboard() {
 
   // Fetch brands only when products tab is active or when ProductForm might be needed
   useEffect(() => {
-    if (activeTab === 'products' && isAuthenticated) {
+    if ((activeTab === 'products' || activeTab === 'policy-review') && isAuthenticated) {
       fetchBrands();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated]);
+
 
   useEffect(() => {
     const userId = searchParams.get('userId');
@@ -1236,6 +1301,226 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRunPolicyReview = async (product: Product) => {
+    if (!product?._id) return;
+    setPolicyReviewStatus(prev => ({
+      ...prev,
+      [product._id]: {
+        ...(prev[product._id] || {}),
+        loading: true,
+        error: undefined,
+      }
+    }));
+
+    try {
+      const response = await fetch(`/api/products/${product._id}/check-etsy-policies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to review product');
+      }
+
+      setPolicyReviewStatus(prev => ({
+        ...prev,
+        [product._id]: {
+          loading: false,
+          result: {
+            score: data.score,
+            complianceRate: data.complianceRate,
+            summary: data.summary,
+            aiReview: data.aiReview,
+          },
+        },
+      }));
+
+      toast.success(`Gemini review ready for “${product.name}”`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to review product';
+      setPolicyReviewStatus(prev => ({
+        ...prev,
+        [product._id]: {
+          loading: false,
+          error: message,
+        },
+      }));
+      toast.error(message);
+    }
+  };
+
+  const handleImproveProduct = async (product: Product, review?: PolicyReviewResult) => {
+    if (!product?._id) return;
+    console.log('[Frontend] handleImproveProduct called for product:', product._id);
+    setPolicyImprovements(prev => ({
+      ...prev,
+      [product._id]: {
+        ...(prev[product._id] || {}),
+        loading: true,
+        error: undefined,
+      }
+    }));
+
+    try {
+      console.log('[Frontend] Calling /api/products/' + product._id + '/improve');
+      const response = await fetch(`/api/products/${product._id}/improve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewSummary: review }),
+      });
+      
+      console.log('[Frontend] Response status:', response.status);
+      console.log('[Frontend] Response ok:', response.ok);
+      
+      let data;
+      try {
+        const text = await response.text();
+        console.log('[Frontend] Response text length:', text.length);
+        console.log('[Frontend] Response text preview:', text.substring(0, 500));
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[Frontend] Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+      
+      console.log('[Frontend] Parsed data:', data);
+      
+      if (!response.ok) {
+        console.error('[Frontend] Response not ok. Error:', data.error);
+        throw new Error(data.error || 'Failed to generate improvements');
+      }
+
+      const improvements: ProductImprovementResult | undefined = data?.improvements;
+      console.log('[Frontend] Improvements received:', !!improvements);
+      
+      const selection = {
+        title: !!improvements?.title?.suggestion,
+        description: !!improvements?.description?.suggestion,
+        tags: !!(improvements?.tags?.suggestion && improvements.tags.suggestion.length),
+      };
+
+      setPolicyImprovements(prev => ({
+        ...prev,
+        [product._id]: {
+          loading: false,
+          data: improvements,
+          selection,
+        },
+      }));
+
+      toast.success(`Improvement plan ready for “${product.name}”`);
+    } catch (error) {
+      console.error('[Frontend] Error in handleImproveProduct:', error);
+      console.error('[Frontend] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      const message = error instanceof Error ? error.message : 'Failed to improve product';
+      setPolicyImprovements(prev => ({
+        ...prev,
+        [product._id]: {
+          ...(prev[product._id] || {}),
+          loading: false,
+          error: message,
+        },
+      }));
+      toast.error(message);
+    }
+  };
+
+  const handleToggleImprovementSelection = (productId: string, field: 'title' | 'description' | 'tags', checked: boolean) => {
+    setPolicyImprovements(prev => {
+      const current = prev[productId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [productId]: {
+          ...current,
+          selection: {
+            ...(current.selection || {}),
+            [field]: checked,
+          },
+        },
+      };
+    });
+  };
+
+  const handleApplyImprovements = async (product: Product) => {
+    if (!product?._id) return;
+    const entry = policyImprovements[product._id];
+    if (!entry?.data) {
+      toast.error('Generate improvements first');
+      return;
+    }
+    const selection = entry.selection || {};
+    const updates: Record<string, any> = {};
+
+    if (selection.title && entry.data.title?.suggestion) {
+      updates.name = entry.data.title.suggestion.trim();
+    }
+    if (selection.description && entry.data.description?.suggestion) {
+      updates.description = entry.data.description.suggestion.trim();
+    }
+    if (selection.tags && entry.data.tags?.suggestion?.length) {
+      updates.tags = entry.data.tags.suggestion;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      toast.error('Select at least one improvement to apply');
+      return;
+    }
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+
+    setPolicyImprovements(prev => ({
+      ...prev,
+      [product._id]: {
+        ...(prev[product._id] || {}),
+        applying: true,
+        error: undefined,
+      },
+    }));
+
+    try {
+      const response = await fetch(`/api/admin/products/${product._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to apply improvements');
+      }
+      setPolicyImprovements(prev => ({
+        ...prev,
+        [product._id]: {
+          ...(prev[product._id] || {}),
+          applying: false,
+        },
+      }));
+      toast.success('Improvements applied');
+      fetchProducts();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to apply improvements';
+      setPolicyImprovements(prev => ({
+        ...prev,
+        [product._id]: {
+          ...(prev[product._id] || {}),
+          applying: false,
+          error: message,
+        },
+      }));
+      toast.error(message);
     }
   };
 
@@ -1885,6 +2170,7 @@ export default function AdminDashboard() {
         fetchRoles();
         break;
       case 'products':
+      case 'policy-review':
         fetchProducts();
         break;
       case 'orders':
@@ -1905,7 +2191,7 @@ export default function AdminDashboard() {
 
   // Refetch products when organized filter or productPage changes
   useEffect(() => {
-    if (activeTab === 'products' && isAuthenticated) {
+    if ((activeTab === 'products' || activeTab === 'policy-review') && isAuthenticated) {
       fetchProducts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1918,6 +2204,26 @@ export default function AdminDashboard() {
     const matchesRole = !selectedRole || user.role?.name === selectedRole;
     return matchesSearch && matchesRole;
   });
+
+  const filteredPolicyProducts = useMemo(() => {
+    const query = policyReviewSearch.trim().toLowerCase();
+    return products.filter((product) => {
+      const matchesSearch =
+        !query ||
+        product.name.toLowerCase().includes(query) ||
+        product.brand?.toLowerCase().includes(query) ||
+        product.category?.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+      if (policyReviewFilter === 'all') return true;
+      const review = policyReviewStatus[product._id];
+      if (!review?.result) return false;
+      return policyReviewFilter === 'compliant'
+        ? review.result.summary.isCompliant
+        : !review.result.summary.isCompliant;
+    });
+  }, [products, policyReviewSearch, policyReviewFilter, policyReviewStatus]);
+
+  const visiblePolicyProducts = filteredPolicyProducts;
 
   const selectedProductTitle = selectedProductForModal?.name || '';
   const selectedProductDescription = selectedProductForModal?.description || '';
@@ -2075,6 +2381,21 @@ export default function AdminDashboard() {
                   <span>Products</span>
                   {activeTab === 'products' && (
                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab('policy-review'); updateQuery({ tab: 'policy-review' }); }}
+                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'policy-review'
+                      ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 shadow-sm border border-emerald-200'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <ShieldCheck className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'policy-review' ? 'text-emerald-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
+                  <span className="hidden sm:inline">Policy Review</span>
+                  <span className="sm:hidden">Review</span>
+                  {activeTab === 'policy-review' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500"></span>
                   )}
                 </button>
                 <button
@@ -6605,6 +6926,526 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Policy Review Tab */}
+        {activeTab === 'policy-review' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-100 rounded-3xl p-6 sm:p-8 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    Etsy Policy & Gemini Review
+                  </p>
+                  <h2 className="text-2xl font-black text-gray-900 mt-2">Audit Listings Before Publishing</h2>
+                  <p className="text-sm text-gray-700 mt-2 max-w-2xl">
+                    Run the deterministic policy scanner together with Gemini&apos;s Seller Handbook analysis.
+                    Spot risky claims, missing disclosures, and external links before they get flagged by Etsy.
+                  </p>
+                </div>
+                <Link
+                  href="https://www.etsy.com/seller-handbook"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-emerald-700 border border-emerald-200 font-semibold text-sm hover:bg-emerald-50 transition-colors"
+                >
+                  Open Seller Handbook
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </div>
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-700">
+                <div className="p-3 rounded-2xl bg-white/70 border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Gemini Insights</p>
+                  <p className="mt-1 text-gray-800">
+                    AI highlights risky phrasing, missing disclosures, and references the seller handbook directly.
+                  </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white/70 border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Deterministic Checks</p>
+                  <p className="mt-1 text-gray-800">
+                    Pattern-based guardrails catch personal info, spam language, and counterfeit keywords instantly.
+                  </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white/70 border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Responsive Workflow</p>
+                  <p className="mt-1 text-gray-800">
+                    Cards adapt to any screen—review products on desktop or tablet while sourcing new listings.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+                <div className="flex-1 w-full">
+                  <label className="text-sm font-medium text-gray-700">Search catalog</label>
+                  <div className="relative mt-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Filter by product, brand, or category"
+                      value={policyReviewSearch}
+                      onChange={(e) => setPolicyReviewSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 text-gray-800"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'All', value: 'all' },
+                    { label: 'Needs Attention', value: 'risk' },
+                    { label: 'Compliant', value: 'compliant' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      onClick={() => setPolicyReviewFilter(filter.value as 'all' | 'risk' | 'compliant')}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                        policyReviewFilter === filter.value
+                          ? 'bg-emerald-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {renderEtsyPaginationControls('Policy review pagination')}
+
+            {visiblePolicyProducts.length ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {visiblePolicyProducts.map((product) => {
+                  const reviewEntry = policyReviewStatus[product._id];
+                  const improvementEntry = policyImprovements[product._id];
+                  const isReviewLoading = reviewEntry?.loading;
+                  const result = reviewEntry?.result;
+                  const improvements = improvementEntry?.data;
+                  const improvementSelection = improvementEntry?.selection || {};
+
+                  const reviewBadges: AdminProductCardBadge[] = [];
+                  if (result) {
+                    reviewBadges.push({
+                      label: result.summary.isCompliant ? 'Compliant' : 'Needs Attention',
+                      tone: result.summary.isCompliant ? 'success' : 'danger',
+                      icon: <ShieldCheck className="h-3.5 w-3.5" />,
+                    });
+                    if (result.aiReview?.riskLevel) {
+                      const toneMap: Record<string, AdminProductCardBadge['tone']> = {
+                        low: 'success',
+                        medium: 'warning',
+                        high: 'danger',
+                      };
+                      reviewBadges.push({
+                        label: `Risk: ${result.aiReview.riskLevel.toUpperCase()}`,
+                        tone: toneMap[result.aiReview.riskLevel.toLowerCase()] || 'info',
+                        icon: <Activity className="h-3.5 w-3.5" />,
+                      });
+                    }
+                  } else {
+                    reviewBadges.push({
+                      label: isReviewLoading ? 'Review Running' : 'Review Pending',
+                      tone: isReviewLoading ? 'info' : 'neutral',
+                      icon: <Sparkles className="h-3.5 w-3.5" />,
+                    });
+                  }
+
+                  const reviewStats: AdminProductCardStat[] = [];
+                  if (result) {
+                    reviewStats.push({
+                      label: 'Rule Score',
+                      value: `${result.score}/100`,
+                      tone: result.summary.isCompliant ? 'success' : 'danger',
+                      icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />,
+                      helper: `${result.summary.criticalIssues} critical · ${result.summary.warnings} warnings`,
+                    });
+                    reviewStats.push({
+                      label: 'Critical Issues',
+                      value: result.summary.criticalIssues,
+                      tone: result.summary.criticalIssues ? 'danger' : 'success',
+                      icon: <AlertTriangle className="h-3.5 w-3.5 text-red-500" />,
+                    });
+                    reviewStats.push({
+                      label: 'Warnings',
+                      value: result.summary.warnings,
+                      tone: result.summary.warnings ? 'warning' : 'success',
+                      icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />,
+                    });
+                    if (result.aiReview?.riskLevel) {
+                      reviewStats.push({
+                        label: 'AI Risk',
+                        value: result.aiReview.riskLevel.toUpperCase(),
+                        tone:
+                          result.aiReview.riskLevel.toLowerCase() === 'low'
+                            ? 'success'
+                            : result.aiReview.riskLevel.toLowerCase() === 'high'
+                            ? 'danger'
+                            : 'warning',
+                        icon: <Activity className="h-3.5 w-3.5 text-slate-500" />,
+                      });
+                    }
+                  } else if (!isReviewLoading) {
+                    reviewStats.push({
+                      label: 'Review Status',
+                      value: 'Not run',
+                      tone: 'warning',
+                      icon: <Sparkles className="h-3.5 w-3.5 text-amber-500" />,
+                      helper: 'Run Gemini to see compliance insights',
+                    });
+                  }
+
+                  const toolbarButtonClass =
+                    'p-2 rounded-full border border-gray-200 text-gray-500 hover:border-emerald-300 hover:text-emerald-600 transition-colors';
+
+                  const actionButtons = [
+                    {
+                      title: 'Edit product',
+                      icon: <Edit className="h-4 w-4" />,
+                      onClick: () => handleEditProduct(product),
+                    },
+                    {
+                      title: 'Copy title',
+                      icon: <Type className="h-4 w-4" />,
+                      onClick: () => handleCopyTitle(product),
+                    },
+                    {
+                      title: 'Copy description',
+                      icon: <FileText className="h-4 w-4" />,
+                      onClick: () => handleCopyDescription(product),
+                    },
+                    {
+                      title: 'Copy tags',
+                      icon: <Tag className="h-4 w-4" />,
+                      onClick: () => handleCopyTags(product),
+                    },
+                    {
+                      title: 'Copy specs',
+                      icon: <ListChecks className="h-4 w-4" />,
+                      onClick: () => handleCopySpecs(product),
+                    },
+                    {
+                      title: 'Copy image URLs',
+                      icon: <ImageIcon className="h-4 w-4" />,
+                      onClick: () => handleCopyImageUrls(product),
+                    },
+                    {
+                      title: 'Copy alt text',
+                      icon: <AlignLeft className="h-4 w-4" />,
+                      onClick: () => handleCopyAltTexts(product),
+                    },
+                  ];
+
+                  return (
+                    <AdminProductCard
+                      key={product._id}
+                      product={product}
+                      metaBadges={reviewBadges}
+                      statHighlights={reviewStats}
+                      highlightTone="emerald"
+                      density="compact"
+                      showTags={false}
+                      topRightSlot={
+                        <div className="text-right text-xs text-gray-500 space-y-1">
+                          <p className="font-mono">#{(product._id || '').slice(-6)}</p>
+                          <Link
+                            href={`/products/${product._id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-sm hover:text-emerald-900"
+                          >
+                            View listing
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Link>
+                        </div>
+                      }
+                      actionButtons={actionButtons.map(btn => (
+                        <button
+                          key={btn.title}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            btn.onClick();
+                          }}
+                          className={toolbarButtonClass}
+                          title={btn.title}
+                        >
+                          {btn.icon}
+                        </button>
+                      ))}
+                      secondaryActions={
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleRunPolicyReview(product)}
+                            disabled={isReviewLoading}
+                            className="px-4 py-2 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-700 hover:border-emerald-200 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                          >
+                            Quick Run
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleImproveProduct(product, result)}
+                            disabled={improvementEntry?.loading}
+                            className="px-4 py-2 rounded-2xl border border-emerald-200 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60 flex items-center gap-2"
+                          >
+                            {improvementEntry?.loading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Improving...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                Improve Listing
+                              </>
+                            )}
+                          </button>
+                        </>
+                      }
+                      primaryAction={{
+                        label: result ? 'Re-run Gemini Review' : 'Run Gemini Review',
+                        onClick: () => handleRunPolicyReview(product),
+                        loading: isReviewLoading,
+                        icon: <Sparkles className="h-4 w-4" />,
+                      }}
+                    >
+                      {reviewEntry?.error && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-3 py-2">
+                          {reviewEntry.error}
+                        </p>
+                      )}
+
+                      {result ? (
+                        <div className="space-y-4">
+                          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                            <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                              <Shield className="h-4 w-4 text-emerald-600" />
+                              Gemini Summary
+                            </p>
+                            <p className="text-sm text-gray-700 mt-2">
+                              {result.aiReview?.summary ||
+                                'Gemini did not include an additional summary.'}
+                            </p>
+                          </div>
+
+                          {result.aiReview?.issues?.length ? (
+                            <div className="space-y-2">
+                              {result.aiReview.issues.slice(0, 3).map((issue, idx) => (
+                                <div
+                                  key={`${product._id}-issue-${idx}`}
+                                  className="p-3 rounded-2xl border border-gray-100 bg-gray-50 text-sm text-gray-700"
+                                >
+                                  <span className="font-semibold text-gray-900">
+                                    {issue.policy || 'Policy'}
+                                  </span>
+                                  : {issue.description || 'Gemini flagged this area.'}
+                                  {issue.fix && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Fix: {issue.fix}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                              {result.aiReview.issues.length > 3 && (
+                                <p className="text-xs text-gray-500">
+                                  +{result.aiReview.issues.length - 3} more callouts
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2">
+                              Gemini did not flag any additional risks.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        !isReviewLoading && (
+                          <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-sm text-gray-600">
+                            Run a review to see Gemini feedback, rule-based scores, and quick fixes.
+                          </div>
+                        )
+                      )}
+
+                      {improvementEntry?.error && !improvementEntry.loading && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-3 py-2">
+                          {improvementEntry.error}
+                        </p>
+                      )}
+
+                      {improvements ? (
+                        <div className="space-y-3 rounded-2xl border border-emerald-100 bg-white p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-emerald-600" />
+                                AI Improvement Plan
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                {improvements.summary || 'Gemini prepared refinements for this listing.'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyImprovements(product)}
+                              disabled={improvementEntry?.applying}
+                              className="px-4 py-2 rounded-2xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60 flex items-center gap-2"
+                            >
+                              {improvementEntry?.applying ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Applying...
+                                </>
+                              ) : (
+                                'Apply Selected'
+                              )}
+                            </button>
+                          </div>
+
+                          {improvements.title?.suggestion && (
+                            <label
+                              className={`block rounded-2xl border p-3 transition-colors ${
+                                improvementSelection.title !== false
+                                  ? 'border-emerald-200 bg-emerald-50/40'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                  checked={improvementSelection.title ?? true}
+                                  onChange={(e) =>
+                                    handleToggleImprovementSelection(product._id, 'title', e.target.checked)
+                                  }
+                                />
+                                <div className="space-y-1">
+                                  <p className="text-sm font-semibold text-gray-900">Title</p>
+                                  <p className="text-xs text-gray-500 line-clamp-1">
+                                    Current: {product.name}
+                                  </p>
+                                  <p className="text-sm text-gray-900">
+                                    Suggestion: {improvements.title.suggestion}
+                                  </p>
+                                  {improvements.title.reasoning && (
+                                    <p className="text-xs text-gray-500">
+                                      Reason: {improvements.title.reasoning}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          )}
+
+                          {improvements.description?.suggestion && (
+                            <label
+                              className={`block rounded-2xl border p-3 transition-colors ${
+                                improvementSelection.description !== false
+                                  ? 'border-emerald-200 bg-emerald-50/40'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                  checked={improvementSelection.description ?? true}
+                                  onChange={(e) =>
+                                    handleToggleImprovementSelection(product._id, 'description', e.target.checked)
+                                  }
+                                />
+                                <div className="space-y-1">
+                                  <p className="text-sm font-semibold text-gray-900">Description</p>
+                                  <p className="text-xs text-gray-500 line-clamp-2">
+                                    Current: {product.description}
+                                  </p>
+                                  <div className="text-sm text-gray-900 bg-white border border-gray-100 rounded-xl p-2">
+                                    {improvements.description.suggestion}
+                                  </div>
+                                  {improvements.description.reasoning && (
+                                    <p className="text-xs text-gray-500">
+                                      Reason: {improvements.description.reasoning}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          )}
+
+                          {improvements.tags?.suggestion && improvements.tags.suggestion.length > 0 && (
+                            <label
+                              className={`block rounded-2xl border p-3 transition-colors ${
+                                improvementSelection.tags !== false
+                                  ? 'border-emerald-200 bg-emerald-50/40'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                  checked={improvementSelection.tags ?? true}
+                                  onChange={(e) =>
+                                    handleToggleImprovementSelection(product._id, 'tags', e.target.checked)
+                                  }
+                                />
+                                <div className="space-y-1 flex-1">
+                                  <p className="text-sm font-semibold text-gray-900">Tags</p>
+                                  <p className="text-xs text-gray-500">
+                                    Current: {(product.tags || []).slice(0, 6).join(', ') || '—'}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {improvements.tags.suggestion.slice(0, 13).map(tagValue => (
+                                      <span
+                                        key={tagValue}
+                                        className="px-2.5 py-1 rounded-full bg-white border border-emerald-100 text-xs font-medium text-emerald-700"
+                                      >
+                                        {tagValue}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {improvements.tags.reasoning && (
+                                    <p className="text-xs text-gray-500">
+                                      Reason: {improvements.tags.reasoning}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          )}
+
+                          {improvements.notes && improvements.notes.length > 0 && (
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                                Notes
+                              </p>
+                              <ul className="mt-1 list-disc list-inside text-sm text-gray-700 space-y-1">
+                                {improvements.notes.map((note: string, idx: number) => (
+                                  <li key={`${product._id}-note-${idx}`}>{note}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ) : improvementEntry?.loading ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-sm text-gray-500">
+                          Generating improvement plan...
+                        </div>
+                      ) : null}
+                    </AdminProductCard>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-8 text-center text-gray-600">
+                {products.length
+                  ? 'No products match your filters yet. Adjust search or run a new review.'
+                  : 'No products found. Import or create listings to start reviewing.'}
+              </div>
+            )}
+
           </div>
         )}
 
