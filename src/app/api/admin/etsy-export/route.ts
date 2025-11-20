@@ -120,6 +120,23 @@ export async function GET(request: NextRequest) {
       )
     ].join('\n');
 
+    // Mark exported products in DB for tracking
+    const exportedIds = products
+      .map(product => product._id)
+      .filter(id => !!id);
+
+    if (exportedIds.length > 0) {
+      await Product.updateMany(
+        { _id: { $in: exportedIds } },
+        {
+          $set: {
+            etsyExported: true,
+            etsyExportedAt: new Date()
+          }
+        }
+      );
+    }
+
     // Generate filename
     let filename = 'etsy-products-export';
     if (customFilename) {

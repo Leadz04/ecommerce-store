@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -192,6 +192,8 @@ export default function AdminDashboard() {
   const [showProductModal, setShowProductModal] = useState(false);
   const productsFetchedRef = useRef(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [analysisSelectedIds, setAnalysisSelectedIds] = useState<string[]>([]);
+  const [analysisSelectedMeta, setAnalysisSelectedMeta] = useState<Record<string, { name: string; price?: number }>>({});
   const [etsyExportLoading, setEtsyExportLoading] = useState<Record<string, boolean>>({});
   const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
@@ -1216,17 +1218,82 @@ export default function AdminDashboard() {
       });
       const items = Array.isArray(json.products) ? json.products : [];
       setProducts(items);
-      setTotalProducts(json.pagination?.total || items.length);
-      setTotalProductPages(json.pagination?.pages || 1);
-      if (pageToFetch) {
-        setProductPage(pageToFetch);
-      }
+
+      const totalFromResponse = Number(json.pagination?.total ?? json.total ?? items.length);
+      const total = Number.isFinite(totalFromResponse) && totalFromResponse > 0
+        ? totalFromResponse
+        : items.length;
+      const pagesFromResponse = Number(json.pagination?.pages ?? 0);
+      const calculatedPages = pagesFromResponse > 0
+        ? pagesFromResponse
+        : Math.max(1, Math.ceil(total / Math.max(1, limit)));
+
+      setTotalProducts(total);
+      setTotalProductPages(calculatedPages);
+      setProductPage(page);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
     } finally {
       setLoading(false);
     }
+  };
+
+  const goToProductPage = (nextPage: number) => {
+    const totalPages = Math.max(1, totalProductPages || 1);
+    if (nextPage < 1 || nextPage > totalPages || nextPage === productPage) {
+      return;
+    }
+    fetchProducts(nextPage);
+  };
+
+  const renderEtsyPaginationControls = (label: string) => {
+    const totalPages = Math.max(1, totalProductPages || 1);
+    const hasProducts = totalProducts > 0;
+    const start = hasProducts ? (productPage - 1) * productPerPage + 1 : 0;
+    const end = hasProducts ? Math.min(totalProducts, productPage * productPerPage) : 0;
+
+    return (
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm mb-4">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">{label}</p>
+          <p className="text-xs text-gray-500">
+            {hasProducts
+              ? `Showing ${start}-${end} of ${totalProducts} products • Page ${productPage} of ${totalPages}`
+              : 'No products available'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => goToProductPage(productPage - 1)}
+            disabled={productPage === 1 || loading}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              productPage === 1 || loading
+                ? 'text-gray-400 border-gray-200 bg-gray-100 cursor-not-allowed'
+                : 'text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            Previous
+          </button>
+          <span className="text-sm font-semibold text-gray-700 px-3 py-1 rounded-full bg-gray-100">
+            {productPage} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => goToProductPage(productPage + 1)}
+            disabled={productPage === totalPages || loading}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              productPage === totalPages || loading
+                ? 'text-gray-400 border-gray-200 bg-gray-100 cursor-not-allowed'
+                : 'text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Fetch orders
@@ -1559,6 +1626,73 @@ export default function AdminDashboard() {
   const handleClearAll = () => {
     setSelectedProductIds([]);
     toast.success('Selection cleared');
+  };
+
+  const handleAnalysisSelectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const selectedOnPage = Array.from(event.target.selectedOptions).map(option => option.value);
+    const currentPageIds = products.map(product => product._id);
+
+    setAnalysisSelectedIds(prev => {
+      const idsWithoutCurrentPage = prev.filter(id => !currentPageIds.includes(id));
+      return [...idsWithoutCurrentPage, ...selectedOnPage];
+    });
+
+    setAnalysisSelectedMeta(prev => {
+      const updated = { ...prev };
+      currentPageIds.forEach(id => {
+        if (!selectedOnPage.includes(id)) {
+          delete updated[id];
+        }
+      });
+      selectedOnPage.forEach(id => {
+        const product = products.find(p => p._id === id);
+        if (product) {
+          updated[id] = { name: product.name, price: product.price };
+        }
+      });
+      return updated;
+    });
+  };
+
+  const handleAnalysisSelectAllCurrentPage = () => {
+    const currentIds = products.map(product => product._id);
+    if (!currentIds.length) return;
+
+    setAnalysisSelectedIds(prev => {
+      const idsWithoutCurrentPage = prev.filter(id => !currentIds.includes(id));
+      return [...idsWithoutCurrentPage, ...currentIds];
+    });
+
+    setAnalysisSelectedMeta(prev => {
+      const updated = { ...prev };
+      products.forEach(product => {
+        updated[product._id] = { name: product.name, price: product.price };
+      });
+      return updated;
+    });
+  };
+
+  const handleAnalysisClearCurrentPage = () => {
+    const currentIds = products.map(product => product._id);
+    if (!currentIds.length) return;
+
+    setAnalysisSelectedIds(prev => prev.filter(id => !currentIds.includes(id)));
+    setAnalysisSelectedMeta(prev => {
+      const updated = { ...prev };
+      currentIds.forEach(id => {
+        delete updated[id];
+      });
+      return updated;
+    });
+  };
+
+  const handleAnalysisRemoveSelection = (productId: string) => {
+    setAnalysisSelectedIds(prev => prev.filter(id => id !== productId));
+    setAnalysisSelectedMeta(prev => {
+      const updated = { ...prev };
+      delete updated[productId];
+      return updated;
+    });
   };
 
   const applyProductUpdate = (productId: string, updates: Partial<Product>) => {
@@ -2546,6 +2680,7 @@ export default function AdminDashboard() {
                     </div>
                     <span>Select Products to Analyze</span>
                   </label>
+                  {renderEtsyPaginationControls('SerpAPI analysis pagination')}
                   <div className="flex gap-6 items-start">
                     <div className="flex-1 relative">
                       <select
@@ -2553,6 +2688,8 @@ export default function AdminDashboard() {
                         size={10}
                         className="w-full border-2 border-gray-300 rounded-2xl p-4 text-sm bg-white shadow-md focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all [&>option]:py-3 [&>option]:px-4 [&>option]:my-1 [&>option]:rounded-lg [&>option]:font-semibold [&>option]:text-gray-900 [&>option]:bg-white [&>option]:border-b [&>option]:border-gray-200 [&>option:hover]:bg-orange-100 [&>option:checked]:bg-orange-200 [&>option:checked]:text-orange-900"
                         id="etsyAnalysisProducts"
+                        value={analysisSelectedIds.filter(id => products.some(product => product._id === id))}
+                        onChange={handleAnalysisSelectionChange}
                         style={{ 
                           minHeight: '320px',
                         }}
@@ -2583,29 +2720,62 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex flex-col gap-3">
                       <button
-                        onClick={() => {
-                          const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
-                          if (select) {
-                            Array.from(select.options).forEach(opt => opt.selected = true);
-                          }
-                        }}
+                        onClick={handleAnalysisSelectAllCurrentPage}
                         className="px-6 py-3 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                       >
                         Select All
                       </button>
                       <button
-                        onClick={() => {
-                          const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
-                          if (select) {
-                            Array.from(select.options).forEach(opt => opt.selected = false);
-                          }
-                        }}
+                        onClick={handleAnalysisClearCurrentPage}
                         className="px-6 py-3 text-sm font-bold bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all shadow-md hover:shadow-lg"
                       >
-                        Clear
+                        Clear Page
                       </button>
                     </div>
                   </div>
+                  {analysisSelectedIds.length > 0 && (
+                    <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-semibold text-gray-800">
+                          Selected {analysisSelectedIds.length} product{analysisSelectedIds.length === 1 ? '' : 's'} across pages
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAnalysisSelectedIds([]);
+                            setAnalysisSelectedMeta({});
+                          }}
+                          className="text-xs font-semibold text-orange-600 hover:text-orange-700"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                        {analysisSelectedIds.map(id => (
+                          <span
+                            key={id}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-xs font-medium text-orange-800"
+                          >
+                            <span className="truncate max-w-[160px]">
+                              {analysisSelectedMeta[id]?.name || 'Product'}
+                              {(() => {
+                                const price = analysisSelectedMeta[id]?.price;
+                                return typeof price === 'number' ? ` · $${price.toFixed(2)}` : '';
+                              })()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAnalysisRemoveSelection(id)}
+                              className="text-orange-500 hover:text-orange-700"
+                              aria-label={`Remove ${analysisSelectedMeta[id]?.name || 'product'} from selection`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="mb-8 p-5 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-200 shadow-md">
@@ -2626,11 +2796,8 @@ export default function AdminDashboard() {
                 <div className="flex justify-center">
                   <button
                     onClick={async () => {
-                      const select = document.getElementById('etsyAnalysisProducts') as HTMLSelectElement;
                       const includeGoogle = (document.getElementById('includeGoogleData') as HTMLInputElement)?.checked ?? true;
-                      if (!select) return;
-                      
-                      const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
+                      const selectedIds = analysisSelectedIds;
                       if (selectedIds.length === 0) {
                         toast.error('Please select at least one product');
                         return;
@@ -3130,7 +3297,8 @@ export default function AdminDashboard() {
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
                             
-                            toast.success(`CSV file downloaded successfully! Exported ${exportFinalLimit} products.`);
+                        toast.success(`CSV file downloaded successfully! Exported ${exportFinalLimit} products.`);
+                        await fetchProducts();
                           } catch (error) {
                             console.error('Export error:', error);
                             toast.error(error instanceof Error ? error.message : 'Failed to export products');
@@ -3148,13 +3316,14 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-medium text-gray-900">Select Specific Products</h3>
                         <button
-                          onClick={fetchProducts}
+                          onClick={() => fetchProducts()}
                           className="text-sm text-purple-600 hover:text-purple-800 flex items-center space-x-2 px-3 py-1 rounded-lg hover:bg-purple-50 transition-colors"
                         >
                           <RefreshCw className="h-4 w-4" />
                           <span>Refresh Products</span>
                         </button>
                       </div>
+                      {renderEtsyPaginationControls('Export list pagination')}
                       
                       {/* Product Grid */}
                       <div className="space-y-4">
@@ -3394,6 +3563,8 @@ export default function AdminDashboard() {
                                 ? `CSV file downloaded successfully! Exported "${products.find(p => p._id === selectedProductIds[0])?.name || 'product'}"`
                                 : `CSV file downloaded successfully! Exported ${productCount} selected products.`;
                               toast.success(message);
+                              setSelectedProductIds([]);
+                              await fetchProducts();
                             } catch (error) {
                               console.error('Export error:', error);
                               toast.error(error instanceof Error ? error.message : 'Failed to export selected products');
@@ -5695,7 +5866,7 @@ export default function AdminDashboard() {
                   {/* Action Buttons */}
                   <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-between xl:justify-end">
                     <button
-                      onClick={fetchProducts}
+                      onClick={() => fetchProducts()}
                       className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm hover:shadow-md"
                     >
                       <RefreshCw className="h-4 w-4" />
