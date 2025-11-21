@@ -51,8 +51,10 @@ import {
   Activity,
   ListChecks,
   Type,
-  AlignLeft
+  AlignLeft,
+  ChevronDown
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
 import BlogAdmin from '@/components/BlogAdmin';
 import KeywordPlanner from '@/components/KeywordPlanner';
@@ -67,6 +69,16 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
+
+const allowedTabs = ['users','roles','products','policy-review','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking'] as const;
+type TabKey = typeof allowedTabs[number];
+type SidebarTab = {
+  id: TabKey;
+  label: string;
+  description?: string;
+  icon: LucideIcon;
+  children?: Array<{ id: TabKey; label: string; icon?: LucideIcon }>;
+};
 
 interface User {
   _id: string;
@@ -255,10 +267,10 @@ export default function AdminDashboard() {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
-  const allowedTabs = ['users','roles','products','policy-review','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking'] as const;
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
+  const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -1138,6 +1150,50 @@ export default function AdminDashboard() {
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+
+  const handleTabChange = (tab: TabKey) => {
+    setActiveTab(tab);
+    setOpenNestedMenu(null);
+    if (tab === 'orders') {
+      updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined });
+      return;
+    }
+    updateQuery({ tab });
+  };
+
+  const sidebarTabs: SidebarTab[] = [
+    { id: 'overview', label: 'Overview', icon: BarChart3, description: 'Snapshot & key KPIs' },
+    { id: 'sourcing', label: 'Sourcing', icon: Download, description: 'Import and curate products' },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'roles', label: 'Roles & Permissions', icon: Shield },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
+    { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    {
+      id: 'marketing',
+      label: 'Growth & Insights',
+      icon: Activity,
+      description: 'Campaigns, analytics & SEO',
+      children: [
+        { id: 'marketing', label: 'Campaign Hub', icon: Mail },
+        { id: 'performance', label: 'Performance', icon: BarChart3 },
+        { id: 'analytics', label: 'Analytics', icon: Activity },
+        { id: 'analytics-seo', label: 'Google & Shopping', icon: AlignLeft },
+        { id: 'etsy', label: 'Etsy Integration', icon: ShoppingCart },
+        { id: 'seo', label: 'SEO Research', icon: Search },
+        { id: 'seo-raw', label: 'SEO Raw Data', icon: Type },
+      ],
+    },
+    { id: 'email-tracking', label: 'Email Tracking', icon: Mail },
+    { id: 'blogs', label: 'Blogs', icon: FileText },
+    { id: 'keyword-planner', label: 'Keyword Planner', icon: Type },
+  ];
+
+  const isTabActive = (tab: SidebarTab) =>
+    tab.id === activeTab || tab.children?.some(child => child.id === activeTab);
+
+  const shouldShowChildren = (tab: SidebarTab) =>
+    !!tab.children && (openNestedMenu === tab.id || tab.children.some(child => child.id === activeTab));
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -2555,264 +2611,131 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-4 sm:py-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">Manage users, roles, and system settings</p>
-            </div>
-            <div className="w-full sm:w-auto">
-              <div className="p-3 rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-gray-50 to-gray-100 shadow-sm">
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <aside className="lg:w-72 xl:w-80">
+            <div className="space-y-6 lg:sticky lg:top-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">Control Center</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">Admin Dashboard</h1>
+                <p className="text-sm text-gray-600 mt-2">Manage users, roles, and system settings</p>
+                <div className="mt-5 flex flex-col gap-3">
                   <button
-                onClick={seedRoles}
-                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow hover:shadow-md font-medium text-sm w-full sm:w-auto"
-              >
-                <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">Seed Roles</span>
-                <span className="sm:hidden">Seed</span>
-              </button>
-              <Link
-                href="/admin/audit-logs"
-                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
-              >
-                <FileCheck className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
-                <span className="hidden sm:inline">Audit Logs</span>
-                <span className="sm:hidden">Audit</span>
-              </Link>
-              <Link
-                href="/admin/product-versions"
-                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
-              >
-                <History className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
-                <span className="hidden sm:inline">Product Changes</span>
-                <span className="sm:hidden">Changes</span>
-              </Link>
-              <Link
-                href="/admin/tools"
-                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
-              >
-                <Wrench className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
-                <span className="hidden sm:inline">Admin Tools</span>
-                <span className="sm:hidden">Tools</span>
-              </Link>
-              <Link
-                href="/"
-                    className="group flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm w-full sm:w-auto"
-              >
-                <Home className="h-4 w-4 text-gray-600 group-hover:text-gray-900" />
-                <span className="hidden sm:inline">Back to Store</span>
-                <span className="sm:hidden">Store</span>
-              </Link>
+                    type="button"
+                    onClick={seedRoles}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-blue-700 hover:to-indigo-700 transition-all"
+                  >
+                    <Shield className="h-4 w-4" />
+                    <span>Seed Roles</span>
+                  </button>
+                  <Link
+                    href="/admin/audit-logs"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <FileCheck className="h-4 w-4 text-gray-500" />
+                    <span>Audit Logs</span>
+                  </Link>
+                  <Link
+                    href="/admin/product-versions"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <History className="h-4 w-4 text-gray-500" />
+                    <span>Product Changes</span>
+                  </Link>
+                  <Link
+                    href="/admin/tools"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <Wrench className="h-4 w-4 text-gray-500" />
+                    <span>Admin Tools</span>
+                  </Link>
+                  <Link
+                    href="/"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <Home className="h-4 w-4 text-gray-500" />
+                    <span>Back to Store</span>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">Navigate</p>
+                </div>
+                <div className="p-3 flex flex-col gap-1.5">
+                  {sidebarTabs.map((tab) => {
+                    const active = isTabActive(tab);
+                    return (
+                      <div key={tab.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleTabChange(tab.id)}
+                          className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all border ${
+                            active
+                              ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 shadow-sm'
+                              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                          }`}
+                        >
+                          <tab.icon className={`h-4 w-4 ${active ? 'text-blue-600' : 'text-gray-400'}`} />
+                          <div className="flex-1">
+                            <div className="font-semibold">{tab.label}</div>
+                            {tab.description && (
+                              <p className="text-xs text-gray-500">{tab.description}</p>
+                            )}
+                          </div>
+                          {tab.children && (
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenNestedMenu((prev) => (prev === tab.id ? null : tab.id));
+                              }}
+                              className="p-1 rounded-lg hover:bg-white/70"
+                            >
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform ${
+                                  shouldShowChildren(tab) ? 'rotate-180 text-blue-600' : 'text-gray-400'
+                                }`}
+                              />
+                            </span>
+                          )}
+                        </button>
+                        {shouldShowChildren(tab) && tab.children && (
+                          <div className="ml-9 mt-2 mb-3 flex flex-col gap-1 border-l border-gray-100 pl-3">
+                            {tab.children.map((child) => {
+                              const childActive = activeTab === child.id;
+                              return (
+                                <button
+                                  type="button"
+                                  key={child.id}
+                                  onClick={() => handleTabChange(child.id)}
+                                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                                    childActive
+                                      ? 'bg-blue-600/10 text-blue-700'
+                                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {child.icon && (
+                                    <child.icon
+                                      className={`h-4 w-4 ${childActive ? 'text-blue-600' : 'text-gray-400'}`}
+                                    />
+                                  )}
+                                  <span>{child.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </aside>
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Navigation Tabs */}
-        <div className="mb-6 sm:mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto admin-tabs-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
-              <nav className="flex -mb-px">
-                <div className="flex gap-1.5 lg:gap-2 px-2 sm:px-4 py-2.5 lg:py-3 min-w-max">
-                <button
-                  onClick={() => { setActiveTab('overview'); updateQuery({ tab: 'overview' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'overview'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <BarChart3 className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'overview' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Overview</span>
-                  {activeTab === 'overview' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('sourcing'); updateQuery({ tab: 'sourcing' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'sourcing'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Download className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'sourcing' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Sourcing</span>
-                  {activeTab === 'sourcing' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('users'); updateQuery({ tab: 'users' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'users'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Users className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'users' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Users</span>
-                  {activeTab === 'users' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('roles'); updateQuery({ tab: 'roles' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'roles'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Shield className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'roles' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">Roles & Permissions</span>
-                  <span className="sm:hidden">Roles</span>
-                  {activeTab === 'roles' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('products'); updateQuery({ tab: 'products' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'products'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Package className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'products' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Products</span>
-                  {activeTab === 'products' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('policy-review'); updateQuery({ tab: 'policy-review' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'policy-review'
-                      ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 shadow-sm border border-emerald-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <ShieldCheck className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'policy-review' ? 'text-emerald-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">Policy Review</span>
-                  <span className="sm:hidden">Review</span>
-                  {activeTab === 'policy-review' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('orders'); updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined } as any); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'orders'
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <ShoppingCart className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'orders' ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Orders</span>
-                  {activeTab === 'orders' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('marketing'); updateQuery({ tab: 'marketing' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    ['marketing','performance','analytics','etsy'].includes(activeTab as any)
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <BarChart3 className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${['marketing','performance','analytics','etsy'].includes(activeTab as any) ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">Marketing & Performance</span>
-                  <span className="sm:hidden">Marketing</span>
-                  {['marketing','performance','analytics','etsy'].includes(activeTab as any) && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('email-tracking'); updateQuery({ tab: 'email-tracking' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    activeTab === 'email-tracking'
-                      ? 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 shadow-sm border border-purple-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Mail className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${activeTab === 'email-tracking' ? 'text-purple-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">Email Tracking</span>
-                  <span className="sm:hidden">Email</span>
-                  {activeTab === 'email-tracking' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('seo'); updateQuery({ tab: 'seo' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    (activeTab as any) === 'seo'
-                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 shadow-sm border border-green-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'seo' ? 'text-green-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">SEO Research</span>
-                  <span className="sm:hidden">SEO</span>
-                  {(activeTab as any) === 'seo' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-emerald-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('seo-raw'); updateQuery({ tab: 'seo-raw' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    (activeTab as any) === 'seo-raw'
-                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 shadow-sm border border-green-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'seo-raw' ? 'text-green-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>SEO Raw</span>
-                  {(activeTab as any) === 'seo-raw' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-500 to-emerald-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('blogs'); updateQuery({ tab: 'blogs' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    (activeTab as any) === 'blogs'
-                      ? 'bg-gradient-to-r from-purple-50 to-violet-50 text-purple-700 shadow-sm border border-purple-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <FileText className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'blogs' ? 'text-purple-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span>Blogs</span>
-                  {(activeTab as any) === 'blogs' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-violet-500"></span>
-                  )}
-                </button>
-                <button
-                  onClick={() => { setActiveTab('keyword-planner'); updateQuery({ tab: 'keyword-planner' }); }}
-                  className={`group relative flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
-                    (activeTab as any) === 'keyword-planner'
-                      ? 'bg-gradient-to-r from-orange-50 to-amber-50 text-orange-700 shadow-sm border border-orange-200'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Search className={`h-4 w-4 sm:h-5 sm:w-5 transition-colors ${(activeTab as any) === 'keyword-planner' ? 'text-orange-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="hidden sm:inline">Keyword Planner</span>
-                  <span className="sm:hidden">Keywords</span>
-                  {(activeTab as any) === 'keyword-planner' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-orange-500 to-amber-500"></span>
-                  )}
-                </button>
-                </div>
-              </nav>
-            </div>
-          </div>
-        </div>
+          <div className="flex-1">
+            <div className="space-y-8">
 
         {/* Sourcing Tab */}
         {activeTab === 'sourcing' && (
@@ -8084,6 +8007,9 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
