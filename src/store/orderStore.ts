@@ -31,6 +31,9 @@ interface OrderStore {
       image: string;
       size?: string;
       color?: string;
+      promoToken?: string;
+      promoPercent?: number;
+      promoOriginalPrice?: number;
     }[];
     subtotal: number;
     shipping: number;

@@ -561,10 +561,22 @@ export async function POST(
     await connectDB();
 
     const { id: productId } = await params;
+    const url = new URL(request.url);
+    const isForceRun = url.searchParams.get('force') === 'true';
     const product = await Product.findById(productId);
 
     if (!product) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+
+    if (product.policyReview?.lastRunAt && !isForceRun) {
+      return NextResponse.json(
+        {
+          error: 'Policy review already completed for this product',
+          policyReview: product.policyReview,
+        },
+        { status: 409 }
+      );
     }
 
     const violations: PolicyCheckResult[] = [];
@@ -744,6 +756,24 @@ export async function POST(
 
     const aiReview = await runGeminiPolicyReview(product, plainDescription, deterministicSummary);
 
+    const summary = {
+      totalViolations: violations.length,
+      criticalIssues: errors.length,
+      warnings: warnings.length,
+      recommendations: info.length,
+      isCompliant: errors.length === 0 && complianceRate >= 80
+    };
+
+    product.policyReview = {
+      lastRunAt: new Date(),
+      score: Math.max(0, overallScore),
+      complianceRate: Math.round(complianceRate),
+      summary,
+      aiReview,
+    };
+
+    await product.save();
+
     return NextResponse.json({
       success: true,
       productId: product._id.toString(),
@@ -757,14 +787,9 @@ export async function POST(
         warnings,
         info
       },
-      summary: {
-        totalViolations: violations.length,
-        criticalIssues: errors.length,
-        warnings: warnings.length,
-        recommendations: info.length,
-        isCompliant: errors.length === 0 && complianceRate >= 80
-      },
-      aiReview
+      summary,
+      aiReview,
+      policyReview: product.policyReview,
     });
   } catch (error) {
     console.error('Etsy policy check error:', error);

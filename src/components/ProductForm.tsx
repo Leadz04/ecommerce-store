@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Eye, Calendar as CalendarIcon, Cloud, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Calendar as CalendarIcon, Cloud, Loader2, UploadCloud, ShieldAlert } from 'lucide-react';
 import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/store/authStore';
 
 interface Product {
   _id: string;
@@ -38,6 +39,17 @@ const CATEGORIES = [
   'Gifting'
 ];
 
+const sanitizeFilename = (text: string) => {
+  if (!text) return 'product';
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase() || 'product';
+};
+
 export default function ProductForm({ product, isOpen, onClose, onSuccess }: ProductFormProps) {
   const [brands, setBrands] = useState<string[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(false);
@@ -69,6 +81,13 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [optimizingTags, setOptimizingTags] = useState(false);
   const [organizingImages, setOrganizingImages] = useState(false);
   const [openSelect, setOpenSelect] = useState<'brand' | 'category' | 'status' | null>(null);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [uploadingDroppedImages, setUploadingDroppedImages] = useState(false);
+  const [uploadQueueStatus, setUploadQueueStatus] = useState({ completed: 0, total: 0 });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const roleName = useAuthStore((state) => state.user?.role?.name);
+  const normalizedRoleName = roleName?.toUpperCase?.();
+  const isAdminUser = normalizedRoleName === 'ADMIN' || normalizedRoleName === 'SUPER_ADMIN';
 
   // Fetch brands from API only when modal is open
   useEffect(() => {
@@ -292,6 +311,110 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
     } finally {
       setOrganizingImages(false);
     }
+  };
+
+  const uploadFilesToCloudinary = async (fileList: FileList | File[]) => {
+    if (!isAdminUser) {
+      toast.error('Only admin users can upload images.');
+      return;
+    }
+    const files = Array.from(fileList || []).filter(
+      (file) => file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name)
+    );
+    if (files.length === 0) {
+      toast.error('Please choose image files to upload.');
+      return;
+    }
+
+    const productNameForUploads = product?.name || formData.name || 'product';
+    const productSlug = sanitizeFilename(productNameForUploads);
+    const folderName = `EverStyleCrafts/${productSlug}`;
+    let viewCounter = (formData.image ? 1 : 0) + (formData.images?.length || 0);
+
+    setUploadingDroppedImages(true);
+    setUploadQueueStatus({ completed: 0, total: files.length });
+
+    const uploadedUrls: string[] = [];
+
+    for (const file of files) {
+      const formDataPayload = new FormData();
+      formDataPayload.append('file', file);
+      viewCounter += 1;
+      const publicId = `${productSlug}-view-${viewCounter}`;
+      formDataPayload.append('folder', folderName);
+      formDataPayload.append('public_id', publicId);
+      formDataPayload.append('product_name', productNameForUploads);
+
+      try {
+        const response = await fetch('/api/uploads/cloudinary', {
+          method: 'POST',
+          body: formDataPayload,
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data?.url) {
+          throw new Error(data?.error || 'Upload failed');
+        }
+
+        uploadedUrls.push(data.url);
+        setUploadQueueStatus((prev) => ({ ...prev, completed: prev.completed + 1 }));
+      } catch (error) {
+        console.error('Image upload failed:', error);
+        toast.error(
+          `${file.name}: ${error instanceof Error ? error.message : 'Upload failed'}`
+        );
+      }
+    }
+
+    if (uploadedUrls.length > 0) {
+      setFormData((prev) => {
+        const remainingUrls = [...uploadedUrls];
+        const nextMainImage = prev.image || remainingUrls.shift() || '';
+        const nextImages = Array.from(new Set([...prev.images, ...remainingUrls]));
+
+        return {
+          ...prev,
+          image: nextMainImage,
+          images: nextImages,
+        };
+      });
+
+      toast.success(
+        uploadedUrls.length > 1
+          ? `${uploadedUrls.length} images uploaded to Cloudinary`
+          : 'Image uploaded to Cloudinary'
+      );
+    }
+
+    setUploadQueueStatus({ completed: 0, total: 0 });
+    setUploadingDroppedImages(false);
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files?.length) return;
+    void uploadFilesToCloudinary(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDraggingFiles(false);
+    if (!event.dataTransfer.files?.length) return;
+    void uploadFilesToCloudinary(event.dataTransfer.files);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!isDraggingFiles) {
+      setIsDraggingFiles(true);
+    }
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    setIsDraggingFiles(false);
   };
 
   if (!isOpen) return null;
@@ -676,6 +799,50 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                   </button>
                 )}
               </div>
+
+              {isAdminUser ? (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                  />
+                  <div
+                    className={`mb-6 rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
+                      isDraggingFiles
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 hover:border-blue-400'
+                    } ${uploadingDroppedImages ? 'cursor-progress' : 'cursor-pointer'}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => !uploadingDroppedImages && fileInputRef.current?.click()}
+                  >
+                    <UploadCloud className={`mx-auto mb-3 h-8 w-8 ${isDraggingFiles ? 'text-blue-600' : 'text-gray-500'}`} />
+                    <p className="text-sm font-medium text-gray-800">
+                      Drag & drop product images here
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      or click to browse files. Images upload directly to Cloudinary.
+                    </p>
+                    {uploadingDroppedImages && (
+                      <p className="mt-3 text-sm text-blue-600">
+                        Uploading {uploadQueueStatus.completed}/{uploadQueueStatus.total}...
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+                  <ShieldAlert className="h-5 w-5" />
+                  <p className="text-sm">
+                    Only admin users can drag, drop, and upload product images.
+                  </p>
+                </div>
+              )}
               
               {/* Main Image */}
               <div className="mb-4">

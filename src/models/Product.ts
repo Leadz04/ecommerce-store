@@ -34,6 +34,19 @@ export interface IProduct extends Document {
   }>;
   etsyExported?: boolean;
   etsyExportedAt?: Date | null;
+  policyReview?: {
+    lastRunAt?: Date | null;
+    score?: number;
+    complianceRate?: number;
+    summary?: {
+      totalViolations?: number;
+      criticalIssues?: number;
+      warnings?: number;
+      recommendations?: number;
+      isCompliant?: boolean;
+    };
+    aiReview?: Record<string, any>;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -158,7 +171,22 @@ const ProductSchema = new Schema<IProduct>({
     originalPrice: { type: Number, min: 0 },
     available: { type: Boolean },
     inventory: { type: Number, min: 0, required: false },
-  }]
+  }],
+  policyReview: {
+    lastRunAt: { type: Date, default: null },
+    score: { type: Number },
+    complianceRate: { type: Number },
+    summary: {
+      totalViolations: { type: Number },
+      criticalIssues: { type: Number },
+      warnings: { type: Number },
+      recommendations: { type: Number },
+      isCompliant: { type: Boolean },
+    },
+    aiReview: {
+      type: Schema.Types.Mixed,
+    },
+  }
 }, {
   timestamps: true
 });

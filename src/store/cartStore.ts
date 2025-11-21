@@ -57,6 +57,8 @@ export const useCartStore = create<CartStore>()(
             quantity,
             size: size,
             color: color,
+            price: product.price,
+            appliedPromo: product.emailPromo,
           };
           // Append then dedupe to guard against any legacy duplicates
           const next = [...items, newItem];

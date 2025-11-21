@@ -4,9 +4,13 @@ import { requireAnyPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import Product from '@/models/Product';
 import EmailTracking from '@/models/EmailTracking';
+import EmailPromoDiscount from '@/models/EmailPromoDiscount';
 import { sendEmail } from '@/lib/email';
 import { generateProductPromoEmail, ProductPromoEmailData } from '@/lib/emailTemplates';
 import { addTrackingPixel, wrapLinksWithTracking } from '@/lib/emailTrackingHelpers';
+import crypto from 'crypto';
+
+const PROMO_EXPIRY_HOURS = Number(process.env.NEXT_PUBLIC_EMAIL_PROMO_EXPIRY_HOURS || process.env.EMAIL_PROMO_EXPIRY_HOURS || 72);
 
 /**
  * Send promotional email for a specific product to selected email addresses
@@ -60,8 +64,8 @@ export async function POST(
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const productUrl = `${siteUrl}/products/${productId}`;
     
-    // Prepare email data
-    const emailData: ProductPromoEmailData = {
+    // Prepare base email data (per recipient tweaks happen later)
+    const baseEmailData: ProductPromoEmailData = {
       productName: product.name,
       productDescription: product.description || (product as any).descriptionHtml?.replace(/<[^>]*>/g, ' ').substring(0, 200) || '',
       productPrice: product.price,
@@ -74,10 +78,9 @@ export async function POST(
       siteUrl,
       template: template || 'purple',
     };
-
-    // Generate email HTML
-    const emailHTML = generateProductPromoEmail(emailData);
     
+    const fallbackPreviewHtml = generateProductPromoEmail(baseEmailData);
+
     // Default subject if not provided
     const emailSubject = subject || 
       (discountPercent 
@@ -117,8 +120,47 @@ export async function POST(
           }
         });
 
+        let promoToken: string | null = null;
+        let promoExpiresAt: Date | null = null;
+        if (discountPercent && discountPercent > 0) {
+          promoToken = crypto.randomBytes(16).toString('hex');
+          promoExpiresAt = new Date(Date.now() + PROMO_EXPIRY_HOURS * 60 * 60 * 1000);
+          await EmailPromoDiscount.create({
+            token: promoToken,
+            email: normalizedEmail,
+            productId: product._id,
+            discountPercent,
+            trackingId: emailTracking._id,
+            emailSentAt: emailTracking.emailSentAt,
+            expiresAt: promoExpiresAt,
+          });
+          emailTracking.metadata = {
+            ...(emailTracking.metadata || {}),
+            promoToken,
+            promoExpiresAt,
+          };
+          await emailTracking.save();
+          console.info('[PromoEmail] Issued promo token', {
+            token: promoToken,
+            email: normalizedEmail,
+            productId,
+            discountPercent,
+            expiresAt: promoExpiresAt?.toISOString(),
+          });
+        }
+
+        const productLink = new URL(productUrl);
+        if (promoToken) {
+          productLink.searchParams.set('promo', promoToken);
+        }
+
+        const personalizedHtml = generateProductPromoEmail({
+          ...baseEmailData,
+          productUrl: productLink.toString(),
+        });
+
         // Add tracking to email HTML
-        let trackedHTML = wrapLinksWithTracking(emailHTML, normalizedEmail, emailTracking._id.toString(), siteUrl);
+        let trackedHTML = wrapLinksWithTracking(personalizedHtml, normalizedEmail, emailTracking._id.toString(), siteUrl);
         trackedHTML = addTrackingPixel(trackedHTML, normalizedEmail, emailTracking._id.toString(), siteUrl);
 
         const emailSent = await sendEmail({
@@ -129,9 +171,17 @@ export async function POST(
 
         if (emailSent) {
           results.sent.push(normalizedEmail);
+          if (promoToken) {
+            console.info('[PromoEmail] Email sent with promo token', { promoToken, email: normalizedEmail });
+          }
         } else {
           // Delete tracking record if email failed to send
           await EmailTracking.findByIdAndDelete(emailTracking._id);
+          if (promoToken) {
+            await EmailPromoDiscount.deleteOne({ token: promoToken }).catch((err) => {
+              console.warn('[PromoEmail] Failed cleaning promo token after send failure', { promoToken, error: err?.message });
+            });
+          }
           results.failed.push({
             email: normalizedEmail,
             error: 'Failed to send email'
@@ -154,7 +204,7 @@ export async function POST(
       results,
       preview: {
         subject: emailSubject,
-        html: emailHTML
+        html: fallbackPreviewHtml
       }
     });
 

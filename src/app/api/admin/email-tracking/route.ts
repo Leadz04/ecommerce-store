@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
+import Product from '@/models/Product';
 import { AnalyticsEvent } from '@/models';
 import jwt from 'jsonwebtoken';
 
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Top clicked products
-    const topClickedProducts = await EmailTracking.aggregate([
+    const rawTopClickedProducts = await EmailTracking.aggregate([
       { $match: { emailSentAt: { $gte: since } } },
       { $unwind: '$clickedLinks' },
       { $match: { 'clickedLinks.linkType': 'product', 'clickedLinks.productId': { $exists: true } } },
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Top viewed products
-    const topViewedProducts = await EmailTracking.aggregate([
+    const rawTopViewedProducts = await EmailTracking.aggregate([
       { $match: { emailSentAt: { $gte: since } } },
       { $unwind: '$productViews' },
       { $group: {
@@ -122,6 +123,48 @@ export async function GET(request: NextRequest) {
       { $sort: { viewCount: -1 } },
       { $limit: 10 }
     ]);
+
+    // Map product IDs to names for display
+    const productIdSet = new Set<string>();
+    const normalizeId = (id: any) => {
+      if (!id) return null;
+      return typeof id === 'string' ? id : id.toString();
+    };
+
+    rawTopClickedProducts.forEach((product) => {
+      const normalized = normalizeId(product.productId);
+      if (normalized) productIdSet.add(normalized);
+    });
+    rawTopViewedProducts.forEach((product) => {
+      const normalized = normalizeId(product.productId);
+      if (normalized) productIdSet.add(normalized);
+    });
+
+    let productNameMap = new Map<string, string>();
+    if (productIdSet.size > 0) {
+      const products = await Product.find({ _id: { $in: Array.from(productIdSet) } })
+        .select('_id name')
+        .lean();
+      productNameMap = new Map(products.map((product) => [product._id.toString(), product.name]));
+    }
+
+    const topClickedProducts = rawTopClickedProducts.map((product) => {
+      const normalizedId = normalizeId(product.productId);
+      return {
+        ...product,
+        productId: normalizedId,
+        productName: normalizedId ? productNameMap.get(normalizedId) || null : null
+      };
+    });
+
+    const topViewedProducts = rawTopViewedProducts.map((product) => {
+      const normalizedId = normalizeId(product.productId);
+      return {
+        ...product,
+        productId: normalizedId,
+        productName: normalizedId ? productNameMap.get(normalizedId) || null : null
+      };
+    });
 
     // Most visited pages
     const topVisitedPages = await EmailTracking.aggregate([

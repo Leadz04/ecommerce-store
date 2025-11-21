@@ -50,11 +50,13 @@ interface EmailTrackingData {
   }>;
   topClickedProducts: Array<{
     productId: string;
+    productName?: string | null;
     clickCount: number;
     uniqueClickers: number;
   }>;
   topViewedProducts: Array<{
     productId: string;
+    productName?: string | null;
     viewCount: number;
     uniqueViewers: number;
   }>;
@@ -430,7 +432,9 @@ export default function EmailTrackingDashboard() {
                 {data.topClickedProducts.map((product, idx) => (
                   <div key={product.productId} className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">#{idx + 1} {product.productId}</p>
+                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                        #{idx + 1} {product.productName || product.productId}
+                      </p>
                       <p className="text-xs sm:text-sm text-gray-500">{product.uniqueClickers} unique clickers</p>
                     </div>
                     <div className="text-right shrink-0 ml-2">
@@ -460,7 +464,9 @@ export default function EmailTrackingDashboard() {
                 {data.topViewedProducts.map((product, idx) => (
                   <div key={product.productId} className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">#{idx + 1} {product.productId}</p>
+                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                        #{idx + 1} {product.productName || product.productId}
+                      </p>
                       <p className="text-xs sm:text-sm text-gray-500">{product.uniqueViewers} unique viewers</p>
                     </div>
                     <div className="text-right shrink-0 ml-2">
@@ -791,6 +797,67 @@ function EmailRow({ email }: { email: EmailTrackingData['recentEmails'][0] }) {
         <tr>
           <td colSpan={8} className="px-3 sm:px-6 py-4 sm:py-6 bg-gray-50">
             <div className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {(details.metadata?.productId || details.metadata?.productName) && (
+                  <div className="bg-white rounded-xl border border-purple-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package className="h-4 w-4 text-purple-600" />
+                      <h4 className="text-sm font-semibold text-gray-900">Product Promoted</h4>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {details.metadata?.productName || 'Unnamed product'}
+                    </p>
+                    {details.metadata?.productId && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ID: {details.metadata.productId}
+                      </p>
+                    )}
+                    {typeof details.metadata?.discountPercent === 'number' && (
+                      <p className="text-xs text-emerald-600 font-medium mt-2">
+                        {details.metadata.discountPercent}% discount advertised
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      {details.metadata?.productId && (
+                        <a
+                          href={`/products/${details.metadata.productId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 hover:bg-purple-100 transition"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View product
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <h4 className="text-sm font-semibold text-gray-900">Recipient</h4>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 break-words">
+                    {details.email}
+                  </p>
+                  {details.subscriberId && (
+                    <>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Subscriber: {details.subscriberId.firstName || ''} {details.subscriberId.lastName || ''}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Visits: {details.subscriberId.visitCount ?? 0} · Converted: {details.subscriberId.converted ? 'Yes' : 'No'}
+                      </p>
+                    </>
+                  )}
+                  {details.orderId && (
+                    <p className="text-xs text-emerald-600 font-semibold mt-2">
+                      Converted via order #{details.orderId}
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Timeline */}
               <div>
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3 flex items-center gap-2">

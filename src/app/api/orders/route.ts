@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 
 // Import all models to ensure proper schema registration
 import { Order, Product, OrderCounter } from '@/models';
+import EmailPromoDiscount from '@/models/EmailPromoDiscount';
 import User from '@/models/User';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
@@ -142,6 +143,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let recalculatedSubtotal = 0;
+
     // Check product availability and update stock
     for (const item of orderData.items) {
       let product;
@@ -155,27 +158,90 @@ export async function POST(request: NextRequest) {
         product = await Product.findOne({ id: item.productId });
       }
       
-      if (!product) {
-        // If product not found in database, log warning but continue
-        // This handles cases where sample products are used
+      if (product) {
+        if (!product.inStock || product.stockCount < item.quantity) {
+          return NextResponse.json(
+            { error: `Insufficient stock for ${item.name}` },
+            { status: 400 }
+          );
+        }
+      } else {
         console.warn(`Product ${item.name} (ID: ${item.productId}) not found in database. Skipping stock validation.`);
-        continue;
       }
       
-      if (!product.inStock || product.stockCount < item.quantity) {
-        return NextResponse.json(
-          { error: `Insufficient stock for ${item.name}` },
-          { status: 400 }
-        );
+      let effectivePrice = product ? product.price : item.price;
+
+      if (item.promoToken && product) {
+        try {
+          const promoRecord = await EmailPromoDiscount.findOne({ token: item.promoToken });
+          if (!promoRecord) {
+            console.warn('[Order Promo] Token not found, ignoring', { token: item.promoToken });
+            item.promoToken = undefined;
+            item.promoPercent = undefined;
+          } else if (promoRecord.expiresAt < new Date() || promoRecord.status === 'expired') {
+            console.warn('[Order Promo] Token expired', { token: item.promoToken });
+            await EmailPromoDiscount.updateOne({ token: item.promoToken }, { $set: { status: 'expired' } });
+            item.promoToken = undefined;
+            item.promoPercent = undefined;
+          } else if (product && promoRecord.productId.toString() !== product._id.toString()) {
+            console.warn('[Order Promo] Token product mismatch', {
+              token: item.promoToken,
+              expected: promoRecord.productId.toString(),
+              received: product._id.toString(),
+            });
+            item.promoToken = undefined;
+            item.promoPercent = undefined;
+          } else if (product) {
+            effectivePrice = Number(
+              (product.price * (1 - promoRecord.discountPercent / 100)).toFixed(2)
+            );
+            item.promoPercent = promoRecord.discountPercent;
+            item.promoOriginalPrice = product.price;
+            await EmailPromoDiscount.updateOne(
+              { token: item.promoToken },
+              { $inc: { usageCount: 1 }, $set: { lastUsedAt: new Date() } }
+            );
+            console.info('[Order Promo] Promo applied', {
+              token: item.promoToken,
+              productId: product._id.toString(),
+              discountedPrice: effectivePrice,
+            });
+          }
+        } catch (promoError) {
+          console.error('[Order Promo] Error validating promo token', promoError);
+          item.promoToken = undefined;
+          item.promoPercent = undefined;
+        }
       }
-      
-      // Update stock
-      product.stockCount -= item.quantity;
-      if (product.stockCount === 0) {
-        product.inStock = false;
+
+      item.price = effectivePrice;
+      recalculatedSubtotal += effectivePrice * item.quantity;
+
+      if (product) {
+        // Update stock
+        product.stockCount -= item.quantity;
+        if (product.stockCount === 0) {
+          product.inStock = false;
+        }
+        await product.save();
       }
-      await product.save();
     }
+
+    const recalculatedShipping = recalculatedSubtotal > 100 ? 0 : 9.99;
+    const recalculatedTax = Number((recalculatedSubtotal * 0.08).toFixed(2));
+    const recalculatedTotal = Number((recalculatedSubtotal + recalculatedShipping + recalculatedTax).toFixed(2));
+
+    orderData.subtotal = recalculatedSubtotal;
+    orderData.shipping = recalculatedShipping;
+    orderData.tax = recalculatedTax;
+    orderData.total = recalculatedTotal;
+
+    console.info('[Order Totals] Recalculated amounts', {
+      subtotal: recalculatedSubtotal,
+      shipping: recalculatedShipping,
+      tax: recalculatedTax,
+      total: recalculatedTotal,
+    });
 
     // Debug: Log the Order schema paths
     console.log('Order schema paths:', Object.keys(Order.schema.paths));

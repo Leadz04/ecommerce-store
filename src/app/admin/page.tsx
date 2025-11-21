@@ -109,6 +109,13 @@ interface Product {
   isActive: boolean;
   etsyExported?: boolean;
   etsyExportedAt?: string | null;
+  policyReview?: {
+    lastRunAt?: string | null;
+    score?: number;
+    complianceRate?: number;
+    summary?: PolicyReviewResult['summary'];
+    aiReview?: PolicyReviewResult['aiReview'];
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -188,6 +195,7 @@ interface PolicyReviewResult {
       handbookReference?: string;
     }>;
   };
+  lastRunAt?: string | null;
 }
 
 interface ProductImprovementBlock {
@@ -208,16 +216,38 @@ interface ProductImprovementResult {
 }
 
 interface ProductImprovementState {
-  loading: boolean;
+  loading?: boolean;
   applying?: boolean;
   error?: string;
   data?: ProductImprovementResult;
   selection?: {
-    title: boolean;
-    description: boolean;
-    tags: boolean;
+    title?: boolean;
+    description?: boolean;
+    tags?: boolean;
   };
 }
+
+type PolicyReviewFilter = 'all' | 'risk' | 'compliant' | 'pending';
+
+const buildPolicyReviewResultFromProduct = (
+  policyReview?: Product['policyReview']
+): PolicyReviewResult | undefined => {
+  if (!policyReview?.summary && !policyReview?.lastRunAt) return undefined;
+  const summary = (policyReview?.summary ?? {}) as Partial<PolicyReviewResult['summary']>;
+  return {
+    score: policyReview?.score ?? 0,
+    complianceRate: policyReview?.complianceRate ?? 0,
+    summary: {
+      totalViolations: summary.totalViolations ?? 0,
+      criticalIssues: summary.criticalIssues ?? 0,
+      warnings: summary.warnings ?? 0,
+      recommendations: summary.recommendations ?? 0,
+      isCompliant: !!summary.isCompliant,
+    },
+    aiReview: policyReview?.aiReview,
+    lastRunAt: policyReview?.lastRunAt ?? null,
+  };
+};
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -260,11 +290,44 @@ export default function AdminDashboard() {
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
   const [seoRawSnapshot, setSeoRawSnapshot] = useState<any>(null);
   const [policyReviewSearch, setPolicyReviewSearch] = useState('');
-  const [policyReviewFilter, setPolicyReviewFilter] = useState<'all' | 'compliant' | 'risk'>('all');
+  const [policyReviewFilter, setPolicyReviewFilter] = useState<PolicyReviewFilter>('all');
   const [policyReviewStatus, setPolicyReviewStatus] = useState<Record<string, { loading: boolean; error?: string; result?: PolicyReviewResult }>>({});
   const [policyImprovements, setPolicyImprovements] = useState<Record<string, ProductImprovementState>>({});
   const [rawSearchItems, setRawSearchItems] = useState<any[]>([]);
   
+  const hydratePolicyReviewsFromProducts = (productList: Product[]) => {
+    if (!Array.isArray(productList) || productList.length === 0) {
+      return;
+    }
+    setPolicyReviewStatus(prevStatus => {
+      let changed = false;
+      const nextStatus = { ...prevStatus };
+      productList.forEach(product => {
+        const persistedResult = buildPolicyReviewResultFromProduct(product.policyReview);
+        if (!persistedResult) return;
+        const previousEntry = prevStatus[product._id];
+        if (!previousEntry || previousEntry.result?.lastRunAt !== persistedResult.lastRunAt) {
+          nextStatus[product._id] = {
+            loading: false,
+            error: undefined,
+            result: persistedResult,
+          };
+          changed = true;
+        }
+      });
+      return changed ? nextStatus : prevStatus;
+    });
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+    return date.toLocaleString();
+  };
+
   // Google & Google Shopping Analytics state
   const [analyticsSearchQuery, setAnalyticsSearchQuery] = useState('');
   const [analyticsResults, setAnalyticsResults] = useState<any[]>([]);
@@ -1292,6 +1355,7 @@ export default function AdminDashboard() {
       });
       const items = Array.isArray(json.products) ? json.products : [];
       setProducts(items);
+      hydratePolicyReviewsFromProducts(items);
 
       const totalFromResponse = Number(json.pagination?.total ?? json.total ?? items.length);
       const total = Number.isFinite(totalFromResponse) && totalFromResponse > 0
@@ -1341,6 +1405,25 @@ export default function AdminDashboard() {
 
   const handleRunPolicyReview = async (product: Product) => {
     if (!product?._id) return;
+    const existingStatus = policyReviewStatus[product._id];
+    const existingLastRunAt =
+      existingStatus?.result?.lastRunAt || product.policyReview?.lastRunAt;
+    if (existingStatus?.result || existingLastRunAt) {
+      const persistedResult =
+        existingStatus?.result || buildPolicyReviewResultFromProduct(product.policyReview);
+      if (persistedResult) {
+        setPolicyReviewStatus(prev => ({
+          ...prev,
+          [product._id]: {
+            loading: false,
+            error: undefined,
+            result: persistedResult,
+          },
+        }));
+      }
+      toast('Gemini review already completed for this product.');
+      return;
+    }
     setPolicyReviewStatus(prev => ({
       ...prev,
       [product._id]: {
@@ -1351,30 +1434,111 @@ export default function AdminDashboard() {
     }));
 
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        setPolicyReviewStatus(prev => ({
+          ...prev,
+          [product._id]: {
+            ...(prev[product._id] || {}),
+            loading: false,
+            error: 'Authentication required',
+          },
+        }));
+        toast.error('Authentication required');
+        return;
+      }
+
       const response = await fetch(`/api/products/${product._id}/check-etsy-policies`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
       });
 
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 409) {
+          const persistedResult = buildPolicyReviewResultFromProduct(data.policyReview);
+          setPolicyReviewStatus(prev => ({
+            ...prev,
+            [product._id]: {
+              ...(prev[product._id] || {}),
+              loading: false,
+              error: undefined,
+              ...(persistedResult ? { result: persistedResult } : {}),
+            },
+          }));
+          if (data.policyReview) {
+            setProducts(prev =>
+              prev.map(p =>
+                p._id === product._id
+                  ? {
+                      ...p,
+                      policyReview: {
+                        lastRunAt: data.policyReview.lastRunAt,
+                        score: data.policyReview.score,
+                        complianceRate: data.policyReview.complianceRate,
+                        summary: data.policyReview.summary,
+                        aiReview: data.policyReview.aiReview,
+                      },
+                    }
+                  : p
+              )
+            );
+          }
+          toast('Gemini review already completed for this product.');
+          return;
+        }
         throw new Error(data.error || 'Failed to review product');
       }
+
+      const persistedPolicyReview =
+        data.policyReview || {
+          lastRunAt: new Date().toISOString(),
+          score: data.score,
+          complianceRate: data.complianceRate,
+          summary: data.summary,
+          aiReview: data.aiReview,
+        };
+      const normalizedResult =
+        buildPolicyReviewResultFromProduct(persistedPolicyReview) || {
+          score: persistedPolicyReview.score ?? 0,
+          complianceRate: persistedPolicyReview.complianceRate ?? 0,
+          summary: {
+            totalViolations: persistedPolicyReview.summary?.totalViolations ?? 0,
+            criticalIssues: persistedPolicyReview.summary?.criticalIssues ?? 0,
+            warnings: persistedPolicyReview.summary?.warnings ?? 0,
+            recommendations: persistedPolicyReview.summary?.recommendations ?? 0,
+            isCompliant: !!persistedPolicyReview.summary?.isCompliant,
+          },
+          aiReview: persistedPolicyReview.aiReview,
+          lastRunAt: persistedPolicyReview.lastRunAt ?? null,
+        };
 
       setPolicyReviewStatus(prev => ({
         ...prev,
         [product._id]: {
           loading: false,
-          result: {
-            score: data.score,
-            complianceRate: data.complianceRate,
-            summary: data.summary,
-            aiReview: data.aiReview,
-          },
+          result: normalizedResult,
         },
       }));
+      setProducts(prev =>
+        prev.map(p =>
+          p._id === product._id
+            ? {
+                ...p,
+                policyReview: {
+                  lastRunAt: persistedPolicyReview.lastRunAt,
+                  score: persistedPolicyReview.score,
+                  complianceRate: persistedPolicyReview.complianceRate,
+                  summary: persistedPolicyReview.summary,
+                  aiReview: persistedPolicyReview.aiReview,
+                },
+              }
+            : p
+        )
+      );
 
       toast.success(`Gemini review ready for “${product.name}”`);
     } catch (error) {
@@ -1393,20 +1557,43 @@ export default function AdminDashboard() {
   const handleImproveProduct = async (product: Product, review?: PolicyReviewResult) => {
     if (!product?._id) return;
     console.log('[Frontend] handleImproveProduct called for product:', product._id);
-    setPolicyImprovements(prev => ({
-      ...prev,
-      [product._id]: {
-        ...(prev[product._id] || {}),
-        loading: true,
-        error: undefined,
-      }
-    }));
+    setPolicyImprovements(prev => {
+      const previous = prev[product._id] || { loading: false };
+      return {
+        ...prev,
+        [product._id]: {
+          ...previous,
+          loading: true,
+          error: undefined,
+        },
+      };
+    });
 
     try {
       console.log('[Frontend] Calling /api/products/' + product._id + '/improve');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        setPolicyImprovements(prev => {
+          const previous = prev[product._id] || { loading: false };
+          return {
+            ...prev,
+            [product._id]: {
+              ...previous,
+              loading: false,
+              error: 'Authentication required',
+            },
+          };
+        });
+        toast.error('Authentication required');
+        return;
+      }
+
       const response = await fetch(`/api/products/${product._id}/improve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ reviewSummary: review }),
       });
       
@@ -1440,28 +1627,35 @@ export default function AdminDashboard() {
         tags: !!(improvements?.tags?.suggestion && improvements.tags.suggestion.length),
       };
 
-      setPolicyImprovements(prev => ({
-        ...prev,
-        [product._id]: {
-          loading: false,
-          data: improvements,
-          selection,
-        },
-      }));
+      setPolicyImprovements(prev => {
+        const previous = prev[product._id] || { loading: false };
+        return {
+          ...prev,
+          [product._id]: {
+            ...previous,
+            loading: false,
+            data: improvements,
+            selection,
+          },
+        };
+      });
 
       toast.success(`Improvement plan ready for “${product.name}”`);
     } catch (error) {
       console.error('[Frontend] Error in handleImproveProduct:', error);
       console.error('[Frontend] Error stack:', error instanceof Error ? error.stack : 'No stack');
       const message = error instanceof Error ? error.message : 'Failed to improve product';
-      setPolicyImprovements(prev => ({
-        ...prev,
-        [product._id]: {
-          ...(prev[product._id] || {}),
-          loading: false,
-          error: message,
-        },
-      }));
+      setPolicyImprovements(prev => {
+        const previous = prev[product._id] || { loading: false };
+        return {
+          ...prev,
+          [product._id]: {
+            ...previous,
+            loading: false,
+            error: message,
+          },
+        };
+      });
       toast.error(message);
     }
   };
@@ -1470,12 +1664,17 @@ export default function AdminDashboard() {
     setPolicyImprovements(prev => {
       const current = prev[productId];
       if (!current) return prev;
+      const currentSelection = current.selection ?? {
+        title: true,
+        description: true,
+        tags: true,
+      };
       return {
         ...prev,
         [productId]: {
           ...current,
           selection: {
-            ...(current.selection || {}),
+            ...currentSelection,
             [field]: checked,
           },
         },
@@ -1490,7 +1689,11 @@ export default function AdminDashboard() {
       toast.error('Generate improvements first');
       return;
     }
-    const selection = entry.selection || {};
+    const selection = entry.selection ?? {
+      title: false,
+      description: false,
+      tags: false,
+    };
     const updates: Record<string, any> = {};
 
     if (selection.title && entry.data.title?.suggestion) {
@@ -1514,14 +1717,17 @@ export default function AdminDashboard() {
       return;
     }
 
-    setPolicyImprovements(prev => ({
-      ...prev,
-      [product._id]: {
-        ...(prev[product._id] || {}),
-        applying: true,
-        error: undefined,
-      },
-    }));
+    setPolicyImprovements(prev => {
+      const previous = prev[product._id] || { loading: false };
+      return {
+        ...prev,
+        [product._id]: {
+          ...previous,
+          applying: true,
+          error: undefined,
+        },
+      };
+    });
 
     try {
       const response = await fetch(`/api/admin/products/${product._id}`, {
@@ -1536,25 +1742,31 @@ export default function AdminDashboard() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to apply improvements');
       }
-      setPolicyImprovements(prev => ({
-        ...prev,
-        [product._id]: {
-          ...(prev[product._id] || {}),
-          applying: false,
-        },
-      }));
+      setPolicyImprovements(prev => {
+        const previous = prev[product._id] || { loading: false };
+        return {
+          ...prev,
+          [product._id]: {
+            ...previous,
+            applying: false,
+          },
+        };
+      });
       toast.success('Improvements applied');
       fetchProducts();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to apply improvements';
-      setPolicyImprovements(prev => ({
-        ...prev,
-        [product._id]: {
-          ...(prev[product._id] || {}),
-          applying: false,
-          error: message,
-        },
-      }));
+      setPolicyImprovements(prev => {
+        const previous = prev[product._id] || { loading: false };
+        return {
+          ...prev,
+          [product._id]: {
+            ...previous,
+            applying: false,
+            error: message,
+          },
+        };
+      });
       toast.error(message);
     }
   };
@@ -1567,20 +1779,34 @@ export default function AdminDashboard() {
     fetchProducts(nextPage);
   };
 
-  const renderEtsyPaginationControls = (label: string) => {
+  const renderEtsyPaginationControls = (
+    label: string,
+    options?: { filteredCount?: number; filteredLabel?: string }
+  ) => {
     const totalPages = Math.max(1, totalProductPages || 1);
     const hasProducts = totalProducts > 0;
     const start = hasProducts ? (productPage - 1) * productPerPage + 1 : 0;
     const end = hasProducts ? Math.min(totalProducts, productPage * productPerPage) : 0;
+    const filteredCount =
+      typeof options?.filteredCount === 'number' ? options.filteredCount : undefined;
+    const filteredLabel = options?.filteredLabel || 'match current filters';
 
     return (
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm mb-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm mb-4 w-full">
         <div>
           <p className="text-sm font-semibold text-gray-800">{label}</p>
           <p className="text-xs text-gray-500">
             {hasProducts
               ? `Showing ${start}-${end} of ${totalProducts} products • Page ${productPage} of ${totalPages}`
               : 'No products available'}
+            {typeof filteredCount === 'number' && hasProducts && (
+              <>
+                {' · '}
+                {filteredCount === totalProducts
+                  ? 'All visible products match current filters'
+                  : `${filteredCount} ${filteredLabel}`}
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -2240,6 +2466,47 @@ export default function AdminDashboard() {
     return matchesSearch && matchesRole;
   });
 
+  useEffect(() => {
+    if (!products.length) return;
+    setPolicyReviewStatus(prev => {
+      let changed = false;
+      const next = { ...prev };
+
+      products.forEach(product => {
+        const derived = buildPolicyReviewResultFromProduct(product.policyReview);
+        if (!derived) {
+          return;
+        }
+        const existing = next[product._id];
+        const existingResult = existing?.result;
+        const alreadySynced =
+          existingResult &&
+          existingResult.score === derived.score &&
+          existingResult.complianceRate === derived.complianceRate &&
+          existingResult.summary.totalViolations === derived.summary.totalViolations &&
+          existingResult.summary.criticalIssues === derived.summary.criticalIssues &&
+          existingResult.summary.warnings === derived.summary.warnings &&
+          existingResult.summary.recommendations === derived.summary.recommendations &&
+          existingResult.summary.isCompliant === derived.summary.isCompliant;
+
+        if (!alreadySynced) {
+          next[product._id] = {
+            loading: false,
+            error: undefined,
+            result: derived,
+          };
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [products]);
+
+  const getPolicyReviewResultForProduct = (product: Product): PolicyReviewResult | undefined => {
+    return policyReviewStatus[product._id]?.result || buildPolicyReviewResultFromProduct(product.policyReview);
+  };
+
   const filteredPolicyProducts = useMemo(() => {
     const query = policyReviewSearch.trim().toLowerCase();
     return products.filter((product) => {
@@ -2249,12 +2516,18 @@ export default function AdminDashboard() {
         product.brand?.toLowerCase().includes(query) ||
         product.category?.toLowerCase().includes(query);
       if (!matchesSearch) return false;
-      if (policyReviewFilter === 'all') return true;
-      const review = policyReviewStatus[product._id];
-      if (!review?.result) return false;
-      return policyReviewFilter === 'compliant'
-        ? review.result.summary.isCompliant
-        : !review.result.summary.isCompliant;
+      const result = getPolicyReviewResultForProduct(product);
+
+      switch (policyReviewFilter) {
+        case 'compliant':
+          return result?.summary?.isCompliant ?? false;
+        case 'risk':
+          return result ? !result.summary.isCompliant : false;
+        case 'pending':
+          return !result;
+        default:
+          return true;
+      }
     });
   }, [products, policyReviewSearch, policyReviewFilter, policyReviewStatus]);
 
@@ -6983,7 +7256,7 @@ export default function AdminDashboard() {
 
         {/* Policy Review Tab */}
         {activeTab === 'policy-review' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-100 rounded-3xl p-6 sm:p-8 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -7030,8 +7303,8 @@ export default function AdminDashboard() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-                <div className="flex-1 w-full">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="w-full xl:max-w-xl">
                   <label className="text-sm font-medium text-gray-700">Search catalog</label>
                   <div className="relative mt-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -7044,39 +7317,52 @@ export default function AdminDashboard() {
                     />
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'All', value: 'all' },
-                    { label: 'Needs Attention', value: 'risk' },
-                    { label: 'Compliant', value: 'compliant' },
-                  ].map((filter) => (
-                    <button
-                      key={filter.value}
-                      onClick={() => setPolicyReviewFilter(filter.value as 'all' | 'risk' | 'compliant')}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        policyReviewFilter === filter.value
-                          ? 'bg-emerald-600 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
+                <div className="w-full xl:flex-1">
+                  <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible pb-1 sm:pb-0">
+                    {[
+                      { label: 'All', value: 'all' },
+                      { label: 'Needs Attention', value: 'risk' },
+                      { label: 'Compliant', value: 'compliant' },
+                      { label: 'Pending Review', value: 'pending' },
+                    ].map((filter) => (
+                      <button
+                        key={filter.value}
+                        onClick={() => setPolicyReviewFilter(filter.value as PolicyReviewFilter)}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex-shrink-0 ${
+                          policyReviewFilter === filter.value
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {renderEtsyPaginationControls('Policy review pagination')}
+            {renderEtsyPaginationControls('Policy review pagination', {
+              filteredCount: filteredPolicyProducts.length,
+              filteredLabel: 'products match current filters',
+            })}
 
             {visiblePolicyProducts.length ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
                 {visiblePolicyProducts.map((product) => {
                   const reviewEntry = policyReviewStatus[product._id];
                   const improvementEntry = policyImprovements[product._id];
                   const isReviewLoading = reviewEntry?.loading;
                   const result = reviewEntry?.result;
+                  const lastReviewAt = result?.lastRunAt || product.policyReview?.lastRunAt || null;
+                  const reviewLocked = Boolean(lastReviewAt);
                   const improvements = improvementEntry?.data;
-                  const improvementSelection = improvementEntry?.selection || {};
+                  const improvementSelection =
+                    improvementEntry?.selection ?? {
+                      title: true,
+                      description: true,
+                      tags: true,
+                    };
 
                   const reviewBadges: AdminProductCardBadge[] = [];
                   if (result) {
@@ -7095,6 +7381,14 @@ export default function AdminDashboard() {
                         label: `Risk: ${result.aiReview.riskLevel.toUpperCase()}`,
                         tone: toneMap[result.aiReview.riskLevel.toLowerCase()] || 'info',
                         icon: <Activity className="h-3.5 w-3.5" />,
+                      });
+                    }
+                    if (reviewLocked && lastReviewAt) {
+                      reviewBadges.push({
+                        label: `Reviewed ${formatDateTime(lastReviewAt)}`,
+                        tone: 'info',
+                        icon: <Clock className="h-3.5 w-3.5" />,
+                        subtle: true,
                       });
                     }
                   } else {
@@ -7228,20 +7522,25 @@ export default function AdminDashboard() {
                         </button>
                       ))}
                       secondaryActions={
-                        <>
+                        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
                           <button
                             type="button"
                             onClick={() => handleRunPolicyReview(product)}
-                            disabled={isReviewLoading}
-                            className="px-4 py-2 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-700 hover:border-emerald-200 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                            disabled={isReviewLoading || reviewLocked}
+                            className="w-full sm:w-auto px-4 py-2 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-700 hover:border-emerald-200 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                            title={
+                              reviewLocked
+                                ? 'Gemini review already saved for this product'
+                                : 'Run policy review'
+                            }
                           >
-                            Quick Run
+                            {reviewLocked ? 'Locked' : 'Quick Run'}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleImproveProduct(product, result)}
                             disabled={improvementEntry?.loading}
-                            className="px-4 py-2 rounded-2xl border border-emerald-200 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60 flex items-center gap-2"
+                            className="w-full sm:w-auto px-4 py-2 rounded-2xl border border-emerald-200 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                           >
                             {improvementEntry?.loading ? (
                               <>
@@ -7255,18 +7554,32 @@ export default function AdminDashboard() {
                               </>
                             )}
                           </button>
-                        </>
+                        </div>
                       }
                       primaryAction={{
-                        label: result ? 'Re-run Gemini Review' : 'Run Gemini Review',
-                        onClick: () => handleRunPolicyReview(product),
+                        label: reviewLocked
+                          ? 'Review Locked'
+                          : result
+                          ? 'Re-run Gemini Review'
+                          : 'Run Gemini Review',
+                        onClick: () => {
+                          if (reviewLocked) return;
+                          handleRunPolicyReview(product);
+                        },
                         loading: isReviewLoading,
                         icon: <Sparkles className="h-4 w-4" />,
+                        disabled: reviewLocked,
                       }}
                     >
                       {reviewEntry?.error && (
                         <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-3 py-2">
                           {reviewEntry.error}
+                        </p>
+                      )}
+                      {reviewLocked && lastReviewAt && (
+                        <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2">
+                          Gemini scan locked on {formatDateTime(lastReviewAt)}. Re-run is disabled to
+                          avoid duplicate processing.
                         </p>
                       )}
 

@@ -1,3 +1,12 @@
+export interface EmailPromoDetails {
+  token: string;
+  discountPercent: number;
+  discountedPrice: number;
+  originalPrice: number;
+  expiresAt?: string;
+  source?: 'email';
+}
+
 export interface Product {
   _id?: string;
   id?: string; // For backward compatibility
@@ -20,6 +29,7 @@ export interface Product {
   productType?: string;
   etsyExported?: boolean;
   etsyExportedAt?: string | Date | null;
+  emailPromo?: EmailPromoDetails;
 }
 
 export interface CartItem {
@@ -31,6 +41,7 @@ export interface CartItem {
   image?: string; // For easier access in order displays
   name?: string; // For easier access in order displays
   price?: number; // For easier access in order displays
+  appliedPromo?: EmailPromoDetails;
 }
 
 export interface User {

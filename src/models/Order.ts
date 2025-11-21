@@ -8,6 +8,9 @@ export interface IOrderItem {
   size?: string;
   color?: string;
   image: string;
+  promoToken?: string;
+  promoPercent?: number;
+  promoOriginalPrice?: number;
 }
 
 export interface IAddress {
@@ -67,7 +70,10 @@ const OrderItemSchema = new Schema<IOrderItem>({
   image: {
     type: String,
     required: true
-  }
+  },
+  promoToken: String,
+  promoPercent: Number,
+  promoOriginalPrice: Number
 }, { _id: false });
 
 const AddressSchema = new Schema<IAddress>({

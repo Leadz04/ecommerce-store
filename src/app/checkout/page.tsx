@@ -210,7 +210,10 @@ export default function CheckoutPage() {
             quantity: item.quantity,
             image: item.product.image,
             size: item.size,
-            color: item.color
+            color: item.color,
+            promoToken: item.product.emailPromo?.token,
+            promoPercent: item.product.emailPromo?.discountPercent,
+            promoOriginalPrice: item.product.emailPromo?.originalPrice,
           })),
           subtotal,
           shipping,

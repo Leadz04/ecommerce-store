@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ import { sampleProducts } from '@/data/products';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
+import type { EmailPromoDetails } from '@/types';
 
 // Brand Select Component
 function BrandSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -102,10 +103,13 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (value: str
   );
 }
 
+const PROMO_STORAGE_KEY = 'email-promo-cache';
+
 export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
   const productId = params.id as string;
+  const searchParams = useSearchParams();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -125,6 +129,9 @@ export default function ProductPage() {
   const [showEtsyResults, setShowEtsyResults] = useState(false);
   const [etsyExportLoading, setEtsyExportLoading] = useState(false);
   const [organizingImages, setOrganizingImages] = useState(false);
+  const [promoDetails, setPromoDetails] = useState<EmailPromoDetails | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const aiReview = etsyPolicyResults?.aiReview;
   const getRiskBadgeClass = (riskLevel?: string) => {
     switch ((riskLevel || '').toLowerCase()) {
@@ -147,6 +154,40 @@ export default function ProductPage() {
     return 'border-blue-200 bg-blue-50 text-blue-900';
   };
   
+  const promoToken = searchParams?.get('promo');
+
+  const persistPromo = (productIdValue: string, promo: EmailPromoDetails) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const cache = window.localStorage.getItem(PROMO_STORAGE_KEY);
+      const parsed = cache ? JSON.parse(cache) : {};
+      parsed[productIdValue] = promo;
+      window.localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (error) {
+      console.warn('[PromoClient] Failed to persist promo cache', error);
+    }
+  };
+
+  const loadPromoFromCache = (productIdValue: string): EmailPromoDetails | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const cache = window.localStorage.getItem(PROMO_STORAGE_KEY);
+      if (!cache) return null;
+      const parsed = JSON.parse(cache);
+      const record = parsed?.[productIdValue];
+      if (!record) return null;
+      if (record.expiresAt && new Date(record.expiresAt) < new Date()) {
+        delete parsed[productIdValue];
+        window.localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify(parsed));
+        return null;
+      }
+      return record;
+    } catch (error) {
+      console.warn('[PromoClient] Failed to read promo cache', error);
+      return null;
+    }
+  };
+
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
   const { toggleWishlist, isInWishlist } = useWishlistStore();
@@ -167,6 +208,47 @@ export default function ProductPage() {
       fetchProduct(productId);
     }
   }, [productId, fetchProduct]);
+
+  useEffect(() => {
+    if (!productId) return;
+    const cachedPromo = loadPromoFromCache(productId);
+    if (cachedPromo) {
+      setPromoDetails(cachedPromo);
+    }
+  }, [productId]);
+
+  const validatePromoToken = async (token: string) => {
+    if (!productId) return;
+    try {
+      setPromoLoading(true);
+      setPromoError(null);
+      const response = await fetch(`/api/promotions/validate?token=${token}&productId=${productId}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setPromoDetails(null);
+        setPromoError(data.error || 'Promo code invalid');
+        console.warn('[PromoClient] Promo validation failed', { token, productId, error: data.error });
+        return;
+      }
+      setPromoDetails(data.promo);
+      persistPromo(productId, data.promo);
+      console.info('[PromoClient] Promo applied', {
+        token: data.promo.token,
+        productId,
+        discountPercent: data.promo.discountPercent,
+      });
+    } catch (error) {
+      console.error('[PromoClient] Promo validation error', error);
+      setPromoError('Unable to validate promo at this time.');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!promoToken || !productId) return;
+    validatePromoToken(promoToken);
+  }, [promoToken, productId]);
 
   // Initialize edit form data when product loads or edit mode is enabled
   useEffect(() => {
@@ -610,8 +692,23 @@ export default function ProductPage() {
   
   const product = currentProduct as any;
 
+  const buildProductWithPromo = () => {
+    if (!promoDetails) return product;
+    const originalPrice =
+      promoDetails.originalPrice ||
+      product.originalPrice ||
+      product.price;
+    return {
+      ...product,
+      price: promoDetails.discountedPrice,
+      originalPrice,
+      emailPromo: promoDetails,
+    };
+  };
+
   const handleAddToCart = () => {
-    addItem(product, quantity, selectedSize, selectedColor);
+    const productPayload = buildProductWithPromo();
+    addItem(productPayload, quantity, selectedSize, selectedColor);
     // Fire analytics event
     try {
       fetch('/api/analytics/events', {
@@ -625,6 +722,18 @@ export default function ProductPage() {
   const handleRelatedProductClick = (productId: string) => {
     router.push(`/products/${productId}`);
   };
+
+  const formatCurrency = (value: number) =>
+    Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+
+  const displayPrice = promoDetails ? promoDetails.discountedPrice : product.price;
+  const comparePrice = promoDetails
+    ? promoDetails.originalPrice || product.originalPrice || product.price
+    : product.originalPrice;
+  const savings =
+    comparePrice && displayPrice
+      ? Number((comparePrice - displayPrice).toFixed(2))
+      : null;
 
   // Helper function to check if a value is a question
   const isQuestion = (text: string): boolean => {
@@ -1108,15 +1217,39 @@ export default function ProductPage() {
               </div>
             </div>
           ) : (
-            <div className="flex items-center space-x-4">
-              <span className="text-3xl font-bold text-gray-900 ">${product.price}</span>
-              {product.originalPrice && (
-                <span className="text-xl text-gray-500  line-through">${product.originalPrice}</span>
-              )}
-              {product.originalPrice && (
-                <span className="bg-red-100  text-red-800  text-sm font-bold px-3 py-1 rounded-full">
-                  Save ${(product.originalPrice - product.price).toFixed(2)}
+            <div className="space-y-2">
+              <div className="flex items-center space-x-4">
+                <span className="text-3xl font-bold text-gray-900 ">
+                  {formatCurrency(displayPrice)}
                 </span>
+                {comparePrice && comparePrice > displayPrice && (
+                  <span className="text-xl text-gray-500 line-through">
+                    {formatCurrency(comparePrice)}
+                  </span>
+                )}
+                {savings && savings > 0 && (
+                  <span className="bg-red-100 text-red-800 text-sm font-bold px-3 py-1 rounded-full">
+                    Save {formatCurrency(savings)}
+                  </span>
+                )}
+              </div>
+              {promoDetails && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200">
+                    {promoDetails.discountPercent}% email offer applied
+                  </span>
+                  {promoDetails.expiresAt && (
+                    <span className="text-emerald-700">
+                      Expires {new Date(promoDetails.expiresAt).toLocaleString()}
+                    </span>
+                  )}
+                  {promoLoading && (
+                    <span className="text-xs text-gray-500">Validating offer…</span>
+                  )}
+                </div>
+              )}
+              {promoError && (
+                <p className="text-sm text-red-600 font-medium">{promoError}</p>
               )}
             </div>
           )}
