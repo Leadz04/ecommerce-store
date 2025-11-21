@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -132,6 +132,8 @@ export default function ProductPage() {
   const [promoDetails, setPromoDetails] = useState<EmailPromoDetails | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const aiReview = etsyPolicyResults?.aiReview;
   const getRiskBadgeClass = (riskLevel?: string) => {
     switch ((riskLevel || '').toLowerCase()) {
@@ -471,6 +473,50 @@ export default function ProductPage() {
   const handleCancel = () => {
     setIsEditMode(false);
     setEditFormData({});
+    setDraggedImageIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleImageDragStart = (index: number) => {
+    setDraggedImageIndex(index);
+  };
+
+  const handleImageDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedImageIndex !== null && draggedImageIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleImageDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleImageDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedImageIndex === null || draggedImageIndex === dropIndex) {
+      setDraggedImageIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newImages = [...(editFormData.images || [])];
+    const draggedImage = newImages[draggedImageIndex];
+    newImages.splice(draggedImageIndex, 1);
+    newImages.splice(dropIndex, 0, draggedImage);
+
+    setEditFormData({ ...editFormData, images: newImages });
+
+    setDraggedImageIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleImageDragEnd = () => {
+    setDraggedImageIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleCheckEtsyPolicies = async () => {
@@ -912,7 +958,11 @@ export default function ProductPage() {
   const allFAQs = Array.from(new Set([...productFAQs, ...questionsFromSpecs]))
     .filter(faq => !isInformationalContent('', String(faq)));
 
-  const images = product.images && product.images.length > 0 ? product.images : [product.image];
+  // Combine main image with images array, ensuring main image is first and no duplicates
+  const allImages = product.image 
+    ? [product.image, ...(product.images || []).filter(img => img && img !== product.image)]
+    : (product.images && product.images.length > 0 ? product.images : []);
+  const images = allImages.filter(Boolean); // Remove any empty/null values
   const sizes = ['XS', 'S', 'M', 'L', 'XL'];
   const colors = ['Black', 'White', 'Blue', 'Red'];
 
@@ -944,8 +994,39 @@ export default function ProductPage() {
                 </div>
                 <div className="space-y-3">
                   {(editFormData.images || []).map((imageUrl: string, index: number) => (
-                    <div key={index} className="flex gap-2 items-start">
+                    <div
+                      key={index}
+                      draggable
+                      onDragStart={() => handleImageDragStart(index)}
+                      onDragOver={(e) => handleImageDragOver(e, index)}
+                      onDragLeave={handleImageDragLeave}
+                      onDrop={(e) => handleImageDrop(e, index)}
+                      onDragEnd={handleImageDragEnd}
+                      className={`flex gap-2 items-start p-2 rounded-lg border-2 transition-all ${
+                        draggedImageIndex === index
+                          ? 'opacity-50 border-blue-400 bg-blue-50'
+                          : dragOverIndex === index
+                          ? 'border-blue-500 bg-blue-100 scale-105'
+                          : 'border-transparent hover:border-rose-300 hover:bg-rose-50'
+                      }`}
+                    >
+                      <div
+                        className="cursor-move p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 mt-1"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="h-5 w-5" />
+                      </div>
                       <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs text-gray-500 font-medium px-2 py-1 bg-gray-100 rounded">
+                            #{index + 1}
+                          </span>
+                          {index === 0 && (
+                            <span className="text-xs text-blue-600 font-medium px-2 py-1 bg-blue-100 rounded">
+                              Main Image
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={imageUrl}
@@ -956,6 +1037,7 @@ export default function ProductPage() {
                           }}
                           placeholder="Image URL"
                           className="w-full px-4 py-2.5 border-2 border-rose-200 rounded-lg focus:border-rose-500 focus:ring-2 focus:ring-rose-200 transition-all bg-white text-gray-900 placeholder-gray-400"
+                          onClick={(e) => e.stopPropagation()}
                         />
                         {imageUrl && (
                           <div className="mt-2 relative w-full h-32 rounded-lg overflow-hidden border-2 border-rose-200">
@@ -972,7 +1054,7 @@ export default function ProductPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 flex-shrink-0">
                         {index > 0 && (
                           <button
                             type="button"
@@ -1021,7 +1103,7 @@ export default function ProductPage() {
                   {editFormData.images && editFormData.images.length > 0 && (
                     <div className="mt-4 p-3 bg-rose-100 rounded-lg">
                       <p className="text-xs text-gray-600">
-                        <strong>Note:</strong> The first image will be set as the main product image.
+                        <strong>Note:</strong> The first image will be set as the main product image. Drag images by the grip icon to reorder them.
                       </p>
                     </div>
                   )}

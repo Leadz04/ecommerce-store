@@ -11,7 +11,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
  * 2. Tracks when they visit the site
  * 3. Tracks page visits and product views
  * 4. Tracks if they came from email (via URL params)
- * 5. Automatically sends conversion emails based on visit behavior
+ * 
+ * Note: This component only tracks visits. Emails should be sent manually or via scheduled jobs.
  * 
  * Usage: Add <VisitorEmailTracker /> to your layout or main page
  */
@@ -110,7 +111,7 @@ function getVisitorEmail(): string | null {
 }
 
 /**
- * Track visitor and trigger email if needed
+ * Track visitor visit (no automatic email sending)
  */
 async function trackVisitor(email: string, options?: {
   page?: string;
@@ -148,7 +149,7 @@ async function trackVisitor(email: string, options?: {
       console.log('[VisitorEmailTracker] Visit tracked successfully:', result);
     }
 
-    // Also track basic visitor (for email sending logic)
+    // Also track basic visitor (for analytics, not for automatic email sending)
     const response = await fetch('/api/email/track-visitor', {
       method: 'POST',
       headers: {
@@ -188,12 +189,14 @@ async function trackVisitor(email: string, options?: {
     }
 
     const data = await response.json();
+    console.log('[VisitorEmailTracker] Visitor tracked:', {
+      email: data.subscriber?.email,
+      visitCount: data.subscriber?.visitCount,
+      shouldSendEmail: data.subscriber?.shouldSendEmail // For reference only, not used for auto-sending
+    });
 
-    // If system recommends sending email, send it
-    if (data.subscriber?.shouldSendEmail) {
-      // Send conversion email automatically
-      sendConversionEmail(email);
-    }
+    // Note: Email sending should be done manually via admin interface or scheduled jobs
+    // We do NOT automatically send emails on every visit to avoid spam
   } catch (error) {
     // Handle network errors and other exceptions gracefully
     if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -226,30 +229,8 @@ function detectPageType(pathname: string): 'home' | 'product' | 'category' | 'ca
   return 'other';
 }
 
-/**
- * Send conversion email to visitor
- */
-async function sendConversionEmail(email: string) {
-  try {
-    const response = await fetch('/api/email/send-conversion', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email,
-        // emailType will be auto-determined based on visit count
-      }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Conversion email sent:', data);
-    }
-  } catch (error) {
-    console.error('Error sending conversion email:', error);
-  }
-}
+// Removed automatic email sending - emails should be sent manually via admin interface
+// or scheduled jobs, not automatically on every visit
 
 /**
  * Validate email format

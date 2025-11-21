@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Calendar as CalendarIcon, Cloud, Loader2, UploadCloud, ShieldAlert } from 'lucide-react';
+import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Calendar as CalendarIcon, Cloud, Loader2, UploadCloud, ShieldAlert, GripVertical } from 'lucide-react';
 import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
@@ -84,6 +84,8 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [uploadingDroppedImages, setUploadingDroppedImages] = useState(false);
   const [uploadQueueStatus, setUploadQueueStatus] = useState({ completed: 0, total: 0 });
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const roleName = useAuthStore((state) => state.user?.role?.name);
   const normalizedRoleName = roleName?.toUpperCase?.();
@@ -258,6 +260,72 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
       ...prev,
       images: prev.images.filter(img => img !== imageToRemove)
     }));
+  };
+
+  const handleImageDragStart = (index: number) => {
+    setDraggedImageIndex(index);
+  };
+
+  const handleImageDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedImageIndex !== null && draggedImageIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleImageDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleImageDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedImageIndex === null || draggedImageIndex === dropIndex) {
+      setDraggedImageIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newImages = [...formData.images];
+    const draggedImage = newImages[draggedImageIndex];
+    newImages.splice(draggedImageIndex, 1);
+    newImages.splice(dropIndex, 0, draggedImage);
+
+    setFormData(prev => ({
+      ...prev,
+      images: newImages
+    }));
+
+    setDraggedImageIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleImageDragEnd = () => {
+    setDraggedImageIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const setAsMainImage = (imageUrl: string, index: number) => {
+    const newImages = [...formData.images];
+    const currentMain = formData.image;
+    
+    // Remove the selected image from the images array
+    newImages.splice(index, 1);
+    
+    // Add the current main image to the images array if it exists
+    if (currentMain) {
+      newImages.unshift(currentMain);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      image: imageUrl,
+      images: newImages
+    }));
+    
+    toast.success('Main image updated');
   };
 
   // Check if images are already on Cloudinary
@@ -880,40 +948,81 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
               {formData.images.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    Additional Images
+                    Additional Images (Drag to reorder)
                   </label>
                   <div className="space-y-2">
                     {formData.images.map((image, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <input
-                          type="url"
-                          value={image}
-                          onChange={(e) => {
-                            const newImages = [...formData.images];
-                            newImages[index] = e.target.value;
-                            handleInputChange('images', newImages);
-                          }}
-                          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter image URL"
-                        />
-                        {image && (
-                          <img
-                            src={image}
-                            alt={`preview-${index}`}
-                            className="w-10 h-10 rounded border object-cover"
-                            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeImage(image)}
-                          className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
+                      <div
+                        key={index}
+                        draggable
+                        onDragStart={() => handleImageDragStart(index)}
+                        onDragOver={(e) => handleImageDragOver(e, index)}
+                        onDragLeave={handleImageDragLeave}
+                        onDrop={(e) => handleImageDrop(e, index)}
+                        onDragEnd={handleImageDragEnd}
+                        className={`flex items-center space-x-2 p-2 rounded-lg border-2 transition-all ${
+                          draggedImageIndex === index
+                            ? 'opacity-50 border-blue-400 bg-blue-50'
+                            : dragOverIndex === index
+                            ? 'border-blue-500 bg-blue-100 scale-105'
+                            : 'border-transparent hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div
+                          className="cursor-move p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                          title="Drag to reorder"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                          <GripVertical className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 flex items-center space-x-2">
+                          <input
+                            type="url"
+                            value={image}
+                            onChange={(e) => {
+                              const newImages = [...formData.images];
+                              newImages[index] = e.target.value;
+                              handleInputChange('images', newImages);
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Enter image URL"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {image && (
+                            <img
+                              src={image}
+                              alt={`preview-${index}`}
+                              className="w-12 h-12 rounded border object-cover flex-shrink-0"
+                              onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs text-gray-500 font-medium px-2 py-1 bg-gray-100 rounded">
+                            #{index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setAsMainImage(image, index)}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            title="Set as main image"
+                          >
+                            Main
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeImage(image)}
+                            className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
+                            title="Remove image"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    💡 Drag images by the grip icon to reorder them. The order will be saved when you submit the form.
+                  </p>
                 </div>
               )}
             </div>

@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
         $setOnInsert: {
           email: normalizedEmail,
           source: 'website',
-          visitCount: 1,
           emailSentCount: 0,
           converted: false
         }
