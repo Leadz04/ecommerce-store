@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -52,7 +53,8 @@ import {
   ListChecks,
   Type,
   AlignLeft,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -271,6 +273,7 @@ export default function AdminDashboard() {
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
   const [campaignText, setCampaignText] = useState('Hello from ShopEase!');
@@ -298,6 +301,42 @@ export default function AdminDashboard() {
   const [analysisSelectedIds, setAnalysisSelectedIds] = useState<string[]>([]);
   const [analysisSelectedMeta, setAnalysisSelectedMeta] = useState<Record<string, { name: string; price?: number }>>({});
   const [etsyExportLoading, setEtsyExportLoading] = useState<Record<string, boolean>>({});
+  const [etsyProductSearch, setEtsyProductSearch] = useState('');
+  
+  const ETSY_SYNC_ACTION_OPTIONS: SelectOption[] = [
+    { value: 'create', label: 'Create' },
+    { value: 'update', label: 'Update' },
+    { value: 'delete', label: 'Delete' },
+  ];
+  
+  const ETSY_EXPORT_CATEGORY_OPTIONS: SelectOption[] = [
+    { value: 'all', label: 'All Categories' },
+    { value: 'Men', label: 'Men' },
+    { value: 'Women', label: 'Women' },
+    { value: 'Office & Travel', label: 'Office & Travel' },
+    { value: 'Accessories', label: 'Accessories' },
+    { value: 'Gifting', label: 'Gifting' },
+  ];
+  
+  const ETSY_EXPORT_LIMIT_OPTIONS: SelectOption[] = [
+    { value: '10', label: '10' },
+    { value: '25', label: '25' },
+    { value: '50', label: '50' },
+    { value: '100', label: '100' },
+    { value: '250', label: '250' },
+    { value: '500', label: '500' },
+    { value: 'custom', label: 'Custom' },
+  ];
+  
+  const [etsySyncProductId, setEtsySyncProductId] = useState('');
+  const [etsySyncProductOpen, setEtsySyncProductOpen] = useState(false);
+  const [etsySyncAction, setEtsySyncAction] = useState<'create' | 'update' | 'delete'>('create');
+  const [etsySyncActionOpen, setEtsySyncActionOpen] = useState(false);
+  const [etsyExportCategory, setEtsyExportCategory] = useState('all');
+  const [etsyExportCategoryOpen, setEtsyExportCategoryOpen] = useState(false);
+  const [etsyExportLimit, setEtsyExportLimit] = useState('50');
+  const [etsyExportLimitOpen, setEtsyExportLimitOpen] = useState(false);
+  const [etsyExportCustomLimit, setEtsyExportCustomLimit] = useState('');
   const [seoHistoryLoading, setSeoHistoryLoading] = useState(false);
   const [seoHistoryExpanded, setSeoHistoryExpanded] = useState<Record<string, { kw: number; pr: number }>>({});
   const [seoRawSnapshot, setSeoRawSnapshot] = useState<any>(null);
@@ -552,6 +591,19 @@ export default function AdminDashboard() {
     totalClicked: number;
     lastSentAt: string;
   }>>({});
+  
+  const etsyProductOptions = useMemo<SelectOption[]>(() => {
+    if (!Array.isArray(products) || products.length === 0) return [];
+    return products.map((product) => {
+      const priceLabel =
+        typeof product.price === 'number' ? ` - $${product.price.toFixed(2)}` : '';
+      return {
+        value: product._id,
+        label: `${product.name || 'Untitled Product'}${priceLabel}`,
+      };
+    });
+  }, [products]);
+  
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1154,6 +1206,7 @@ export default function AdminDashboard() {
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
     setOpenNestedMenu(null);
+    setMobileSidebarOpen(false);
     if (tab === 'orders') {
       updateQuery({ tab: 'orders', status: undefined, orderId: undefined, userId: undefined, productId: undefined });
       return;
@@ -1194,6 +1247,29 @@ export default function AdminDashboard() {
 
   const shouldShowChildren = (tab: SidebarTab) =>
     !!tab.children && (openNestedMenu === tab.id || tab.children.some(child => child.id === activeTab));
+
+  // Find parent tab for nested/child tabs
+  const getParentTab = (): SidebarTab | null => {
+    for (const tab of sidebarTabs) {
+      if (tab.children?.some(child => child.id === activeTab)) {
+        return tab;
+      }
+    }
+    return null;
+  };
+
+  const parentTab = getParentTab();
+  const isNestedTab = !!parentTab;
+
+  const handleParentKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, tab: SidebarTab) => {
+    if (!tab.children) return;
+    if (event.key === 'ArrowRight') {
+      setOpenNestedMenu(tab.id);
+    }
+    if (event.key === 'ArrowLeft') {
+      setOpenNestedMenu(null);
+    }
+  };
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -1260,6 +1336,27 @@ export default function AdminDashboard() {
     if (tabParam === 'orders') setSelectedOrderStatus(searchParams.get('status') || '');
   }, [searchParams]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mobileSidebarOpen) return undefined;
+    const keyHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', keyHandler);
+    return () => window.removeEventListener('keydown', keyHandler);
+  }, [mobileSidebarOpen]);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (etsyExportLimit !== 'custom') {
+      setEtsyExportCustomLimit('');
+    }
+  }, [etsyExportLimit]);
+
   // Open detail modals based on URL ids when data is present
   useEffect(() => {
     const orderId = searchParams.get('orderId');
@@ -1294,33 +1391,9 @@ export default function AdminDashboard() {
     }
   }, [searchParams, activeTab, products]);
 
-  // Handle custom limit input visibility for Etsy export
   useEffect(() => {
     if (activeTab !== 'etsy') {
-      // Reset products fetched ref when leaving Etsy tab
       productsFetchedRef.current = false;
-      return;
-    }
-    
-    const limitSelect = document.getElementById('export-limit') as HTMLSelectElement | null;
-    const customInput = document.getElementById('custom-limit') as HTMLInputElement | null;
-    
-    if (limitSelect && customInput) {
-      const handleLimitChange = () => {
-        if (limitSelect.value === 'custom') {
-          customInput.classList.remove('hidden');
-          customInput.required = true;
-        } else {
-          customInput.classList.add('hidden');
-          customInput.required = false;
-        }
-      };
-      
-      limitSelect.addEventListener('change', handleLimitChange);
-      
-      return () => {
-        limitSelect.removeEventListener('change', handleLimitChange);
-      };
     }
   }, [activeTab]);
 
@@ -2256,6 +2329,29 @@ export default function AdminDashboard() {
     });
   };
 
+  const handleAnalysisToggleProduct = (productId: string) => {
+    const product = products.find(p => p._id === productId);
+    if (!product) return;
+
+    setAnalysisSelectedIds(prev => {
+      if (prev.includes(productId)) {
+        return prev.filter(id => id !== productId);
+      } else {
+        return [...prev, productId];
+      }
+    });
+
+    setAnalysisSelectedMeta(prev => {
+      const updated = { ...prev };
+      if (updated[productId]) {
+        delete updated[productId];
+      } else {
+        updated[productId] = { name: product.name, price: product.price };
+      }
+      return updated;
+    });
+  };
+
   const handleAnalysisSelectAllCurrentPage = () => {
     const currentIds = products.map(product => product._id);
     if (!currentIds.length) return;
@@ -2610,16 +2706,177 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <aside className="lg:w-72 xl:w-80">
-            <div className="space-y-6 lg:sticky lg:top-6">
+        <div className="flex flex-col gap-6 md:flex-row">
+          <div className="md:hidden flex items-center justify-between rounded-2xl border border-gray-200 bg-white/70 px-4 py-3 shadow-sm">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">Navigate</p>
+              <p className="text-base font-semibold text-gray-900">Choose a workspace area</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(prev => !prev)}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              aria-expanded={mobileSidebarOpen}
+              aria-controls="admin-sidebar"
+            >
+              {mobileSidebarOpen ? 'Hide Menu' : 'Open Menu'}
+            </button>
+          </div>
+
+          {mobileSidebarOpen && (
+            <div
+              role="presentation"
+              aria-hidden="true"
+              className="fixed inset-0 z-30 bg-black/40 md:hidden"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+          )}
+
+          <aside
+            id="admin-sidebar"
+            aria-label="Admin navigation"
+            className={`md:w-64 lg:w-72 xl:w-80 ${
+              mobileSidebarOpen
+                ? 'fixed inset-y-4 left-4 right-4 z-40 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl md:relative md:block md:h-full md:max-h-none md:p-0 md:border-0 md:shadow-none'
+                : 'hidden md:block md:sticky md:top-6'
+            }`}
+          >
+            <div className={`space-y-6 ${mobileSidebarOpen ? '' : 'md:sticky md:top-6'}`}>
+              {mobileSidebarOpen && (
+                <div className="flex items-center justify-between gap-2 rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-2 md:hidden">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {isNestedTab && parentTab && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleTabChange(parentTab.id);
+                          setOpenNestedMenu(parentTab.id);
+                        }}
+                        className="flex items-center justify-center p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0"
+                        aria-label={`Back to ${parentTab.label}`}
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                    )}
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {isNestedTab && parentTab ? parentTab.label : 'Navigation'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">Control Center</p>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">Admin Dashboard</h1>
                 <p className="text-sm text-gray-600 mt-2">Manage users, roles, and system settings</p>
-                <div className="mt-5 flex flex-col gap-3">
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">Navigate</p>
+                </div>
+                <div className="p-3 flex flex-col gap-1.5">
+                  {sidebarTabs.map((tab) => {
+                    const active = isTabActive(tab);
+                    const childrenVisible = shouldShowChildren(tab);
+                    return (
+                      <div key={tab.id} className="space-y-1.5">
+                        <div
+                          className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm transition-all border ${
+                            active
+                              ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 shadow-sm'
+                              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleTabChange(tab.id)}
+                            onKeyDown={(event) => handleParentKeyDown(event, tab)}
+                            aria-current={tab.id === activeTab ? 'page' : undefined}
+                            aria-expanded={tab.children ? childrenVisible : undefined}
+                            aria-controls={tab.children ? `sidebar-section-${tab.id}` : undefined}
+                            className="flex flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                          >
+                            <tab.icon className={`h-4 w-4 ${active ? 'text-blue-600' : 'text-gray-400'}`} />
+                            <div className="flex-1">
+                              <div className="font-semibold">{tab.label}</div>
+                              {tab.description && (
+                                <p className="text-xs text-gray-500">{tab.description}</p>
+                              )}
+                            </div>
+                          </button>
+                          {tab.children && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenNestedMenu((prev) => (prev === tab.id ? null : tab.id));
+                              }}
+                              className="p-1 rounded-lg hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                              aria-label={`${childrenVisible ? 'Collapse' : 'Expand'} ${tab.label} submenu`}
+                              aria-expanded={childrenVisible}
+                              aria-controls={`sidebar-section-${tab.id}`}
+                            >
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform ${
+                                  childrenVisible ? 'rotate-180 text-blue-600' : 'text-gray-400'
+                                }`}
+                              />
+                            </button>
+                          )}
+                        </div>
+                        {tab.children && (
+                          <div
+                            id={`sidebar-section-${tab.id}`}
+                            role="region"
+                            aria-label={`${tab.label} submenu`}
+                            aria-hidden={!childrenVisible}
+                            className={`ml-9 flex flex-col gap-1 border-l border-gray-100 pl-3 transition-all duration-200 ${
+                              childrenVisible ? 'mt-1 mb-2 opacity-100' : 'max-h-0 overflow-hidden opacity-0'
+                            }`}
+                          >
+                            {tab.children.map((child) => {
+                              const childActive = activeTab === child.id;
+                              return (
+                                <button
+                                  type="button"
+                                  key={child.id}
+                                  onClick={() => handleTabChange(child.id)}
+                                  aria-current={childActive ? 'page' : undefined}
+                                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                                    childActive
+                                      ? 'bg-blue-600/10 text-blue-700'
+                                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {child.icon && (
+                                    <child.icon
+                                      className={`h-4 w-4 ${childActive ? 'text-blue-600' : 'text-gray-400'}`}
+                                    />
+                                  )}
+                                  <span>{child.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">Quick Actions</p>
+                <div className="mt-4 flex flex-col gap-3">
                   <button
                     type="button"
                     onClick={seedRoles}
@@ -2658,83 +2915,10 @@ export default function AdminDashboard() {
                   </Link>
                 </div>
               </div>
-
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">Navigate</p>
-                </div>
-                <div className="p-3 flex flex-col gap-1.5">
-                  {sidebarTabs.map((tab) => {
-                    const active = isTabActive(tab);
-                    return (
-                      <div key={tab.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleTabChange(tab.id)}
-                          className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all border ${
-                            active
-                              ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 shadow-sm'
-                              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                          }`}
-                        >
-                          <tab.icon className={`h-4 w-4 ${active ? 'text-blue-600' : 'text-gray-400'}`} />
-                          <div className="flex-1">
-                            <div className="font-semibold">{tab.label}</div>
-                            {tab.description && (
-                              <p className="text-xs text-gray-500">{tab.description}</p>
-                            )}
-                          </div>
-                          {tab.children && (
-                            <span
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setOpenNestedMenu((prev) => (prev === tab.id ? null : tab.id));
-                              }}
-                              className="p-1 rounded-lg hover:bg-white/70"
-                            >
-                              <ChevronDown
-                                className={`h-4 w-4 transition-transform ${
-                                  shouldShowChildren(tab) ? 'rotate-180 text-blue-600' : 'text-gray-400'
-                                }`}
-                              />
-                            </span>
-                          )}
-                        </button>
-                        {shouldShowChildren(tab) && tab.children && (
-                          <div className="ml-9 mt-2 mb-3 flex flex-col gap-1 border-l border-gray-100 pl-3">
-                            {tab.children.map((child) => {
-                              const childActive = activeTab === child.id;
-                              return (
-                                <button
-                                  type="button"
-                                  key={child.id}
-                                  onClick={() => handleTabChange(child.id)}
-                                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                                    childActive
-                                      ? 'bg-blue-600/10 text-blue-700'
-                                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  {child.icon && (
-                                    <child.icon
-                                      className={`h-4 w-4 ${childActive ? 'text-blue-600' : 'text-gray-400'}`}
-                                    />
-                                  )}
-                                  <span>{child.label}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </aside>
 
-          <div className="flex-1">
+          <div className={`flex-1 min-w-0 ${mobileSidebarOpen ? 'lg:pl-0' : ''}`}>
             <div className="space-y-8">
 
         {/* Sourcing Tab */}
@@ -3213,18 +3397,18 @@ export default function AdminDashboard() {
 
             {/* Product Analysis Tool */}
             <div className="bg-white rounded-2xl shadow-xl border-2 border-orange-100 overflow-hidden">
-              <div className="p-8 border-b-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg">
-                    <BarChart3 className="h-7 w-7 text-white" />
+              <div className="p-4 sm:p-8 border-b-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg flex-shrink-0">
+                    <BarChart3 className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
                   </div>
-                  <div>
-                    <h2 className="text-3xl font-black text-white tracking-tight">Product Analysis vs Etsy Handbook</h2>
-                    <p className="text-orange-50 text-base mt-2 font-medium">Analyze products using SerpAPI and compare with Etsy seller handbook guidelines</p>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">Product Analysis vs Etsy Handbook</h2>
+                    <p className="text-orange-50 text-xs sm:text-sm lg:text-base mt-1 sm:mt-2 font-medium">Analyze products using SerpAPI and compare with Etsy seller handbook guidelines</p>
                   </div>
                 </div>
               </div>
-              <div className="p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+              <div className="p-4 sm:p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50">
                 <div className="mb-8">
                   <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <div className="p-2 bg-orange-100 rounded-lg">
@@ -3232,59 +3416,214 @@ export default function AdminDashboard() {
                     </div>
                     <span>Select Products to Analyze</span>
                   </label>
-                  {renderEtsyPaginationControls('SerpAPI analysis pagination')}
-                  <div className="flex gap-6 items-start">
-                    <div className="flex-1 relative">
-                      <select
-                        multiple
-                        size={10}
-                        className="w-full border-2 border-gray-300 rounded-2xl p-4 text-sm bg-white shadow-md focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all [&>option]:py-3 [&>option]:px-4 [&>option]:my-1 [&>option]:rounded-lg [&>option]:font-semibold [&>option]:text-gray-900 [&>option]:bg-white [&>option]:border-b [&>option]:border-gray-200 [&>option:hover]:bg-orange-100 [&>option:checked]:bg-orange-200 [&>option:checked]:text-orange-900"
-                        id="etsyAnalysisProducts"
-                        value={analysisSelectedIds.filter(id => products.some(product => product._id === id))}
-                        onChange={handleAnalysisSelectionChange}
-                        style={{ 
-                          minHeight: '320px',
-                        }}
-                      >
-                        {products.map((p: any) => (
-                          <option 
-                            key={p._id} 
-                            value={p._id}
-                            style={{ 
-                              backgroundColor: '#ffffff',
-                              color: '#111827',
-                              fontWeight: '600',
-                              padding: '12px 16px',
-                              marginBottom: '4px',
-                              borderBottom: '1px solid #e5e7eb'
-                            }}
+                  
+                  {/* Product Search */}
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search products by name, category, or brand..."
+                        value={etsyProductSearch}
+                        onChange={(e) => setEtsyProductSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all bg-white shadow-sm text-sm"
+                      />
+                      {etsyProductSearch && (
+                        <button
+                          onClick={() => setEtsyProductSearch('')}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          aria-label="Clear search"
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+                    {etsyProductSearch && (
+                      <p className="mt-2 text-xs text-gray-600">
+                        Showing filtered results for "{etsyProductSearch}"
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="mb-4 flex justify-center">
+                    {renderEtsyPaginationControls('SerpAPI analysis pagination')}
+                  </div>
+                  
+                  {/* Filtered Products */}
+                  {(() => {
+                    const filteredProducts = etsyProductSearch
+                      ? products.filter((p: any) => {
+                          const searchLower = etsyProductSearch.toLowerCase();
+                          return (
+                            p.name?.toLowerCase().includes(searchLower) ||
+                            p.category?.toLowerCase().includes(searchLower) ||
+                            p.brand?.toLowerCase().includes(searchLower) ||
+                            p.description?.toLowerCase().includes(searchLower)
+                          );
+                        })
+                      : products;
+                    
+                    if (etsyProductSearch && filteredProducts.length === 0) {
+                      return (
+                        <div className="text-center py-12 bg-white rounded-2xl border-2 border-gray-200">
+                          <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-600 font-medium">No products found matching "{etsyProductSearch}"</p>
+                          <button
+                            onClick={() => setEtsyProductSearch('')}
+                            className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-semibold"
                           >
-                            {p.name} - ${p.price}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-lg">
-                        <p className="text-xs text-gray-700 flex items-center gap-2 font-medium">
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-md font-bold">TIP</span>
-                          Hold Ctrl/Cmd to select multiple products
-                        </p>
+                            Clear search
+                          </button>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <>
+                        {/* Mobile: Card Layout, Desktop: Table Layout */}
+                        <div className="hidden md:block overflow-x-auto">
+                          <div className="inline-block min-w-full align-middle">
+                            <div className="overflow-hidden rounded-2xl border-2 border-gray-300 bg-white shadow-md">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gradient-to-r from-orange-50 to-red-50">
+                                  <tr>
+                                    <th scope="col" className="w-12 px-4 py-3 text-left">
+                                      <input
+                                        type="checkbox"
+                                        checked={filteredProducts.length > 0 && filteredProducts.every((p: any) => analysisSelectedIds.includes(p._id))}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            filteredProducts.forEach((p: any) => {
+                                              if (!analysisSelectedIds.includes(p._id)) {
+                                                handleAnalysisToggleProduct(p._id);
+                                              }
+                                            });
+                                          } else {
+                                            filteredProducts.forEach((p: any) => {
+                                              if (analysisSelectedIds.includes(p._id)) {
+                                                handleAnalysisToggleProduct(p._id);
+                                              }
+                                            });
+                                          }
+                                        }}
+                                        className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                      />
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-700">
+                                      Product Name
+                                    </th>
+                                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-700">
+                                      Price
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                  {filteredProducts.map((p: any) => {
+                              const isSelected = analysisSelectedIds.includes(p._id);
+                              return (
+                                <tr
+                                  key={p._id}
+                                  className={`cursor-pointer transition-colors ${
+                                    isSelected
+                                      ? 'bg-orange-50 hover:bg-orange-100'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => handleAnalysisToggleProduct(p._id)}
+                                >
+                                  <td className="px-4 py-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleAnalysisToggleProduct(p._id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                                    {p.name}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm font-bold text-gray-700">
+                                    ${typeof p.price === 'number' ? p.price.toFixed(2) : '0.00'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={handleAnalysisSelectAllCurrentPage}
-                        className="px-6 py-3 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                      >
-                        Select All
-                      </button>
-                      <button
-                        onClick={handleAnalysisClearCurrentPage}
-                        className="px-6 py-3 text-sm font-bold bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all shadow-md hover:shadow-lg"
-                      >
-                        Clear Page
-                      </button>
-                    </div>
                   </div>
+
+                        {/* Mobile: Card Layout */}
+                        <div className="md:hidden space-y-3">
+                          {filteredProducts.map((p: any) => {
+                            const isSelected = analysisSelectedIds.includes(p._id);
+                            return (
+                              <div
+                                key={p._id}
+                                onClick={() => handleAnalysisToggleProduct(p._id)}
+                                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                                  isSelected
+                                    ? 'bg-orange-50 border-orange-300 shadow-md'
+                                    : 'bg-white border-gray-200 hover:border-orange-200'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleAnalysisToggleProduct(p._id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-5 w-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500 flex-shrink-0 cursor-pointer"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                                  <p className="text-sm font-bold text-orange-600 mt-1">
+                                    ${typeof p.price === 'number' ? p.price.toFixed(2) : '0.00'}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Action Buttons - Responsive */}
+                        <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center">
+                          <button
+                            onClick={() => {
+                              filteredProducts.forEach((p: any) => {
+                                if (!analysisSelectedIds.includes(p._id)) {
+                                  handleAnalysisToggleProduct(p._id);
+                                }
+                              });
+                            }}
+                            className="px-6 py-3 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            Select All {etsyProductSearch ? '(Filtered)' : ''}
+                          </button>
+                          <button
+                            onClick={() => {
+                              filteredProducts.forEach((p: any) => {
+                                if (analysisSelectedIds.includes(p._id)) {
+                                  handleAnalysisToggleProduct(p._id);
+                                }
+                              });
+                            }}
+                            className="px-6 py-3 text-sm font-bold bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all shadow-md hover:shadow-lg"
+                          >
+                            Clear {etsyProductSearch ? 'Filtered' : 'Page'}
+                          </button>
+                        </div>
+                        
+                        {/* Tip - Mobile Friendly */}
+                        <div className="mt-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-lg">
+                          <p className="text-xs text-gray-700 flex flex-col sm:flex-row items-start sm:items-center gap-2 font-medium">
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-md font-bold">TIP</span>
+                            <span>Tap products to select/deselect. Use buttons above to select all or clear {etsyProductSearch ? 'filtered' : 'current page'}.</span>
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
                   {analysisSelectedIds.length > 0 && (
                     <div className="mt-4 bg-white border border-orange-100 rounded-2xl p-4 shadow-sm">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -3330,22 +3669,22 @@ export default function AdminDashboard() {
                   )}
                 </div>
                 
-                <div className="mb-8 p-5 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-200 shadow-md">
-                  <label className="flex items-center gap-4 cursor-pointer">
+                <div className="mb-8 p-4 sm:p-5 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-200 shadow-md">
+                  <label className="flex items-start sm:items-center gap-3 sm:gap-4 cursor-pointer">
                     <input
                       type="checkbox"
                       id="includeGoogleData"
                       defaultChecked
-                      className="w-6 h-6 text-orange-600 border-gray-300 rounded-lg focus:ring-orange-500 focus:ring-4 cursor-pointer"
+                      className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 border-gray-300 rounded-lg focus:ring-orange-500 focus:ring-4 cursor-pointer mt-1 sm:mt-0 flex-shrink-0"
                     />
-                    <div className="flex-1">
-                      <span className="text-base font-bold text-gray-900 block mb-1">Include Google Search Analysis</span>
-                      <span className="text-sm text-gray-600">Uses SerpAPI to analyze search visibility and competitor data (requires SERPAPI_KEY)</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm sm:text-base font-bold text-gray-900 block mb-1">Include Google Search Analysis</span>
+                      <span className="text-xs sm:text-sm text-gray-600">Uses SerpAPI to analyze search visibility and competitor data (requires SERPAPI_KEY)</span>
                     </div>
                   </label>
                 </div>
 
-                <div className="flex justify-center">
+                <div className="flex justify-center px-4">
                   <button
                     onClick={async () => {
                       const includeGoogle = (document.getElementById('includeGoogleData') as HTMLInputElement)?.checked ?? true;
@@ -3616,11 +3955,11 @@ export default function AdminDashboard() {
                     } catch (error) {
                       toast.error(error instanceof Error ? error.message : 'Analysis failed', { id: 'analyze-etsy' });
                     }
-                  }}
-                    className="px-10 py-5 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white rounded-2xl hover:from-orange-600 hover:via-red-600 hover:to-pink-600 transition-all duration-200 shadow-2xl hover:shadow-3xl font-black text-xl flex items-center justify-center gap-3 transform hover:-translate-y-1"
+                    }}
+                    className="w-full sm:w-auto px-6 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white rounded-2xl hover:from-orange-600 hover:via-red-600 hover:to-pink-600 transition-all duration-200 shadow-2xl hover:shadow-3xl font-black text-base sm:text-xl flex items-center justify-center gap-2 sm:gap-3 transform hover:-translate-y-1"
                   >
-                    <BarChart3 className="h-6 w-6" />
-                    Analyze Products with SerpAPI
+                    <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6" />
+                    <span className="text-center">Analyze Products with SerpAPI</span>
                   </button>
                 </div>
                 <div id="etsyAnalysisResults" className="hidden mt-10"></div>
@@ -3742,17 +4081,26 @@ export default function AdminDashboard() {
               </div>
               <div className="p-6">
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <select className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                      <option value="">Select a product to sync</option>
-                      {/* Products would be populated here */}
-                    </select>
-                    <select className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                      <option value="create">Create New Listing</option>
-                      <option value="update">Update Existing</option>
-                      <option value="delete">Delete Listing</option>
-                    </select>
-                    <button className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <SelectField
+                      value={etsySyncProductId}
+                      options={etsyProductOptions}
+                      isOpen={etsySyncProductOpen}
+                      onOpenChange={setEtsySyncProductOpen}
+                      onSelect={(val) => setEtsySyncProductId(val)}
+                      placeholder="Select a product to sync"
+                      className="flex-1 min-w-[240px]"
+                      disabled={!etsyProductOptions.length}
+                    />
+                    <SelectField
+                      value={etsySyncAction}
+                      options={ETSY_SYNC_ACTION_OPTIONS}
+                      isOpen={etsySyncActionOpen}
+                      onOpenChange={setEtsySyncActionOpen}
+                      onSelect={(val) => setEtsySyncAction(val as 'create' | 'update' | 'delete')}
+                      className="w-full sm:w-56"
+                    />
+                    <button className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-4 py-2 text-center text-white transition-all duration-200 shadow-sm hover:from-purple-700 hover:to-purple-800 hover:shadow-md lg:w-auto">
                       Sync to Etsy
                     </button>
                   </div>
@@ -3774,51 +4122,57 @@ export default function AdminDashboard() {
               <div className="p-6">
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-4 flex-wrap">
-                      <select 
-                        id="export-category"
-                        className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      >
-                        <option value="all">All Products</option>
-                        <option value="mens">Men's Products</option>
-                        <option value="ladies">Ladies Products</option>
-                        <option value="accessories">Accessories</option>
-                      </select>
-                      <select 
-                        id="export-limit"
-                        defaultValue="50"
-                        className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      >
-                        <option value="25">25 Products</option>
-                        <option value="50">50 Products</option>
-                        <option value="100">100 Products</option>
-                        <option value="200">200 Products</option>
-                        <option value="custom">Custom Limit</option>
-                      </select>
-                      <input
-                        id="custom-limit"
-                        type="number"
-                        min="1"
-                        max="1000"
-                        placeholder="Custom limit (1-1000)"
-                        className="px-3 py-2 border border-purple-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-transparent hidden"
-                        style={{ width: '200px' }}
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:flex-wrap">
+                      <SelectField
+                        value={etsyExportCategory}
+                        options={ETSY_EXPORT_CATEGORY_OPTIONS}
+                        isOpen={etsyExportCategoryOpen}
+                        onOpenChange={setEtsyExportCategoryOpen}
+                        onSelect={setEtsyExportCategory}
+                        className="w-full sm:w-56"
                       />
+                      <SelectField
+                        value={etsyExportLimit}
+                        options={ETSY_EXPORT_LIMIT_OPTIONS}
+                        isOpen={etsyExportLimitOpen}
+                        onOpenChange={setEtsyExportLimitOpen}
+                        onSelect={setEtsyExportLimit}
+                        className="w-full sm:w-56"
+                      />
+                      {etsyExportLimit === 'custom' && (
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={etsyExportCustomLimit}
+                          onChange={(e) => setEtsyExportCustomLimit(e.target.value)}
+                          placeholder="Custom limit (1-1000)"
+                          className="w-full rounded-lg border border-purple-200 px-3 py-2 text-sm text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 sm:w-48"
+                        />
+                      )}
                       <button 
                         onClick={async () => {
                           try {
-                            const selectedCategory = (document.getElementById('export-category') as HTMLSelectElement)?.value || 'all';
-                            const limit = (document.getElementById('export-limit') as HTMLSelectElement)?.value || '50';
-                            const customLimit = (document.getElementById('custom-limit') as HTMLInputElement)?.value;
+                            let customLimitValue = etsyExportCustomLimit.trim();
+                            if (etsyExportLimit === 'custom') {
+                              const numeric = Number(customLimitValue);
+                              if (!customLimitValue || Number.isNaN(numeric) || numeric < 1 || numeric > 1000) {
+                                toast.error('Enter a custom limit between 1 and 1000');
+                                return;
+                              }
+                              customLimitValue = String(Math.floor(numeric));
+                            } else {
+                              customLimitValue = '';
+                            }
                             
                             // Build query parameters
                             const params = new URLSearchParams({
-                              category: selectedCategory,
-                              limit
+                              category: etsyExportCategory,
+                              limit: etsyExportLimit
                             });
                             
-                            if (customLimit && limit === 'custom') {
-                              params.set('customLimit', customLimit);
+                            if (etsyExportLimit === 'custom' && customLimitValue) {
+                              params.set('customLimit', customLimitValue);
                             }
                             
                             const response = await fetch(`/api/admin/etsy-export?${params.toString()}`);
@@ -3834,13 +4188,16 @@ export default function AdminDashboard() {
                             a.href = url;
                             
                             // Set filename based on category and limit
-                            const exportFinalLimit = customLimit && limit === 'custom' ? customLimit : limit;
+                            const exportFinalLimit =
+                              etsyExportLimit === 'custom'
+                                ? customLimitValue
+                                : etsyExportLimit;
                             
                             let filename = 'etsy-products-export.csv';
-                            if (selectedCategory === 'all') {
+                            if (etsyExportCategory === 'all') {
                               filename = `etsy-products-export-${exportFinalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
                             } else {
-                              filename = `etsy-${selectedCategory}-products-${exportFinalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
+                              filename = `etsy-${etsyExportCategory}-products-${exportFinalLimit}-${new Date().toISOString().split('T')[0]}.csv`;
                             }
                             
                             a.download = filename;

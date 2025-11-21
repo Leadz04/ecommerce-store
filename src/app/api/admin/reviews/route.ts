@@ -123,6 +123,37 @@ export async function PUT(request: NextRequest) {
       await updateProductRating(review.productId);
     }
 
+    // Send email notification to customer about review status
+    if (status !== oldStatus && (status === 'approved' || status === 'rejected')) {
+      try {
+        const { sendEmail, generateReviewStatusEmailHTML } = await import('@/lib/email');
+        const Product = (await import('@/models/Product')).default;
+        const product = await Product.findById(review.productId).select('name').lean();
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+        
+        if (review.userEmail && product) {
+          const statusEmailHTML = generateReviewStatusEmailHTML({
+            userName: review.userName,
+            productName: product.name || 'Product',
+            status: status as 'approved' | 'rejected',
+            adminMessage: adminResponse,
+            siteUrl
+          });
+          
+          await sendEmail({
+            to: review.userEmail,
+            subject: `Review ${status === 'approved' ? 'Approved' : 'Status Update'} - ${product.name}`,
+            html: statusEmailHTML,
+            text: `Your review for ${product.name} has been ${status === 'approved' ? 'approved and published' : 'rejected'}.`
+          });
+          console.log('✅ [API /admin/reviews] Review status email sent to customer');
+        }
+      } catch (emailError) {
+        console.error('❌ [API /admin/reviews] Failed to send review status email:', emailError);
+        // Don't fail review update if email fails
+      }
+    }
+
     return NextResponse.json({
       message: 'Review updated successfully',
       review,

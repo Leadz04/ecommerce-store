@@ -182,29 +182,38 @@ export default function ProductsPage() {
   ].filter(Boolean).length;
 
   const FiltersContent = () => (
-    <>
-      <div className="mb-6">
-        <h4 className="font-medium mb-3 text-gray-900">Category</h4>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
+    <div className="space-y-6">
+      {/* Category Section */}
+      <div>
+        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Category</h4>
+        <div className="grid grid-cols-2 gap-2">
           {categories.map((category) => (
-            <label key={category} className="flex items-center text-gray-700 text-sm">
+            <label 
+              key={category} 
+              className={`flex items-center justify-center px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${
+                filters.category === category
+                  ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
               <input
                 type="radio"
                 name="category"
                 value={category}
                 checked={filters.category === category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="mr-2 text-blue-600 focus:ring-blue-500"
+                className="sr-only"
               />
-              <span className="capitalize">{category}</span>
+              <span className="capitalize text-sm">{category}</span>
             </label>
           ))}
         </div>
       </div>
 
-      <div className="mb-6">
-        <h4 className="font-medium mb-3 text-gray-900">Availability</h4>
-        <label className="flex items-center text-gray-700 text-sm">
+      {/* Availability Section */}
+      <div>
+        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Availability</h4>
+        <label className="flex items-center p-3 rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer transition-all">
           <input
             type="checkbox"
             checked={filters.inStock === true}
@@ -214,39 +223,42 @@ export default function ProductsPage() {
               updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
               fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1 });
             }}
-            className="mr-2 text-blue-600 focus:ring-blue-500"
+            className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
           />
-          In stock only
+          <span className="ml-3 text-gray-700 font-medium">In stock only</span>
         </label>
       </div>
 
-      <div className="mb-6">
-        <h4 className="font-medium mb-3 text-gray-900">Price Range</h4>
-        <div className="space-y-2">
-          <input
-            type="range"
-            min="0"
-            max="1000"
-            value={currentPriceRange[1]}
-            onChange={(e) => handlePriceRangeChange([currentPriceRange[0], parseInt(e.target.value, 10)])}
-            className="w-full accent-blue-600"
-          />
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>${currentPriceRange[0]}</span>
-            <span>${currentPriceRange[1]}</span>
+      {/* Price Range Section */}
+      <div>
+        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Price Range</h4>
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="range"
+              min="0"
+              max="1000"
+              value={currentPriceRange[1]}
+              onChange={(e) => handlePriceRangeChange([currentPriceRange[0], parseInt(e.target.value, 10)])}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              style={{
+                background: `linear-gradient(to right, #2563eb 0%, #2563eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb 100%)`
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">Min:</span>
+              <span className="text-sm font-semibold text-gray-900">${currentPriceRange[0]}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">Max:</span>
+              <span className="text-sm font-semibold text-blue-600">${currentPriceRange[1]}</span>
+            </div>
           </div>
         </div>
       </div>
-
-      {hasActiveFilters() && (
-        <button
-          onClick={handleClearAllFiltersClick}
-          className="w-full text-blue-600 hover:text-blue-700 font-medium transition-colors"
-        >
-          Clear All Filters
-        </button>
-      )}
-    </>
+    </div>
   );
 
   return (
@@ -354,24 +366,71 @@ export default function ProductsPage() {
           </div>
 
           {showFilters && (
-            <div className="lg:hidden fixed inset-0 z-40 flex" id="mobile-filter-drawer" role="dialog" aria-modal="true">
-              <div className="flex-1 bg-black/40" onClick={() => setShowFilters(false)} aria-hidden="true" />
-              <div className="ml-auto flex h-full w-11/12 max-w-sm flex-col bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b px-6 py-4">
-                  <div className="flex items-center text-gray-900 font-semibold">
-                    <Filter className="h-5 w-5 mr-2 text-blue-600" />
-                    Filters
+            <div 
+              className="lg:hidden fixed inset-0 z-50 flex items-end" 
+              id="mobile-filter-drawer" 
+              role="dialog" 
+              aria-modal="true"
+            >
+              {/* Backdrop with fade-in animation */}
+              <div 
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" 
+                onClick={() => setShowFilters(false)} 
+                aria-hidden="true"
+              />
+              
+              {/* Bottom sheet with slide-up animation */}
+              <div className="relative w-full max-h-[85vh] bg-white rounded-t-3xl shadow-2xl flex flex-col animate-slide-up">
+                {/* Drag handle */}
+                <div className="flex justify-center pt-3 pb-2">
+                  <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+                </div>
+                
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <Filter className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                      {activeFilterCount > 0 && (
+                        <p className="text-xs text-gray-500">{activeFilterCount} active</p>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => setShowFilters(false)}
-                    className="p-2 text-gray-600 hover:text-gray-900"
+                    className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
                     aria-label="Close filters"
                   >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto px-6 py-4">
+                
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto px-5 py-4">
                   <FiltersContent />
+                </div>
+                
+                {/* Footer with action buttons */}
+                <div className="border-t border-gray-100 px-5 py-4 bg-gray-50">
+                  <div className="flex gap-3">
+                    {hasActiveFilters() && (
+                      <button
+                        onClick={handleClearAllFiltersClick}
+                        className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowFilters(false)}
+                      className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-md"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

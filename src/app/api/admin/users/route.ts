@@ -162,6 +162,54 @@ export async function POST(request: NextRequest) {
 
     await newUser.save();
 
+    // Send welcome email to new admin user
+    try {
+      const { sendEmail, generateAdminUserCreatedEmailHTML, ADMIN_EMAIL } = await import('@/lib/email');
+      const creator = await User.findById(user.userId).select('name email').lean();
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      
+      const adminEmailHTML = generateAdminUserCreatedEmailHTML({
+        userName: newUser.name,
+        userEmail: newUser.email,
+        roleName: role.name,
+        createdBy: creator?.name || 'Administrator',
+        siteUrl
+      });
+      
+      await sendEmail({
+        to: newUser.email,
+        subject: 'Your ShopEase Admin Account Has Been Created',
+        html: adminEmailHTML,
+        text: `Your ShopEase admin account has been created with ${role.name} role. Login at ${siteUrl}/login`
+      });
+      console.log('✅ [API /admin/users] Welcome email sent to new admin user');
+      
+      // Also send notification to super admin
+      await sendEmail({
+        to: ADMIN_EMAIL,
+        subject: `New Admin User Created: ${newUser.name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333; border-bottom: 2px solid #6366f1; padding-bottom: 10px;">
+              New Admin User Created
+            </h2>
+            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #1e40af; margin-top: 0;">User Details</h3>
+              <p><strong>Name:</strong> ${newUser.name}</p>
+              <p><strong>Email:</strong> ${newUser.email}</p>
+              <p><strong>Role:</strong> ${role.name}</p>
+              <p><strong>Created By:</strong> ${creator?.name || 'Administrator'}</p>
+              <p><strong>Created At:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+        `,
+        text: `New admin user created:\n\nName: ${newUser.name}\nEmail: ${newUser.email}\nRole: ${role.name}\nCreated By: ${creator?.name || 'Administrator'}`
+      });
+    } catch (emailError) {
+      console.error('❌ [API /admin/users] Failed to send admin user creation emails:', emailError);
+      // Don't fail user creation if email fails
+    }
+
     // Return user without password
     const userResponse = await User.findById(newUser._id)
       .populate('role', 'name description')

@@ -507,6 +507,45 @@ export async function POST(request: NextRequest) {
       total: order.total
     });
 
+    // Send admin notification for new order
+    try {
+      const { sendEmail, ADMIN_EMAIL } = await import('@/lib/email');
+      const user = await User.findById(userId).select('name email').lean();
+      
+      if (user) {
+        // Send admin notification
+        await sendEmail({
+          to: ADMIN_EMAIL,
+          subject: `🚨 New Order Received - #${order.orderNumber} - $${order.total.toFixed(2)}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333; border-bottom: 2px solid #10b981; padding-bottom: 10px;">
+                🚨 New Order Received - #${order.orderNumber}
+              </h2>
+              <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+                <h3 style="color: #92400e; margin-top: 0;">Action Required</h3>
+                <p style="color: #78350f; margin: 0;">A new order has been placed and requires processing.</p>
+              </div>
+              <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1e40af; margin-top: 0;">Order Summary</h3>
+                <p><strong>Order Number:</strong> #${order.orderNumber}</p>
+                <p><strong>Customer:</strong> ${user.name}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Total Amount:</strong> $${order.total.toFixed(2)}</p>
+                <p><strong>Items Count:</strong> ${order.items.length}</p>
+                <p><strong>Status:</strong> ${order.status}</p>
+              </div>
+            </div>
+          `,
+          text: `New Order Received!\n\nOrder #${order.orderNumber}\nCustomer: ${user.name} (${user.email})\nTotal: $${order.total.toFixed(2)}\nItems: ${order.items.length}\n\nAction Required: Process this order.`
+        });
+        console.log('✅ [API /orders] Admin notification sent for order:', order.orderNumber);
+      }
+    } catch (emailError) {
+      console.error('❌ [API /orders] Failed to send admin notification:', emailError);
+      // Don't fail order creation if email fails
+    }
+
     return NextResponse.json({
       message: 'Order created successfully',
       order

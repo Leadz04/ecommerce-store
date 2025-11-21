@@ -308,15 +308,31 @@ export default function ProductPage() {
         return;
       }
 
+      // Validate input data before preparing update
+      const price = parseFloat(editFormData.price) || 0;
+      const stockCount = parseInt(editFormData.stockCount) || 0;
+      
+      if (price < 0) {
+        toast.error('Price cannot be negative');
+        setIsSaving(false);
+        return;
+      }
+      
+      if (stockCount < 0) {
+        toast.error('Stock count cannot be negative');
+        setIsSaving(false);
+        return;
+      }
+
       // Prepare update data
       const updateData: any = {
         name: editFormData.name,
         description: editFormData.description,
         descriptionHtml: editFormData.descriptionHtml,
-        price: parseFloat(editFormData.price) || 0,
+        price: price,
         category: editFormData.category,
         brand: editFormData.brand,
-        stockCount: parseInt(editFormData.stockCount) || 0,
+        stockCount: stockCount,
         inStock: editFormData.inStock,
         status: editFormData.status,
         productType: editFormData.productType
@@ -333,7 +349,13 @@ export default function ProductPage() {
       }
 
       if (editFormData.originalPrice) {
-        updateData.originalPrice = parseFloat(editFormData.originalPrice) || undefined;
+        const originalPrice = parseFloat(editFormData.originalPrice);
+        if (originalPrice < 0) {
+          toast.error('Original price cannot be negative');
+          setIsSaving(false);
+          return;
+        }
+        updateData.originalPrice = originalPrice || undefined;
       }
 
       if (editFormData.tags) {
@@ -360,7 +382,15 @@ export default function ProductPage() {
         body: JSON.stringify(updateData)
       });
 
-      const data = await response.json();
+      // Handle non-JSON responses
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = { error: text || 'Failed to update product' };
+      }
 
       if (!response.ok) {
         // Handle specific error cases
@@ -379,7 +409,8 @@ export default function ProductPage() {
         } else {
           toast.error(data.error || 'Failed to update product');
         }
-        throw new Error(data.error || 'Failed to update product');
+        // Return early instead of throwing - we've already handled the error
+        return;
       }
 
       toast.success('Product updated successfully');
@@ -388,7 +419,14 @@ export default function ProductPage() {
       fetchProduct(productId);
     } catch (error) {
       console.error('Error updating product:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update product');
+      // Handle network errors and other unexpected errors
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else if (error instanceof Error) {
+        toast.error(error.message || 'Failed to update product');
+      } else {
+        toast.error('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -879,18 +917,18 @@ export default function ProductPage() {
   const colors = ['Black', 'White', 'Blue', 'Red'];
 
   return (
-    <div className="min-h-screen bg-gray-50 ">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
         {/* Back Button */}
-        <div className="mb-4 sm:mb-6">
+        <div className="mb-2 sm:mb-3">
           <BackButton href="/products" variant="with-label" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
           {/* Product Images */}
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-3">
             {isEditMode ? (
-              <div className="p-5 bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl border border-rose-100">
-                <div className="flex items-center justify-between mb-4">
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg border border-rose-100">
+                <div className="flex items-center justify-between mb-3">
                   <h4 className="text-lg font-semibold text-gray-800">Product Images</h4>
                   <button
                     type="button"
@@ -992,7 +1030,7 @@ export default function ProductPage() {
             ) : (
               <>
                 {/* Main Image */}
-                <div className="aspect-square overflow-hidden rounded-xl bg-white  shadow-lg border border-gray-200 ">
+                <div className="aspect-square overflow-hidden rounded-lg bg-white shadow-sm border border-gray-200">
                   <Image
                     src={images[selectedImage]}
                     alt={
@@ -1009,7 +1047,7 @@ export default function ProductPage() {
                 
                 {/* Thumbnail Images */}
                 {images.length > 1 && (
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-4 gap-2">
                     {images.map((image: string, index: number) => (
                       <button
                         key={index}
@@ -1041,10 +1079,10 @@ export default function ProductPage() {
           </div>
 
         {/* Product Info */}
-        <div className="space-y-6 bg-white  p-6 rounded-xl shadow-lg border border-gray-200 ">
+        <div className="space-y-3 sm:space-y-4 bg-white p-4 sm:p-5 rounded-lg shadow-sm border border-gray-200">
           {/* Edit Button for Super Admin */}
           {isSuperAdmin && (
-            <div className="flex justify-end gap-3 mb-6">
+            <div className="flex justify-end gap-2 mb-3 sm:mb-4">
               {!isEditMode ? (
                 <>
                   <button
@@ -1145,7 +1183,7 @@ export default function ProductPage() {
           {/* Brand and Name */}
           <div>
             {isEditMode ? (
-              <div className="space-y-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+              <div className="space-y-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 mb-2">Brand</label>
                   <BrandSelect
@@ -1193,7 +1231,7 @@ export default function ProductPage() {
 
           {/* Price */}
           {isEditMode ? (
-            <div className="space-y-4 p-4 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
+            <div className="space-y-3 p-3 bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg border border-emerald-100">
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">Price ($)</label>
                 <input
@@ -1287,7 +1325,7 @@ export default function ProductPage() {
           <div>
             <h3 className="text-lg font-semibold mb-3 text-gray-900">Description</h3>
             {isEditMode ? (
-              <div className="space-y-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+              <div className="space-y-3 p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 mb-2">Description (Plain Text)</label>
                   <textarea
@@ -1325,7 +1363,7 @@ export default function ProductPage() {
 
           {/* Additional Edit Fields for Super Admin */}
           {isEditMode && (
-            <div className="space-y-6 pt-6 border-t-2 border-gray-200">
+            <div className="space-y-3 sm:space-y-4 pt-4 border-t border-gray-200">
               <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-100">
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">Product Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -1647,14 +1685,14 @@ export default function ProductPage() {
       {/* Product Specifications */}
       {(!cleanSpecs || Object.keys(cleanSpecs).length === 0) && isSuperAdmin && (
         <div className="mt-24 mb-16">
-          <div className="text-center mb-12 px-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 rounded-2xl mb-6 shadow-lg">
+          <div className="text-center mb-6 sm:mb-8 px-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 rounded-xl mb-3 sm:mb-4 shadow-md">
               <Package className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
               Product <span className="bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 bg-clip-text text-transparent">Specifications</span>
             </h2>
-            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed mb-6">
+            <p className="text-gray-600 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed mb-4">
               No specifications available yet. Generate them automatically from the product title and description.
             </p>
             <button
@@ -1681,8 +1719,8 @@ export default function ProductPage() {
       {cleanSpecs && Object.keys(cleanSpecs).length > 0 && (
         <div className="mt-24 mb-16">
           {/* Header Section */}
-          <div className="text-center mb-12 px-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-2xl mb-6 shadow-lg">
+          <div className="text-center mb-6 sm:mb-8 px-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-xl mb-3 sm:mb-4 shadow-md">
               <Package className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
@@ -1713,172 +1751,117 @@ export default function ProductPage() {
             )}
           </div>
           
-          {/* Specifications Grid */}
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 md:p-12 shadow-2xl border border-gray-100">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(cleanSpecs).map(([key, value]: any, index) => {
+          {/* Specifications Section - Modern Compact Grid Design */}
+          <div className="max-w-4xl mx-auto px-3 sm:px-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+              {/* Compact Grid Layout */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                {Object.entries(cleanSpecs).map(([key, value]) => {
                   // Format key for better display
                   const formattedKey = key
                     .replace(/([A-Z])/g, ' $1')
                     .replace(/^./, str => str.toUpperCase())
                     .trim();
                   
-                  // Check if it's a material-related specification
-                  const isMaterial = key.toLowerCase().includes('material') || 
-                                    key.toLowerCase().includes('fabric') ||
-                                    key.toLowerCase().includes('leather') ||
-                                    key.toLowerCase().includes('composition') ||
-                                    key.toLowerCase().includes('fiber') ||
-                                    key.toLowerCase().includes('textile') ||
-                                    key.toLowerCase().includes('suede') ||
-                                    key.toLowerCase().includes('wool') ||
-                                    key.toLowerCase().includes('cotton') ||
-                                    key.toLowerCase().includes('polyester');
+                  const keyLower = key.toLowerCase();
+                  const specValue = typeof value === 'string' ? value : JSON.stringify(value);
                   
-                  // Check if it's a dimension-related specification
-                  const isDimension = key.toLowerCase().includes('dimension') ||
-                                     key.toLowerCase().includes('size') ||
-                                     key.toLowerCase().includes('weight') ||
-                                     key.toLowerCase().includes('length') ||
-                                     key.toLowerCase().includes('width') ||
-                                     key.toLowerCase().includes('height') ||
-                                     key.toLowerCase().includes('depth') ||
-                                     key.toLowerCase().includes('thickness') ||
-                                     key.toLowerCase().includes('measurement');
+                  // Determine category and color scheme
+                  let bgColor = 'bg-gray-50';
+                  let borderColor = 'border-gray-200';
+                  let keyColor = 'text-gray-700';
+                  let valueColor = 'text-gray-900';
+                  let dotColor = 'bg-gray-400';
                   
-                  // Check if it's a care instruction
-                  const isCare = key.toLowerCase().includes('care') ||
-                                key.toLowerCase().includes('washing') ||
-                                key.toLowerCase().includes('maintenance') ||
-                                key.toLowerCase().includes('cleaning') ||
-                                key.toLowerCase().includes('dry') ||
-                                key.toLowerCase().includes('iron');
-                  
-                  // Check if it's brand/model info
-                  const isBrand = key.toLowerCase().includes('brand') ||
-                                 key.toLowerCase().includes('manufacturer') ||
-                                 key.toLowerCase().includes('model') ||
-                                 key.toLowerCase().includes('sku');
-                  
-                  // Check if it's color-related
-                  const isColor = key.toLowerCase().includes('color') ||
-                                 key.toLowerCase().includes('colour');
-                  
-                  // Determine icon and colors based on type
-                  let Icon, bgGradient, borderColor, badgeColor, badgeText, iconBg;
-                  
-                  if (isMaterial) {
-                    Icon = Package;
-                    bgGradient = 'from-amber-50 via-orange-50 to-yellow-50';
-                    borderColor = 'border-amber-200 hover:border-amber-400';
-                    badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
-                    badgeText = 'Material';
-                    iconBg = 'bg-gradient-to-br from-amber-400 to-orange-500';
-                  } else if (isDimension) {
-                    Icon = Ruler;
-                    bgGradient = 'from-blue-50 via-indigo-50 to-purple-50';
-                    borderColor = 'border-blue-200 hover:border-blue-400';
-                    badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
-                    badgeText = 'Dimension';
-                    iconBg = 'bg-gradient-to-br from-blue-400 to-indigo-500';
-                  } else if (isCare) {
-                    Icon = Sparkles;
-                    bgGradient = 'from-green-50 via-emerald-50 to-teal-50';
-                    borderColor = 'border-green-200 hover:border-green-400';
-                    badgeColor = 'bg-green-100 text-green-800 border-green-300';
-                    badgeText = 'Care';
-                    iconBg = 'bg-gradient-to-br from-green-400 to-emerald-500';
-                  } else if (isColor) {
-                    Icon = Droplet;
-                    bgGradient = 'from-pink-50 via-rose-50 to-red-50';
-                    borderColor = 'border-pink-200 hover:border-pink-400';
-                    badgeColor = 'bg-pink-100 text-pink-800 border-pink-300';
-                    badgeText = 'Color';
-                    iconBg = 'bg-gradient-to-br from-pink-400 to-rose-500';
-                  } else if (isBrand) {
-                    Icon = CheckCircle2;
-                    bgGradient = 'from-purple-50 via-pink-50 to-fuchsia-50';
-                    borderColor = 'border-purple-200 hover:border-purple-400';
-                    badgeColor = 'bg-purple-100 text-purple-800 border-purple-300';
-                    badgeText = 'Brand';
-                    iconBg = 'bg-gradient-to-br from-purple-400 to-pink-500';
-                  } else {
-                    Icon = Package;
-                    bgGradient = 'from-gray-50 via-slate-50 to-zinc-50';
-                    borderColor = 'border-gray-200 hover:border-emerald-300';
-                    badgeColor = 'bg-gray-100 text-gray-800 border-gray-300';
-                    badgeText = 'Detail';
-                    iconBg = 'bg-gradient-to-br from-gray-400 to-slate-500';
+                  if (keyLower.includes('color') || keyLower.includes('colour')) {
+                    bgColor = 'bg-pink-50';
+                    borderColor = 'border-pink-200';
+                    keyColor = 'text-pink-700';
+                    valueColor = 'text-pink-900';
+                    dotColor = 'bg-pink-400';
+                  } else if (
+                    keyLower.includes('material') || keyLower.includes('fabric') ||
+                    keyLower.includes('leather') || keyLower.includes('composition') ||
+                    keyLower.includes('fiber') || keyLower.includes('textile') ||
+                    keyLower.includes('lining') || keyLower.includes('suede') ||
+                    keyLower.includes('wool') || keyLower.includes('cotton') ||
+                    keyLower.includes('polyester')
+                  ) {
+                    bgColor = 'bg-amber-50';
+                    borderColor = 'border-amber-200';
+                    keyColor = 'text-amber-700';
+                    valueColor = 'text-amber-900';
+                    dotColor = 'bg-amber-400';
+                  } else if (
+                    keyLower.includes('design') || keyLower.includes('style') ||
+                    keyLower.includes('pattern') || keyLower.includes('cuffs') ||
+                    keyLower.includes('closure') || keyLower.includes('pockets') ||
+                    keyLower.includes('collar') || keyLower.includes('sleeve')
+                  ) {
+                    bgColor = 'bg-blue-50';
+                    borderColor = 'border-blue-200';
+                    keyColor = 'text-blue-700';
+                    valueColor = 'text-blue-900';
+                    dotColor = 'bg-blue-400';
+                  } else if (
+                    keyLower.includes('dimension') || keyLower.includes('size') ||
+                    keyLower.includes('weight') || keyLower.includes('length') ||
+                    keyLower.includes('width') || keyLower.includes('height') ||
+                    keyLower.includes('depth') || keyLower.includes('thickness') ||
+                    keyLower.includes('measurement')
+                  ) {
+                    bgColor = 'bg-indigo-50';
+                    borderColor = 'border-indigo-200';
+                    keyColor = 'text-indigo-700';
+                    valueColor = 'text-indigo-900';
+                    dotColor = 'bg-indigo-400';
+                  } else if (
+                    keyLower.includes('care') || keyLower.includes('washing') ||
+                    keyLower.includes('maintenance') || keyLower.includes('cleaning') ||
+                    keyLower.includes('dry') || keyLower.includes('iron')
+                  ) {
+                    bgColor = 'bg-emerald-50';
+                    borderColor = 'border-emerald-200';
+                    keyColor = 'text-emerald-700';
+                    valueColor = 'text-emerald-900';
+                    dotColor = 'bg-emerald-400';
+                  } else if (
+                    keyLower.includes('brand') || keyLower.includes('manufacturer') ||
+                    keyLower.includes('model') || keyLower.includes('sku')
+                  ) {
+                    bgColor = 'bg-purple-50';
+                    borderColor = 'border-purple-200';
+                    keyColor = 'text-purple-700';
+                    valueColor = 'text-purple-900';
+                    dotColor = 'bg-purple-400';
                   }
                   
                   return (
-                    <div 
+                    <div
                       key={key}
-                      className={`group relative overflow-hidden bg-gradient-to-br ${bgGradient} rounded-2xl border-2 ${borderColor} p-6 transition-all duration-500 hover:shadow-2xl hover:-translate-y-1`}
-                      style={{ animationDelay: `${index * 50}ms` }}
+                      className={`${bgColor} ${borderColor} border rounded-lg p-2.5 sm:p-3 hover:shadow-sm transition-all`}
                     >
-                      {/* Icon Badge */}
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`${iconBg} p-3 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                          <Icon className="h-5 w-5 text-white" />
+                      <div className="flex items-start gap-2">
+                        <div className={`${dotColor} w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-xs font-semibold ${keyColor} mb-1`}>
+                            {formattedKey}
+                          </div>
+                          <div className={`text-xs sm:text-sm ${valueColor} line-clamp-2 break-words`}>
+                            {specValue}
+                          </div>
                         </div>
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border-2 ${badgeColor} shadow-sm`}>
-                          {badgeText}
-                        </span>
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-bold text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors">
-                          {formattedKey}
-                        </h3>
-                        <p className="text-gray-700 text-sm leading-relaxed break-words line-clamp-3">
-                          {typeof value === 'string' ? value : JSON.stringify(value)}
-                        </p>
-                      </div>
-                      
-                      {/* Decorative Elements */}
-                      <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-gradient-to-br from-white/20 to-transparent rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
-                      <div className="absolute top-0 right-0 w-32 h-32 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <div className={`w-full h-full bg-gradient-to-br ${iconBg.replace('from-', 'from-').replace('to-', 'to-')} rounded-full blur-3xl`}></div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            
-              {/* Quality Assurance Section */}
-              <div className="mt-12 pt-10 border-t-2 border-gray-200">
-                <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 rounded-2xl p-8 border-2 border-emerald-200 shadow-lg relative overflow-hidden">
-                  {/* Background Pattern */}
-                  <div className="absolute inset-0 opacity-5">
-                    <div className="absolute top-0 left-0 w-40 h-40 bg-emerald-400 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                    <div className="absolute bottom-0 right-0 w-60 h-60 bg-teal-400 rounded-full translate-x-1/2 translate-y-1/2"></div>
-                  </div>
-                  
-                  <div className="relative z-10">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0">
-                        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-2xl shadow-lg">
-                          <Shield className="h-8 w-8 text-white" />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                          Quality Assurance
-                        </h3>
-                        <p className="text-gray-700 text-base leading-relaxed">
-                          All specifications are verified and accurate. Our team ensures every detail is carefully checked. For questions about specific details, please contact our customer service team.
-                        </p>
-                        <div className="mt-4 flex items-center gap-2 text-emerald-700 font-semibold">
-                          <CheckCircle2 className="h-5 w-5" />
-                          <span className="text-sm">Verified Product Information</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              
+              {/* Quality Assurance - Compact Badge */}
+              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-center gap-2">
+                <Shield className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-xs font-medium text-gray-700">Quality Assured</span>
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
               </div>
             </div>
           </div>
@@ -1889,8 +1872,8 @@ export default function ProductPage() {
       {showEtsyResults && etsyPolicyResults && (
         <div className="mt-24 mb-16">
           <div className="max-w-4xl mx-auto px-4">
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-gray-200">
-              <div className="flex items-center justify-between mb-6">
+            <div className="bg-white rounded-lg p-4 sm:p-5 shadow-sm border border-gray-200">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${
                     etsyPolicyResults.summary.isCompliant 
@@ -1919,7 +1902,7 @@ export default function ProductPage() {
               </div>
 
               {/* Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Compliance Rate</p>
                   <p className="text-2xl font-bold text-gray-900">{etsyPolicyResults.complianceRate}%</p>
@@ -1940,7 +1923,7 @@ export default function ProductPage() {
 
               {/* Gemini AI Review */}
               {aiReview && (
-                <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 md:p-6 space-y-4">
+                <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 sm:p-4 space-y-3">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase font-semibold text-indigo-700 tracking-wider flex items-center gap-2">
@@ -2065,7 +2048,7 @@ export default function ProductPage() {
                     </div>
                   ) : (
                     <div
-                      className={`p-4 rounded-2xl border ${
+                      className={`p-3 rounded-lg border ${
                         aiReview.status === 'skipped'
                           ? 'border-amber-200 bg-amber-50 text-amber-900'
                           : 'border-red-200 bg-red-50 text-red-900'
@@ -2086,7 +2069,7 @@ export default function ProductPage() {
               )}
 
               {/* Compliance Status */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Compliance Status</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className={`p-3 rounded-lg border-2 ${
@@ -2186,7 +2169,7 @@ export default function ProductPage() {
               )}
 
               {etsyPolicyResults.violations.all.length === 0 && (
-                <div className="text-center py-8">
+                <div className="text-center py-4 sm:py-6">
                   <CheckCircle2 className="h-16 w-16 text-green-600 mx-auto mb-4" />
                   <p className="text-xl font-semibold text-gray-900 mb-2">All Clear! ✓</p>
                   <p className="text-gray-600">Your product follows Etsy seller policies.</p>
@@ -2200,8 +2183,8 @@ export default function ProductPage() {
       {/* Product FAQs Section */}
       {allFAQs.length > 0 && (
         <div className="mt-24 mb-16">
-          <div className="text-center mb-12 px-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-2xl mb-6 shadow-lg">
+          <div className="text-center mb-6 sm:mb-8 px-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl mb-3 sm:mb-4 shadow-md">
               <HelpCircle className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
@@ -2213,7 +2196,7 @@ export default function ProductPage() {
           </div>
           
           <div className="max-w-4xl mx-auto px-4">
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-gray-200">
+            <div className="bg-white rounded-lg p-4 sm:p-5 shadow-sm border border-gray-200">
               <div className="space-y-3">
                 {allFAQs.map((faq, index) => {
                   // Generate a helpful answer based on the question and product info
@@ -2330,14 +2313,14 @@ export default function ProductPage() {
               <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
                 Related <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Products</span>
               </h2>
-              <p className="text-gray-600 mb-8">You might also like</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <p className="text-gray-600 mb-4 sm:mb-5">You might also like</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {relatedProducts
                   .map((relatedProduct: any) => (
               <div 
                 key={(relatedProduct._id || relatedProduct.id) as string} 
                 onClick={() => handleRelatedProductClick((relatedProduct._id || relatedProduct.id) as string)}
-                className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl shadow-lg border-2 border-emerald-200 overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer group"
+                className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg shadow-sm border border-emerald-200 overflow-hidden hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
               >
                 <div className="aspect-square overflow-hidden bg-gradient-to-br from-emerald-100 to-teal-100 relative">
                   <Image
@@ -2389,9 +2372,9 @@ export default function ProductPage() {
       {/* Product Tags Section */}
       {currentProduct.tags && currentProduct.tags.length > 0 && (
         <div className="mt-16 mb-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-3xl p-8 md:p-12 shadow-xl border-2 border-indigo-100">
-              <div className="flex items-center gap-4 mb-6">
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
+            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-lg p-4 sm:p-6 shadow-sm border border-indigo-100">
+              <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
                   <Tag className="h-6 w-6 text-white" />
                 </div>
@@ -2442,7 +2425,7 @@ export default function ProductPage() {
                           type="button"
                           onClick={() => handleGenerateTags(false)}
                           disabled={isGeneratingTags}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isGeneratingTags ? (
                             <>
@@ -2476,7 +2459,7 @@ export default function ProductPage() {
                           type="button"
                           onClick={() => handleGenerateTags(true)}
                           disabled={isGeneratingTags}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 transition-all shadow-sm hover:shadow-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isGeneratingTags ? (
                             <>

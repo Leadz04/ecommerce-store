@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, Link2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SelectField from '@/components/SelectField';
 
 interface ScrapedItem {
   _id: string;
@@ -125,7 +126,8 @@ export default function SourcingPanel() {
   const [refreshLoading, setRefreshLoading] = useState(false);
   const [savedZoomIdx, setSavedZoomIdx] = useState<number | null>(null);
   const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
-  const [savedViewMode, setSavedViewMode] = useState<'list' | 'brands'>('brands');
+  const [savedViewMode, setSavedViewMode] = useState<'list' | 'brands'>('list');
+  const [savedViewModeOpen, setSavedViewModeOpen] = useState(false);
   const [savedSectionExpanded, setSavedSectionExpanded] = useState(true);
 
   // Filters (must appear after selected/savedSelected exist)
@@ -332,6 +334,9 @@ export default function SourcingPanel() {
       if (!res.ok) throw new Error(data?.error || 'Failed to load saved products');
       
       if (savedViewMode === 'brands') {
+        setSavedItems([]);
+        setSavedPage(1);
+        setSavedPages(1);
         // Brand view - get brand list with counts
         setSavedBrands(data.brands || []);
         setSavedBrandCounts(data.brandCounts || {});
@@ -354,6 +359,7 @@ export default function SourcingPanel() {
         setSavedGroupedByBrand({});
         setSavedBrands([]);
         setSavedBrandCounts({});
+        setExpandedBrands({});
       }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load saved');
@@ -739,139 +745,145 @@ export default function SourcingPanel() {
 
       {/* Saved Products Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-6 border-b border-gray-200 space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <h3 className="text-xl font-semibold text-gray-900">Saved Sourced Products</h3>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               <button
                 onClick={() => fetchSaved(1)}
                 disabled={savedLoading}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center space-x-2"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw className={`h-4 w-4 ${savedLoading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
-              <select
+              <SelectField
                 value={savedViewMode}
-                onChange={(e) => setSavedViewMode(e.target.value as 'list' | 'brands')}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="brands">Group by Brand</option>
-                <option value="list">List View</option>
-              </select>
+                options={[
+                  { value: 'list', label: 'List View' },
+                  { value: 'brands', label: 'Group by Brand' },
+                ]}
+                isOpen={savedViewModeOpen}
+                onOpenChange={setSavedViewModeOpen}
+                onSelect={(val) => setSavedViewMode(val as 'list' | 'brands')}
+                placeholder="Select view"
+                className="w-full sm:w-auto"
+              />
             </div>
           </div>
 
-          {/* Search */}
           <input
             type="text"
             value={savedQuery}
             onChange={(e) => setSavedQuery(e.target.value)}
             placeholder="Search saved products..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
         </div>
 
         <div className="p-6">
           {savedLoading ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-gray-600 mt-4">Loading saved products...</p>
-            </div>
-          ) : savedItems.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No saved products found</p>
-              <p className="text-gray-400 mt-2">Import products using the URL field above</p>
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></div>
+              <p className="mt-4 text-gray-600">Loading saved products...</p>
             </div>
           ) : savedViewMode === 'brands' ? (
-            <div className="space-y-6">
-              {savedBrands.map((brand) => (
-                <div key={brand} className="border border-gray-200 rounded-lg">
-                  <button
-                    onClick={() => {
-                      const isExpanded = expandedBrands[brand];
-                      setExpandedBrands({ ...expandedBrands, [brand]: !isExpanded });
-                      if (!isExpanded && !savedGroupedByBrand[brand]) {
-                        fetchSaved(1, brand);
-                      }
-                    }}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <h4 className="font-semibold text-gray-900">{brand}</h4>
-                      <span className="text-sm text-gray-500">({savedBrandCounts[brand] || 0} items)</span>
-                    </div>
-                    <span className="text-gray-400">{expandedBrands[brand] ? '▼' : '▶'}</span>
-                  </button>
-                  
-                  {expandedBrands[brand] && (
-                    <div className="p-4 bg-gray-50 border-t border-gray-200">
-                      {loadingBrands[brand] ? (
-                        <div className="text-center py-8">
-                          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                          {(savedGroupedByBrand[brand] || []).map((item) => (
-                            <div
-                              key={item._id}
-                              onClick={() => setSavedSelected(item)}
-                              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow"
-                            >
-                              {item.images && item.images[0] && (
-                                <img
-                                  src={item.images[0]}
-                                  alt={item.title}
-                                  className="w-full h-40 object-cover rounded-lg mb-3"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/placeholder-product.svg';
-                                  }}
-                                />
-                              )}
-                              <h5 className="font-medium text-gray-900 text-sm line-clamp-2 mb-2">
-                                {item.title}
-                              </h5>
-                              {item.price && (
-                                <p className="text-blue-600 font-semibold">${item.price}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            savedBrands.length ? (
+              <div className="space-y-6">
+                {savedBrands.map((brand) => (
+                  <div key={brand} className="rounded-lg border border-gray-200">
+                    <button
+                      onClick={() => {
+                        const isExpanded = expandedBrands[brand];
+                        setExpandedBrands((prev) => ({ ...prev, [brand]: !isExpanded }));
+                        if (!isExpanded && !savedGroupedByBrand[brand]) {
+                          fetchBrandProducts(brand, 1);
+                        }
+                      }}
+                      className="flex w-full items-center justify-between px-6 py-4 text-left transition hover:bg-gray-50"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <h4 className="font-semibold text-gray-900">{brand}</h4>
+                        <span className="text-sm text-gray-500">{savedBrandCounts[brand] || 0} items</span>
+                      </div>
+                      <span className="text-gray-400">{expandedBrands[brand] ? '−' : '+'}</span>
+                    </button>
+
+                    {expandedBrands[brand] && (
+                      <div className="border-t border-gray-100 bg-gray-50 p-4">
+                        {loadingBrands[brand] ? (
+                          <div className="py-8 text-center">
+                            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></div>
+                          </div>
+                        ) : (savedGroupedByBrand[brand] || []).length ? (
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {(savedGroupedByBrand[brand] || []).map((item) => (
+                              <div
+                                key={item._id}
+                                onClick={() => setSavedSelected(item)}
+                                className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+                              >
+                                {item.images && item.images[0] && (
+                                  <img
+                                    src={item.images[0]}
+                                    alt={item.title}
+                                    className="mb-3 h-40 w-full rounded-lg object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.src = '/placeholder-product.svg';
+                                    }}
+                                  />
+                                )}
+                                <h5 className="mb-2 line-clamp-2 text-sm font-medium text-gray-900">
+                                  {item.title}
+                                </h5>
+                                {item.price && (
+                                  <p className="text-sm font-semibold text-blue-600">${item.price}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="py-8 text-center text-sm text-gray-500">No products for this brand.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">No brands found yet</p>
+                <p className="text-gray-400 mt-2">Try importing products or switch to list view.</p>
+              </div>
+            )
+          ) : savedItems.length ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {savedItems.map((item) => (
                 <div
                   key={item._id}
                   onClick={() => setSavedSelected(item)}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition-shadow"
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                 >
                   {item.images && item.images[0] && (
                     <img
                       src={item.images[0]}
                       alt={item.title}
-                      className="w-full h-40 object-cover rounded-lg mb-3"
+                      className="mb-3 h-40 w-full rounded-lg object-cover"
                       onError={(e) => {
                         e.currentTarget.src = '/placeholder-product.svg';
                       }}
                     />
                   )}
-                  <h5 className="font-medium text-gray-900 text-sm line-clamp-2 mb-2">
-                    {item.title}
-                  </h5>
-                  {item.price && (
-                    <p className="text-blue-600 font-semibold">${item.price}</p>
-                  )}
-                  {item.brand && (
-                    <p className="text-gray-500 text-xs mt-1">{item.brand}</p>
-                  )}
+                  <h5 className="mb-2 line-clamp-2 text-sm font-medium text-gray-900">{item.title}</h5>
+                  {item.price && <p className="text-sm font-semibold text-blue-600">${item.price}</p>}
+                  {item.brand && <p className="mt-1 text-xs text-gray-500">{item.brand}</p>}
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-lg text-gray-500">No saved products found</p>
+              <p className="mt-2 text-gray-400">Import products using the URL field above</p>
             </div>
           )}
 

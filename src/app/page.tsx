@@ -6,10 +6,11 @@ export const fetchCache = 'force-no-store';
 import { useState, useEffect } from 'react';
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Truck, Shield, RotateCcw, Headphones } from "lucide-react";
+import { ArrowRight, Truck, Shield, RotateCcw, Headphones, CheckCircle2, Loader2 } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/LoadingSkeleton";
 import { sampleProducts } from "@/data/products";
+import toast from 'react-hot-toast';
 
 export default function Home() {
   const featuredProducts = sampleProducts.slice(0, 4);
@@ -198,25 +199,112 @@ export default function Home() {
       </section>
 
       {/* Newsletter Section */}
-      <section className="py-10 sm:py-12 md:py-16 bg-blue-600 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4">Stay Updated</h2>
-          <p className="text-sm sm:text-base text-blue-100 mb-6 sm:mb-8 max-w-2xl mx-auto px-4">
-            Subscribe to our newsletter and be the first to know about new products, 
-            exclusive deals, and special offers.
-          </p>
-          <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-3 sm:gap-4 px-4">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
-            <button className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors w-full sm:w-auto">
-              Subscribe
-            </button>
-          </div>
-        </div>
-      </section>
+      <NewsletterSection />
     </div>
+  );
+}
+
+// Newsletter Subscription Component
+function NewsletterSection() {
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const response = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsSuccess(true);
+        setEmail('');
+        
+        // Store email in localStorage for visitor tracking
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('visitor_email', email.toLowerCase().trim());
+        }
+        
+        if (data.alreadySubscribed) {
+          toast.success('You are already subscribed!');
+        } else {
+          toast.success('Successfully subscribed! Check your email for confirmation.');
+        }
+        
+        // Reset success state after 5 seconds
+        setTimeout(() => {
+          setIsSuccess(false);
+        }, 5000);
+      } else {
+        toast.error(data.error || 'Failed to subscribe. Please try again.');
+      }
+    } catch (error) {
+      console.error('Newsletter subscription error:', error);
+      toast.error('Something went wrong. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="py-10 sm:py-12 md:py-16 bg-blue-600 text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4">Stay Updated</h2>
+        <p className="text-sm sm:text-base text-blue-100 mb-6 sm:mb-8 max-w-2xl mx-auto px-4">
+          Subscribe to our newsletter and be the first to know about new products, 
+          exclusive deals, and special offers.
+        </p>
+        <form onSubmit={handleSubscribe} className="max-w-md mx-auto flex flex-col sm:flex-row gap-3 sm:gap-4 px-4">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            disabled={isSubmitting || isSuccess}
+            required
+            className="flex-1 px-4 py-3 rounded-lg text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting || isSuccess || !email}
+            className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Subscribing...
+              </>
+            ) : isSuccess ? (
+              <>
+                <CheckCircle2 className="h-4 w-4" />
+                Subscribed!
+              </>
+            ) : (
+              'Subscribe'
+            )}
+          </button>
+        </form>
+        {isSuccess && (
+          <p className="mt-4 text-sm text-blue-100">
+            ✓ Thank you for subscribing! Check your email for confirmation.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }

@@ -72,6 +72,26 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error tracking visitor:', error);
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      // Handle MongoDB connection errors
+      if (error.message.includes('MongoServerError') || error.message.includes('connection')) {
+        return NextResponse.json(
+          { error: 'Database connection error. Please try again later.' },
+          { status: 503 }
+        );
+      }
+      
+      // Handle validation errors
+      if (error.name === 'ValidationError') {
+        return NextResponse.json(
+          { error: 'Invalid data provided' },
+          { status: 400 }
+        );
+      }
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -327,3 +327,268 @@ Thank you,
 ShopEase Team
   `;
 }
+
+// Admin email constant
+export const ADMIN_EMAIL = 'testleadz04@gmail.com';
+
+// Welcome Email Template
+export interface WelcomeEmailData {
+  name: string;
+  email: string;
+  siteUrl?: string;
+}
+
+export function generateWelcomeEmailHTML(data: WelcomeEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid #10b981; padding-bottom: 10px;">
+        Welcome to ShopEase! 🎉
+      </h2>
+      
+      <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+        <h3 style="color: #065f46; margin-top: 0;">Thank you for joining us!</h3>
+        <p style="color: #047857; margin: 0;">Your account has been successfully created. We're excited to have you as part of our community!</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Get Started</h3>
+        <p style="color: #374151; line-height: 1.6;">
+          Start exploring our amazing products and enjoy a seamless shopping experience. Browse our catalog, add items to your cart, and checkout with ease.
+        </p>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${siteUrl}/products" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">Start Shopping</a>
+        </div>
+      </div>
+      
+      <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+        <p style="margin: 0; color: #1e40af; font-size: 14px;">
+          <strong>Need help?</strong> Visit our <a href="${siteUrl}/contact" style="color: #3b82f6;">contact page</a> or reply to this email.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+// Order Status Change Email Template
+export interface OrderStatusEmailData {
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  status: string;
+  previousStatus?: string;
+  trackingNumber?: string;
+  notes?: string;
+  siteUrl?: string;
+}
+
+export function generateOrderStatusEmailHTML(data: OrderStatusEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const statusMessages: Record<string, { title: string; message: string; color: string }> = {
+    'processing': { title: 'Order Processing', message: 'Your order is being prepared for shipment.', color: '#3b82f6' },
+    'shipped': { title: 'Order Shipped!', message: 'Your order has been shipped and is on its way to you.', color: '#10b981' },
+    'delivered': { title: 'Order Delivered', message: 'Your order has been delivered successfully.', color: '#10b981' },
+    'cancelled': { title: 'Order Cancelled', message: 'Your order has been cancelled.', color: '#ef4444' },
+    'refunded': { title: 'Order Refunded', message: 'Your order has been refunded.', color: '#f59e0b' },
+  };
+  
+  const statusInfo = statusMessages[data.status] || { title: 'Order Updated', message: 'Your order status has been updated.', color: '#6b7280' };
+  
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid ${statusInfo.color}; padding-bottom: 10px;">
+        ${statusInfo.title} - Order #${data.orderNumber}
+      </h2>
+      
+      <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${statusInfo.color};">
+        <h3 style="color: #065f46; margin-top: 0;">${statusInfo.title}</h3>
+        <p style="color: #047857; margin: 0;">${statusInfo.message}</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Order Details</h3>
+        <p><strong>Order Number:</strong> #${data.orderNumber}</p>
+        <p><strong>Status:</strong> ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}</p>
+        ${data.trackingNumber ? `<p><strong>Tracking Number:</strong> ${data.trackingNumber}</p>` : ''}
+        ${data.notes ? `<p><strong>Notes:</strong> ${data.notes}</p>` : ''}
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${siteUrl}/orders" style="display: inline-block; background: ${statusInfo.color}; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">View Order</a>
+      </div>
+    </div>
+  `;
+}
+
+// Review Submission Admin Notification
+export interface ReviewSubmissionAdminEmailData {
+  reviewId: string;
+  productName: string;
+  productId: string;
+  userName: string;
+  userEmail: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  siteUrl?: string;
+}
+
+export function generateReviewSubmissionAdminEmailHTML(data: ReviewSubmissionAdminEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
+        New Review Submission - Requires Approval
+      </h2>
+      
+      <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+        <h3 style="color: #92400e; margin-top: 0;">Action Required</h3>
+        <p style="color: #78350f; margin: 0;">A new product review has been submitted and requires your approval.</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Review Details</h3>
+        <p><strong>Product:</strong> ${data.productName}</p>
+        <p><strong>Reviewer:</strong> ${data.userName} (${data.userEmail})</p>
+        <p><strong>Rating:</strong> ${'⭐'.repeat(data.rating)} ${data.rating}/5</p>
+        ${data.title ? `<p><strong>Title:</strong> ${data.title}</p>` : ''}
+        <p><strong>Comment:</strong></p>
+        <div style="background: #ffffff; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 10px;">
+          <p style="margin: 0; line-height: 1.6; color: #374151;">${data.comment.replace(/\n/g, '<br>')}</p>
+        </div>
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${siteUrl}/admin/reviews" style="display: inline-block; background: #f59e0b; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">Review & Approve</a>
+      </div>
+    </div>
+  `;
+}
+
+// Review Approval/Rejection Customer Notification
+export interface ReviewStatusEmailData {
+  userName: string;
+  productName: string;
+  status: 'approved' | 'rejected';
+  adminMessage?: string;
+  siteUrl?: string;
+}
+
+export function generateReviewStatusEmailHTML(data: ReviewStatusEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const isApproved = data.status === 'approved';
+  
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid ${isApproved ? '#10b981' : '#ef4444'}; padding-bottom: 10px;">
+        Review ${isApproved ? 'Approved' : 'Status Update'}
+      </h2>
+      
+      <div style="background: ${isApproved ? '#f0fdf4' : '#fee2e2'}; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${isApproved ? '#10b981' : '#ef4444'};">
+        <h3 style="color: ${isApproved ? '#065f46' : '#991b1b'}; margin-top: 0;">${isApproved ? 'Your Review Has Been Published!' : 'Review Status Update'}</h3>
+        <p style="color: ${isApproved ? '#047857' : '#dc2626'}; margin: 0;">
+          ${isApproved 
+            ? `Thank you for your review of ${data.productName}! It has been approved and is now visible to other customers.` 
+            : `We're sorry, but your review for ${data.productName} could not be published at this time.`}
+        </p>
+      </div>
+      
+      ${data.adminMessage ? `
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Admin Message</h3>
+        <p style="color: #374151; line-height: 1.6;">${data.adminMessage}</p>
+      </div>
+      ` : ''}
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${siteUrl}/products" style="display: inline-block; background: ${isApproved ? '#10b981' : '#6b7280'}; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">Continue Shopping</a>
+      </div>
+    </div>
+  `;
+}
+
+// Admin User Creation Notification
+export interface AdminUserCreatedEmailData {
+  userName: string;
+  userEmail: string;
+  roleName: string;
+  createdBy: string;
+  siteUrl?: string;
+}
+
+export function generateAdminUserCreatedEmailHTML(data: AdminUserCreatedEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid #6366f1; padding-bottom: 10px;">
+        Your ShopEase Account Has Been Created
+      </h2>
+      
+      <div style="background: #eef2ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6366f1;">
+        <h3 style="color: #4338ca; margin-top: 0;">Welcome to ShopEase Admin!</h3>
+        <p style="color: #4f46e5; margin: 0;">An administrator account has been created for you with ${data.roleName} role.</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Account Details</h3>
+        <p><strong>Name:</strong> ${data.userName}</p>
+        <p><strong>Email:</strong> ${data.userEmail}</p>
+        <p><strong>Role:</strong> ${data.roleName}</p>
+        <p><strong>Created By:</strong> ${data.createdBy}</p>
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${siteUrl}/login" style="display: inline-block; background: #6366f1; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">Login to Your Account</a>
+      </div>
+    </div>
+  `;
+}
+
+// Payment Notification Templates
+export interface PaymentNotificationEmailData {
+  orderNumber: string;
+  customerName: string;
+  amount: number;
+  status: 'succeeded' | 'failed' | 'disputed' | 'canceled';
+  failureReason?: string;
+  siteUrl?: string;
+}
+
+export function generatePaymentNotificationEmailHTML(data: PaymentNotificationEmailData): string {
+  const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const statusInfo: Record<string, { title: string; message: string; color: string }> = {
+    'succeeded': { title: 'Payment Successful', message: 'Your payment has been processed successfully.', color: '#10b981' },
+    'failed': { title: 'Payment Failed', message: 'Unfortunately, your payment could not be processed.', color: '#ef4444' },
+    'disputed': { title: 'Payment Disputed', message: 'A dispute has been filed for this payment.', color: '#f59e0b' },
+    'canceled': { title: 'Payment Canceled', message: 'Your payment has been canceled.', color: '#6b7280' },
+  };
+  
+  const info = statusInfo[data.status] || statusInfo['failed'];
+  
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333; border-bottom: 2px solid ${info.color}; padding-bottom: 10px;">
+        ${info.title} - Order #${data.orderNumber}
+      </h2>
+      
+      <div style="background: ${info.color === '#10b981' ? '#f0fdf4' : '#fee2e2'}; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${info.color};">
+        <h3 style="color: ${info.color === '#10b981' ? '#065f46' : '#991b1b'}; margin-top: 0;">${info.title}</h3>
+        <p style="color: ${info.color === '#10b981' ? '#047857' : '#dc2626'}; margin: 0;">${info.message}</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #1e40af; margin-top: 0;">Payment Details</h3>
+        <p><strong>Order Number:</strong> #${data.orderNumber}</p>
+        <p><strong>Amount:</strong> $${data.amount.toFixed(2)}</p>
+        <p><strong>Status:</strong> ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}</p>
+        ${data.failureReason ? `<p><strong>Reason:</strong> ${data.failureReason}</p>` : ''}
+      </div>
+      
+      ${data.status === 'succeeded' ? `
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="${siteUrl}/orders" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: 600;">View Order</a>
+      </div>
+      ` : ''}
+    </div>
+  `;
+}

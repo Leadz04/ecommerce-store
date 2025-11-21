@@ -162,7 +162,28 @@ async function trackVisitor(email: string, options?: {
     });
 
     if (!response.ok) {
-      console.error('Failed to track visitor');
+      // Try to get error details
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch {
+        // If response is not JSON, try text
+        try {
+          const errorText = await response.text();
+          if (errorText) errorMessage = errorText;
+        } catch {
+          // Ignore if we can't read the response
+        }
+      }
+      
+      // Log as warning instead of error for non-critical failures
+      console.warn('[VisitorEmailTracker] Failed to track visitor:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage,
+        email: email.substring(0, 3) + '***' // Partial email for debugging
+      });
       return;
     }
 
@@ -174,7 +195,12 @@ async function trackVisitor(email: string, options?: {
       sendConversionEmail(email);
     }
   } catch (error) {
-    console.error('Error tracking visitor:', error);
+    // Handle network errors and other exceptions gracefully
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.warn('[VisitorEmailTracker] Network error - visitor tracking unavailable');
+    } else {
+      console.warn('[VisitorEmailTracker] Error tracking visitor:', error instanceof Error ? error.message : 'Unknown error');
+    }
   }
 }
 

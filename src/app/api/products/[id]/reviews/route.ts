@@ -215,6 +215,35 @@ export async function POST(
       status: 'pending', // Reviews need approval
     });
 
+    // Send admin notification for review submission
+    try {
+      const { sendEmail, generateReviewSubmissionAdminEmailHTML, ADMIN_EMAIL } = await import('@/lib/email');
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      
+      const adminEmailHTML = generateReviewSubmissionAdminEmailHTML({
+        reviewId: review._id.toString(),
+        productName: product.name,
+        productId: id,
+        userName: userName,
+        userEmail: userEmail,
+        rating: parseInt(rating),
+        title: title?.trim(),
+        comment: comment.trim(),
+        siteUrl
+      });
+      
+      await sendEmail({
+        to: ADMIN_EMAIL,
+        subject: `New Review Submission - ${product.name} - ${userName}`,
+        html: adminEmailHTML,
+        text: `New review submitted for ${product.name} by ${userName} (${userEmail})\nRating: ${rating}/5\nComment: ${comment.trim()}`
+      });
+      console.log('✅ [API /products/reviews] Admin notification sent for review submission');
+    } catch (emailError) {
+      console.error('❌ [API /products/reviews] Failed to send admin notification:', emailError);
+      // Don't fail review creation if email fails
+    }
+
     // Update product rating and review count (only if approved)
     // This will be done when admin approves the review
 

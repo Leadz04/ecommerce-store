@@ -190,7 +190,7 @@ export default function EmailTrackingDashboard() {
   if (!data) return null;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Header with Date Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

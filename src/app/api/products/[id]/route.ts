@@ -93,6 +93,28 @@ export async function PUT(
       );
     }
 
+    // Validate data before updating
+    if (updateData.price !== undefined && updateData.price < 0) {
+      return NextResponse.json(
+        { error: 'Price cannot be negative' },
+        { status: 400 }
+      );
+    }
+
+    if (updateData.stockCount !== undefined && updateData.stockCount < 0) {
+      return NextResponse.json(
+        { error: 'Stock count cannot be negative' },
+        { status: 400 }
+      );
+    }
+
+    if (updateData.originalPrice !== undefined && updateData.originalPrice < 0) {
+      return NextResponse.json(
+        { error: 'Original price cannot be negative' },
+        { status: 400 }
+      );
+    }
+
     const product = await Product.findByIdAndUpdate(
       id,
       updateData,
@@ -113,6 +135,43 @@ export async function PUT(
 
   } catch (error) {
     console.error('Product update error:', error);
+    
+    // Handle Mongoose validation errors
+    if (error && typeof error === 'object' && 'name' in error) {
+      if (error.name === 'ValidationError') {
+        const validationError = error as any;
+        // Extract the first validation error message
+        const firstError = validationError.errors 
+          ? Object.values(validationError.errors)[0] as any
+          : null;
+        const errorMessage = firstError?.message || validationError.message || 'Validation failed';
+        
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 400 }
+        );
+      }
+      
+      // Handle CastError (invalid ObjectId, etc.)
+      if (error.name === 'CastError') {
+        return NextResponse.json(
+          { error: 'Invalid data format' },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Handle other known error types
+    if (error instanceof Error) {
+      // If it's a known error with a message, return it
+      if (error.message.includes('Validation failed') || error.message.includes('Stock count')) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 }
+        );
+      }
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

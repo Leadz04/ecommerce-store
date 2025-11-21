@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import { Order, User } from '@/models';
 import { requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import { sendEmail, generateOrderStatusEmailHTML, ADMIN_EMAIL } from '@/lib/email';
 
 export async function GET(
   request: NextRequest,
@@ -83,17 +84,55 @@ export async function PUT(
       updateData.notes = notes;
     }
 
-    const order = await Order.findByIdAndUpdate(
+    const order = await Order.findById(id);
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const previousStatus = order.status;
+    const updatedOrder = await Order.findByIdAndUpdate(
       id,
       updateData,
       { new: true, runValidators: true }
     );
 
-    if (!order) {
+    if (!updatedOrder) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const plain = order.toObject();
+    // Send email notification to customer if status changed
+    if (status && status !== previousStatus) {
+      try {
+        const plain = updatedOrder.toObject();
+        const user = await User.findById(plain.userId).select('name email phone address');
+        
+        if (user && user.email) {
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+          const statusEmailHTML = generateOrderStatusEmailHTML({
+            orderNumber: updatedOrder.orderNumber || updatedOrder._id.toString(),
+            customerName: user.name || 'Customer',
+            customerEmail: user.email,
+            status: status,
+            previousStatus: previousStatus,
+            notes: body.notes,
+            siteUrl
+          });
+
+          await sendEmail({
+            to: user.email,
+            subject: `Order Status Update - #${updatedOrder.orderNumber || updatedOrder._id.toString()}`,
+            html: statusEmailHTML,
+            text: `Your order #${updatedOrder.orderNumber || updatedOrder._id.toString()} status has been updated to: ${status}`
+          });
+          console.log('✅ [API /admin/orders] Status update email sent to customer');
+        }
+      } catch (emailError) {
+        console.error('❌ [API /admin/orders] Failed to send status update email:', emailError);
+        // Don't fail order update if email fails
+      }
+    }
+
+    const plain = updatedOrder.toObject();
     const user = await User.findById(plain.userId).select('name email phone address');
     const transformedOrder = {
       ...plain,
