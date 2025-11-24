@@ -14,7 +14,7 @@ import { applyDeduplication } from '@/lib/deduplication';
 // Helper function to verify JWT token
 async function verifyToken(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  
+
   if (!token) {
     throw new Error('No token provided');
   }
@@ -28,7 +28,7 @@ async function generateOrderNumber(): Promise<string> {
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
   const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, ''); // HHMMSS
-  
+
   // Get or create counter for today
   const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
   let counter = await OrderCounter.findOneAndUpdate(
@@ -36,10 +36,10 @@ async function generateOrderNumber(): Promise<string> {
     { $inc: { counter: 1 } },
     { upsert: true, new: true }
   );
-  
+
   // Format: YYYYMMDD-HHMMSS-XXXX (where XXXX is the incremental counter)
   const orderNumber = `${dateStr}-${timeStr}-${String(counter.counter).padStart(4, '0')}`;
-  
+
   return orderNumber;
 }
 
@@ -49,10 +49,10 @@ export async function GET(request: NextRequest) {
     console.log('[API /orders] Connecting to database...');
     await connectDB();
     console.log('[API /orders] Database connected');
-    
+
     const userId = await verifyToken(request);
     console.log('[API /orders] Fetching orders for user:', userId);
-    
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -62,15 +62,15 @@ export async function GET(request: NextRequest) {
 
     // Build query
     const query: any = { userId };
-    
+
     if (status && status !== 'all') {
       query.status = status;
     }
-    
+
     if (search) {
       query.orderNumber = { $regex: search, $options: 'i' };
     }
-    
+
     if (dateRange && dateRange !== 'all') {
       const days = parseInt(dateRange);
       const startDate = new Date();
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     console.log('[API /orders] Found', ordersRaw.length, 'orders (before deduplication)');
-    
+
     // Apply deduplication to ensure unique orders
     const orders = applyDeduplication(ordersRaw, 'orders');
     console.log('[API /orders] After deduplication:', orders.length, 'orders');
@@ -128,13 +128,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    
+
     const userId = await verifyToken(request);
     const orderData = await request.json();
-    
+
     // Debug: Log the received order data
     console.log('Received order data:', JSON.stringify(orderData, null, 2));
-    
+
     // Validate order data
     if (!orderData.items || orderData.items.length === 0) {
       return NextResponse.json(
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Check product availability and update stock
     for (const item of orderData.items) {
       let product;
-      
+
       // Handle both ObjectId and string ID formats
       if (mongoose.Types.ObjectId.isValid(item.productId)) {
         // Valid ObjectId - search by _id
@@ -157,9 +157,18 @@ export async function POST(request: NextRequest) {
         // String ID - search by id field
         product = await Product.findOne({ id: item.productId });
       }
-      
+
+
       if (product) {
         if (!product.inStock || product.stockCount < item.quantity) {
+          console.error('[Order Creation] Insufficient stock:', {
+            productId: item.productId,
+            productName: item.name,
+            requestedQuantity: item.quantity,
+            availableStock: product.stockCount,
+            inStock: product.inStock,
+            timestamp: new Date().toISOString()
+          });
           return NextResponse.json(
             { error: `Insufficient stock for ${item.name}` },
             { status: 400 }
@@ -168,7 +177,7 @@ export async function POST(request: NextRequest) {
       } else {
         console.warn(`Product ${item.name} (ID: ${item.productId}) not found in database. Skipping stock validation.`);
       }
-      
+
       let effectivePrice = product ? product.price : item.price;
 
       if (item.promoToken && product) {
@@ -183,6 +192,23 @@ export async function POST(request: NextRequest) {
             await EmailPromoDiscount.updateOne({ token: item.promoToken }, { $set: { status: 'expired' } });
             item.promoToken = undefined;
             item.promoPercent = undefined;
+          } else if (promoRecord.usageCount >= (promoRecord.maxUsageCount || 1)) {
+            // Check usage limit
+            console.warn('[Order Promo] Usage limit exceeded', {
+              token: item.promoToken,
+              usageCount: promoRecord.usageCount,
+              maxUsageCount: promoRecord.maxUsageCount,
+            });
+            item.promoToken = undefined;
+            item.promoPercent = undefined;
+          } else if (promoRecord.usedBy && promoRecord.usedBy.some((usage: any) => usage.userId.toString() === userId)) {
+            // Check if this user already used this promo
+            console.warn('[Order Promo] User already used this promo', {
+              token: item.promoToken,
+              userId,
+            });
+            item.promoToken = undefined;
+            item.promoPercent = undefined;
           } else if (product && promoRecord.productId.toString() !== product._id.toString()) {
             console.warn('[Order Promo] Token product mismatch', {
               token: item.promoToken,
@@ -192,20 +218,49 @@ export async function POST(request: NextRequest) {
             item.promoToken = undefined;
             item.promoPercent = undefined;
           } else if (product) {
-            effectivePrice = Number(
-              (product.price * (1 - promoRecord.discountPercent / 100)).toFixed(2)
-            );
-            item.promoPercent = promoRecord.discountPercent;
-            item.promoOriginalPrice = product.price;
-            await EmailPromoDiscount.updateOne(
-              { token: item.promoToken },
-              { $inc: { usageCount: 1 }, $set: { lastUsedAt: new Date() } }
-            );
-            console.info('[Order Promo] Promo applied', {
-              token: item.promoToken,
-              productId: product._id.toString(),
-              discountedPrice: effectivePrice,
-            });
+            // Get user email for validation
+            const user = await User.findById(userId).select('email').lean();
+            const userEmail = user?.email?.toLowerCase().trim();
+
+            // Validate email matches
+            if (userEmail && promoRecord.email !== userEmail) {
+              console.warn('[Order Promo] Email mismatch', {
+                token: item.promoToken,
+                promoEmail: promoRecord.email,
+                userEmail,
+              });
+              item.promoToken = undefined;
+              item.promoPercent = undefined;
+            } else {
+              // All validations passed - apply discount
+              effectivePrice = Number(
+                (product.price * (1 - promoRecord.discountPercent / 100)).toFixed(2)
+              );
+              item.promoPercent = promoRecord.discountPercent;
+              item.promoOriginalPrice = product.price;
+
+              // Update usage count and track user
+              await EmailPromoDiscount.updateOne(
+                { token: item.promoToken },
+                {
+                  $inc: { usageCount: 1 },
+                  $set: { lastUsedAt: new Date() },
+                  $push: {
+                    usedBy: {
+                      userId: new mongoose.Types.ObjectId(userId),
+                      usedAt: new Date()
+                    }
+                  }
+                }
+              );
+
+              console.info('[Order Promo] Promo applied', {
+                token: item.promoToken,
+                productId: product._id.toString(),
+                userId,
+                discountedPrice: effectivePrice,
+              });
+            }
           }
         } catch (promoError) {
           console.error('[Order Promo] Error validating promo token', promoError);
@@ -246,15 +301,15 @@ export async function POST(request: NextRequest) {
     // Debug: Log the Order schema paths
     console.log('Order schema paths:', Object.keys(Order.schema.paths));
     console.log('Address schema paths:', Object.keys(Order.schema.paths.shippingAddress.schema.paths));
-    
+
     // Check if the schema still has the old 'street' field
     const addressSchemaPaths = Object.keys(Order.schema.paths.shippingAddress.schema.paths);
     console.log('Address schema has street field:', addressSchemaPaths.includes('street'));
     console.log('Address schema has address1 field:', addressSchemaPaths.includes('address1'));
-    
+
     // Generate order number with date/time and incremental counter
     const orderNumber = await generateOrderNumber();
-    
+
     // Create order with field mapping for backward compatibility
     const orderDataWithMapping = {
       ...orderData,
@@ -276,13 +331,13 @@ export async function POST(request: NextRequest) {
         } : {})
       }
     };
-    
+
     console.log('Final order data with mapping:', JSON.stringify(orderDataWithMapping, null, 2));
-    
+
     const order = new Order(orderDataWithMapping);
 
     // Attach referral/UTM attribution from headers or cookies forwarded by middleware
-    const attribKeys = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','ref','aff'];
+    const attribKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'aff'];
     const attribution: Record<string, string> = {};
     for (const key of attribKeys) {
       const headerKey = `x-attrib-${key}`;
@@ -312,26 +367,26 @@ export async function POST(request: NextRequest) {
       // Get user email - try multiple sources
       const user = await User.findById(userId).select('email').lean();
       let normalizedEmail: string | null = null;
-      
+
       if (user && user.email) {
         normalizedEmail = user.email.toLowerCase().trim();
       }
-      
+
       // Also check if there's an email in billing address (some orders might have it)
       if (!normalizedEmail && order.billingAddress && (order.billingAddress as any).email) {
         normalizedEmail = ((order.billingAddress as any).email as string).toLowerCase().trim();
       }
-      
+
       if (!normalizedEmail) {
         console.log('[Order Conversion Tracking] No email found for user:', userId);
         // Still continue - conversion tracking is optional
       } else {
         const now = new Date();
-        
+
         // Get product IDs from order items (handle both ObjectId and string formats)
         const productIds: string[] = [];
         const productObjectIds: mongoose.Types.ObjectId[] = [];
-        
+
         for (const item of order.items) {
           if (mongoose.Types.ObjectId.isValid(item.productId)) {
             const objId = new mongoose.Types.ObjectId(item.productId);
@@ -342,7 +397,7 @@ export async function POST(request: NextRequest) {
             productIds.push(item.productId);
           }
         }
-        
+
         console.log('[Order Conversion Tracking] Starting conversion tracking', {
           email: normalizedEmail,
           orderId: order._id.toString(),
@@ -351,14 +406,14 @@ export async function POST(request: NextRequest) {
           productObjectIds: productObjectIds.map(id => id.toString()),
           itemCount: order.items.length
         });
-        
+
         // First, let's check what EmailTracking records exist for this email and products
         const existingTracking = await EmailTracking.find({
           email: normalizedEmail,
           emailType: 'promotional',
           'metadata.productId': { $exists: true }
         }).select('metadata.productId metadata.productName converted _id').lean();
-        
+
         console.log('[Order Conversion Tracking] Existing promotional emails found:', {
           count: existingTracking.length,
           records: existingTracking.map(t => ({
@@ -369,11 +424,11 @@ export async function POST(request: NextRequest) {
             converted: t.converted
           }))
         });
-        
+
         // Build comprehensive product ID matching
         // The productId in metadata might be stored as string (from route param) or ObjectId
         const allProductIdVariants: any[] = [];
-        
+
         // Add all string variants
         productIds.forEach(id => {
           allProductIdVariants.push(id);
@@ -384,25 +439,25 @@ export async function POST(request: NextRequest) {
             allProductIdVariants.push(id.toString());
           }
         });
-        
+
         // Add ObjectId variants
         productObjectIds.forEach(objId => {
           allProductIdVariants.push(objId);
           allProductIdVariants.push(objId.toString());
           allProductIdVariants.push(String(objId));
         });
-        
+
         // Remove duplicates
-        const uniqueProductIds = [...new Set(allProductIdVariants.map(id => 
+        const uniqueProductIds = [...new Set(allProductIdVariants.map(id =>
           id instanceof mongoose.Types.ObjectId ? id.toString() : String(id)
         ))];
-        
+
         console.log('[Order Conversion Tracking] Product ID variants to match:', {
           original: productIds,
           uniqueVariants: uniqueProductIds,
           count: uniqueProductIds.length
         });
-        
+
         // First, try to match by product ID (most specific)
         let promotionalUpdates = await EmailTracking.updateMany(
           {
@@ -419,12 +474,12 @@ export async function POST(request: NextRequest) {
             }
           }
         );
-        
+
         console.log('[Order Conversion Tracking] Promotional emails updated (by product ID):', {
           matched: promotionalUpdates.matchedCount,
           modified: promotionalUpdates.modifiedCount
         });
-        
+
         // If no matches, try updating ALL promotional emails for this email
         // This is a fallback in case product ID format doesn't match exactly
         if (promotionalUpdates.matchedCount === 0) {
@@ -448,7 +503,7 @@ export async function POST(request: NextRequest) {
             modified: promotionalUpdates.modifiedCount
           });
         }
-        
+
         // Also update any other EmailTracking records for this email that haven't been converted
         // This catches cases where they came from welcome/return/urgent emails
         const otherEmailUpdates = await EmailTracking.updateMany(
@@ -465,12 +520,12 @@ export async function POST(request: NextRequest) {
             }
           }
         );
-        
+
         console.log('[Order Conversion Tracking] Other emails updated:', {
           matched: otherEmailUpdates.matchedCount,
           modified: otherEmailUpdates.modifiedCount
         });
-        
+
         // Update EmailSubscriber if exists
         await EmailSubscriber.findOneAndUpdate(
           { email: normalizedEmail },
@@ -482,7 +537,7 @@ export async function POST(request: NextRequest) {
           },
           { upsert: false }
         );
-        
+
         console.log('[Order Conversion Tracking] Conversion tracking completed for:', normalizedEmail);
       }
     } catch (conversionError) {
@@ -497,8 +552,8 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'purchase', orderId: order._id, userId, value: order.total, currency: 'USD' })
-      }).catch(() => {});
-    } catch {}
+      }).catch(() => { });
+    } catch { }
 
     console.log('Order saved successfully:', {
       _id: order._id,
@@ -511,7 +566,7 @@ export async function POST(request: NextRequest) {
     try {
       const { sendEmail, ADMIN_EMAIL } = await import('@/lib/email');
       const user = await User.findById(userId).select('name email').lean();
-      
+
       if (user) {
         // Send admin notification
         await sendEmail({

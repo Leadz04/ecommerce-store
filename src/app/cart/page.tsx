@@ -6,10 +6,12 @@ import Image from 'next/image';
 import { ShoppingCart, Trash2, Edit, Plus, Minus } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import BackButton from '@/components/BackButton';
+import { useStockValidation } from '@/hooks/useStockValidation';
 import toast from 'react-hot-toast';
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotalPrice, getTotalItems } = useCartStore();
+  const { validateStock, isValidating, stockStatus } = useStockValidation();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function CartPage() {
     const shipping = subtotal > 100 ? 0 : 9.99; // Free shipping over $100
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + shipping + tax;
-    
+
     return { subtotal, shipping, tax, total };
   };
 
@@ -55,9 +57,9 @@ export default function CartPage() {
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 sm:py-12 md:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3 sm:gap-4">
-            <BackButton 
-              href="/products" 
-              variant="icon-only" 
+            <BackButton
+              href="/products"
+              variant="icon-only"
               className="text-white/80 hover:text-white hover:bg-white/20 shrink-0 border-white/20"
             />
             <div className="min-w-0">
@@ -92,7 +94,7 @@ export default function CartPage() {
                 {items.map((item) => {
                   const pid = (item.product as any)._id || (item.product as any).id;
                   const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
-                  
+
                   return (
                     <div
                       key={item.id}
@@ -137,7 +139,7 @@ export default function CartPage() {
                                 )}
                               </div>
                             </div>
-                            
+
                             {/* Action Icons */}
                             <div className="flex gap-1 sm:gap-2 shrink-0">
                               <Link
@@ -222,7 +224,7 @@ export default function CartPage() {
               <div className="lg:col-span-1">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 sticky top-4">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Order Summary</h2>
-                  
+
                   <div className="space-y-4 mb-6">
                     <div className="flex justify-between text-gray-600">
                       <span>Subtotal</span>
@@ -257,12 +259,18 @@ export default function CartPage() {
                   )}
 
                   <div className="space-y-3">
-                    <Link
-                      href="/checkout"
-                      className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold text-center block hover:bg-gray-800 transition-colors"
+                    <button
+                      onClick={async () => {
+                        const isValid = await validateStock();
+                        if (isValid) {
+                          window.location.href = '/checkout';
+                        }
+                      }}
+                      disabled={isValidating}
+                      className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold text-center hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      Proceed to Checkout
-                    </Link>
+                      {isValidating ? 'Checking Stock...' : 'Proceed to Checkout'}
+                    </button>
                     <Link
                       href="/products"
                       className="w-full border-2 border-gray-900 text-gray-900 py-3 px-4 rounded-lg font-semibold text-center block hover:bg-gray-50 transition-colors"

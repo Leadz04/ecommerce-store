@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import EmailSubscriber from '@/models/EmailSubscriber';
 import EmailTracking from '@/models/EmailTracking';
+import EmailPromoDiscount from '@/models/EmailPromoDiscount';
 import Product from '@/models/Product';
 import { sendEmail } from '@/lib/email';
-import { 
-  generateWelcomeConversionEmail, 
-  generateReturnVisitorEmail, 
+import {
+  generateWelcomeConversionEmail,
+  generateReturnVisitorEmail,
   generateUrgentConversionEmail,
-  generateDiscountCode 
+  generateDiscountCode
 } from '@/lib/emailTemplates';
 import { addTrackingPixel, wrapLinksWithTracking } from '@/lib/emailTrackingHelpers';
 
@@ -19,9 +20,9 @@ import { addTrackingPixel, wrapLinksWithTracking } from '@/lib/emailTrackingHelp
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    
+
     const { email, emailType } = await request.json();
-    
+
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
         { error: 'Valid email is required' },
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     // Get subscriber
     const subscriber = await EmailSubscriber.findOne({ email: normalizedEmail });
-    
+
     if (!subscriber) {
       return NextResponse.json(
         { error: 'Subscriber not found' },
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     const discountPercent = type === 'welcome' ? 15 : type === 'return' ? 20 : 25;
 
     // Get featured products for email
-    const featuredProducts = await Product.find({ 
+    const featuredProducts = await Product.find({
       isActive: true,
       status: 'published'
     })
@@ -95,6 +96,30 @@ export async function POST(request: NextRequest) {
       clickCount: 0,
       visitCount: 0
     });
+
+    // CRITICAL FIX: Create EmailPromoDiscount records for featured products
+    // This allows the promo codes sent in emails to actually work at checkout
+    const expirationDays = type === 'welcome' ? 7 : type === 'return' ? 5 : 2; // 7, 5, or 2 days
+    const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
+
+    const promoCreationPromises = featuredProducts.map(product =>
+      EmailPromoDiscount.create({
+        token: discountCode,
+        email: normalizedEmail,
+        productId: product._id,
+        discountPercent,
+        trackingId: emailTracking._id,
+        emailSentAt: new Date(),
+        expiresAt,
+        status: 'active',
+        usageCount: 0,
+        maxUsageCount: 1,
+        usedBy: []
+      })
+    );
+
+    await Promise.all(promoCreationPromises);
+    console.log(`[Email Promo] Created ${featuredProducts.length} promo records for code: ${discountCode}, expires: ${expiresAt.toISOString()}`);
 
     const emailData = {
       email: normalizedEmail,
@@ -155,8 +180,8 @@ export async function POST(request: NextRequest) {
     await EmailSubscriber.findByIdAndUpdate(subscriber._id, {
       lastEmailSent: new Date(),
       $inc: { emailSentCount: 1 },
-      $push: { 
-        tags: { 
+      $push: {
+        tags: {
           $each: [type, `discount_${discountCode}`],
           $slice: -10 // Keep last 10 tags
         }
@@ -192,7 +217,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    
+
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
     const type = searchParams.get('type'); // 'welcome', 'return', 'urgent', or 'auto'
@@ -232,14 +257,18 @@ export async function GET(request: NextRequest) {
       // Auto: find all eligible
       query.$or = [
         { visitCount: 1, lastEmailSent: { $exists: false } },
-        { visitCount: { $gte: 2, $lte: 3 }, $or: [
-          { lastEmailSent: { $exists: false } },
-          { lastEmailSent: { $lte: twoDaysAgo } }
-        ]},
-        { visitCount: { $gte: 4 }, $or: [
-          { lastEmailSent: { $exists: false } },
-          { lastEmailSent: { $lte: threeDaysAgo } }
-        ]}
+        {
+          visitCount: { $gte: 2, $lte: 3 }, $or: [
+            { lastEmailSent: { $exists: false } },
+            { lastEmailSent: { $lte: twoDaysAgo } }
+          ]
+        },
+        {
+          visitCount: { $gte: 4 }, $or: [
+            { lastEmailSent: { $exists: false } },
+            { lastEmailSent: { $lte: threeDaysAgo } }
+          ]
+        }
       ];
     }
 
@@ -258,7 +287,7 @@ export async function GET(request: NextRequest) {
     for (const subscriber of subscribers) {
       try {
         results.processed++;
-        
+
         // Determine email type
         let emailType = type;
         if (!emailType || emailType === 'auto') {

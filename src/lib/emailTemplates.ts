@@ -22,7 +22,7 @@ export function generateWelcomeConversionEmail(data: ConversionEmailData): strin
   const discount = data.discountPercent || 15;
   const code = data.discountCode || 'WELCOME15';
   const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -167,7 +167,7 @@ export function generateReturnVisitorEmail(data: ConversionEmailData): string {
   const discount = data.discountPercent || 20;
   const code = data.discountCode || 'RETURN20';
   const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -246,8 +246,8 @@ export function generateReturnVisitorEmail(data: ConversionEmailData): string {
                           <h4 style="color: #333333; margin: 0 0 5px 0; font-size: 16px;">${product.name}</h4>
                           <p style="color: #f5576c; font-size: 18px; font-weight: bold; margin: 5px 0;">
                             $${product.price.toFixed(2)}
-                            ${product.originalPrice && product.originalPrice > product.price ? 
-                              `<span style="color: #999; text-decoration: line-through; font-size: 14px; margin-left: 10px;">$${product.originalPrice.toFixed(2)}</span>` : ''}
+                            ${product.originalPrice && product.originalPrice > product.price ?
+      `<span style="color: #999; text-decoration: line-through; font-size: 14px; margin-left: 10px;">$${product.originalPrice.toFixed(2)}</span>` : ''}
                           </p>
                           <a href="${siteUrl}/products/${product.id || product._id}" style="color: #f5576c; text-decoration: none; font-size: 14px; font-weight: bold;">Shop Now →</a>
                         </td>
@@ -293,7 +293,7 @@ export function generateUrgentConversionEmail(data: ConversionEmailData): string
   const discount = data.discountPercent || 25;
   const code = data.discountCode || 'URGENT25';
   const siteUrl = data.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -479,8 +479,8 @@ function generateProductPromoEmailWithTemplate(data: ProductPromoEmailData, temp
   } = data;
 
   const hasDiscount = discountCode && discountPercent;
-  const savings = productOriginalPrice && productOriginalPrice > productPrice 
-    ? (productOriginalPrice - productPrice).toFixed(2) 
+  const savings = productOriginalPrice && productOriginalPrice > productPrice
+    ? (productOriginalPrice - productPrice).toFixed(2)
     : null;
 
   const colors = templateColors[template];
@@ -509,7 +509,7 @@ function generatePurpleTemplate(
   savings: string | null
 ): string {
   const { productName, productDescription, productPrice, productOriginalPrice, productImage, productUrl, discountCode, discountPercent, customMessage, siteUrl, unsubscribeUrl } = data;
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -646,7 +646,7 @@ function generateEmeraldTemplate(
   savings: string | null
 ): string {
   const { productName, productDescription, productPrice, productOriginalPrice, productImage, productUrl, discountCode, discountPercent, customMessage, siteUrl, unsubscribeUrl } = data;
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -763,7 +763,7 @@ function generateMinimalTemplate(
   savings: string | null
 ): string {
   const { productName, productDescription, productPrice, productOriginalPrice, productImage, productUrl, discountCode, discountPercent, customMessage, siteUrl, unsubscribeUrl } = data;
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -880,7 +880,7 @@ function generateVibrantTemplate(
   savings: string | null
 ): string {
   const { productName, productDescription, productPrice, productOriginalPrice, productImage, productUrl, discountCode, discountPercent, customMessage, siteUrl, unsubscribeUrl } = data;
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -997,7 +997,7 @@ function generateElegantTemplate(
   savings: string | null
 ): string {
   const { productName, productDescription, productPrice, productOriginalPrice, productImage, productUrl, discountCode, discountPercent, customMessage, siteUrl, unsubscribeUrl } = data;
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -1108,17 +1108,16 @@ function generateElegantTemplate(
 }
 
 /**
- * Generate discount code
+ * Generate secure discount code using cryptographic randomness
+ * @param type - Type of discount (welcome, return, urgent) - used for tracking only
+ * @returns Secure random token (32 characters hex)
  */
 export function generateDiscountCode(type: 'welcome' | 'return' | 'urgent' = 'welcome'): string {
-  const codes = {
-    welcome: 'WELCOME15',
-    return: 'RETURN20',
-    urgent: 'URGENT25'
-  };
-  
-  const base = codes[type];
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${base}${random}`;
+  // Use crypto for secure random token generation
+  const crypto = require('crypto');
+  const randomBytes = crypto.randomBytes(16);
+  const token = randomBytes.toString('hex'); // 32 character hex string
+
+  return token;
 }
 

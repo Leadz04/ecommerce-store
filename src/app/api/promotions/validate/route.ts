@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import EmailPromoDiscount from '@/models/EmailPromoDiscount';
 import Product from '@/models/Product';
+import { checkRateLimit, promoValidationLimiter } from '@/lib/rateLimit';
 
 export async function GET(request: NextRequest) {
+  // Apply rate limiting
+  const rateLimitResponse = checkRateLimit(request, promoValidationLimiter);
+  if (rateLimitResponse) {
+    console.warn('[PromoValidate] Rate limit exceeded');
+    return rateLimitResponse;
+  }
+
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');
   const requestedProductId = searchParams.get('productId');
@@ -29,7 +37,33 @@ export async function GET(request: NextRequest) {
         await EmailPromoDiscount.updateOne({ token }, { $set: { status: 'expired' } });
       }
       console.warn('[PromoValidate] Promo token expired', { token, expiresAt: promo.expiresAt });
-      return NextResponse.json({ error: 'Promo expired' }, { status: 410 });
+      return NextResponse.json({ error: 'This discount code has expired. Check your email for the latest offers.' }, { status: 410 });
+    }
+
+    // Check usage limits
+    const maxUsage = promo.maxUsageCount || 1;
+    if (promo.usageCount >= maxUsage) {
+      console.warn('[PromoValidate] Promo usage limit exceeded', {
+        token,
+        usageCount: promo.usageCount,
+        maxUsageCount: maxUsage
+      });
+      return NextResponse.json({
+        error: 'This discount code has already been used the maximum number of times.'
+      }, { status: 410 });
+    }
+
+    // Validate email-user binding (get user email from auth header)
+    const userEmail = request.headers.get('x-user-email')?.toLowerCase().trim();
+    if (userEmail && promo.email !== userEmail) {
+      console.warn('[PromoValidate] Email mismatch', {
+        token,
+        promoEmail: promo.email,
+        userEmail,
+      });
+      return NextResponse.json({
+        error: 'This discount code is not valid for your account. Please use the code sent to your email.'
+      }, { status: 403 });
     }
 
     if (requestedProductId && promo.productId.toString() !== requestedProductId) {
@@ -38,7 +72,7 @@ export async function GET(request: NextRequest) {
         expected: promo.productId.toString(),
         received: requestedProductId,
       });
-      return NextResponse.json({ error: 'Promo does not apply to this product' }, { status: 409 });
+      return NextResponse.json({ error: 'This discount code is only valid for specific products. Browse our catalog to find more deals!' }, { status: 409 });
     }
 
     const product = await Product.findById(promo.productId)

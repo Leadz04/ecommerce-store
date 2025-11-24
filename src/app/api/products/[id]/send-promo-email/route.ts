@@ -5,6 +5,7 @@ import { PERMISSIONS } from '@/lib/permissions';
 import Product from '@/models/Product';
 import EmailTracking from '@/models/EmailTracking';
 import EmailPromoDiscount from '@/models/EmailPromoDiscount';
+import EmailSubscriber from '@/models/EmailSubscriber';
 import { sendEmail } from '@/lib/email';
 import { generateProductPromoEmail, ProductPromoEmailData } from '@/lib/emailTemplates';
 import { addTrackingPixel, wrapLinksWithTracking } from '@/lib/emailTrackingHelpers';
@@ -20,18 +21,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAnyPermission([PERMISSIONS.PRODUCT_MANAGE_INVENTORY, PERMISSIONS.ADMIN])(request);
+    await requireAnyPermission([PERMISSIONS.PRODUCT_MANAGE_INVENTORY])(request);
     await connectDB();
 
     const { id: productId } = await params;
     const body = await request.json();
-    const { 
-      emails, 
-      discountCode, 
-      discountPercent, 
+    const {
+      emails,
+      discountPercent,
       customMessage,
       subject,
-      template 
+      template
     } = body;
 
     // Validate inputs
@@ -63,7 +63,7 @@ export async function POST(
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const productUrl = `${siteUrl}/products/${productId}`;
-    
+
     // Prepare base email data (per recipient tweaks happen later)
     const baseEmailData: ProductPromoEmailData = {
       productName: product.name,
@@ -72,19 +72,18 @@ export async function POST(
       productOriginalPrice: (product as any).originalPrice,
       productImage: product.image || '',
       productUrl,
-      discountCode,
       discountPercent,
       customMessage,
       siteUrl,
       template: template || 'purple',
     };
-    
+
     const fallbackPreviewHtml = generateProductPromoEmail(baseEmailData);
 
     // Default subject if not provided
-    const emailSubject = subject || 
-      (discountPercent 
-        ? `🎉 Special Offer: ${discountPercent}% OFF ${product.name}` 
+    const emailSubject = subject ||
+      (discountPercent
+        ? `🎉 Special Offer: ${discountPercent}% OFF ${product.name}`
         : `Check out ${product.name} - Special Offer!`);
 
     // Send emails to all recipients
@@ -97,7 +96,7 @@ export async function POST(
     for (const email of emails) {
       try {
         const normalizedEmail = email.toLowerCase().trim();
-        
+
         // Create email tracking record BEFORE sending
         const emailTracking = await EmailTracking.create({
           email: normalizedEmail,
@@ -113,18 +112,39 @@ export async function POST(
           metadata: {
             productId: productId,
             productName: product.name,
-            discountCode: discountCode || null,
             discountPercent: discountPercent || null,
             customMessage: customMessage || null,
             subject: emailSubject
           }
         });
 
+        // Update or create EmailSubscriber record for tracking
+        await EmailSubscriber.findOneAndUpdate(
+          { email: normalizedEmail },
+          {
+            $set: {
+              lastEmailSent: new Date(),
+              isActive: true
+            },
+            $inc: { emailSentCount: 1 },
+            $setOnInsert: {
+              email: normalizedEmail,
+              source: 'promotional',
+              visitCount: 0,
+              converted: false
+            }
+          },
+          { upsert: true }
+        );
+
         let promoToken: string | null = null;
         let promoExpiresAt: Date | null = null;
         if (discountPercent && discountPercent > 0) {
+          // Generate secure random promo token
           promoToken = crypto.randomBytes(16).toString('hex');
           promoExpiresAt = new Date(Date.now() + PROMO_EXPIRY_HOURS * 60 * 60 * 1000);
+
+          // CRITICAL FIX: Create EmailPromoDiscount with ALL required fields
           await EmailPromoDiscount.create({
             token: promoToken,
             email: normalizedEmail,
@@ -133,7 +153,12 @@ export async function POST(
             trackingId: emailTracking._id,
             emailSentAt: emailTracking.emailSentAt,
             expiresAt: promoExpiresAt,
+            status: 'active',
+            usageCount: 0,
+            maxUsageCount: 1,
+            usedBy: []
           });
+
           emailTracking.metadata = {
             ...(emailTracking.metadata || {}),
             promoToken,
@@ -231,7 +256,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAnyPermission([PERMISSIONS.PRODUCT_MANAGE_INVENTORY, PERMISSIONS.ADMIN])(request);
+    await requireAnyPermission([PERMISSIONS.PRODUCT_MANAGE_INVENTORY])(request);
     await connectDB();
 
     const { id: productId } = await params;
@@ -252,7 +277,7 @@ export async function GET(
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const productUrl = `${siteUrl}/products/${productId}`;
-    
+
     // Prepare email data
     const emailData: ProductPromoEmailData = {
       productName: product.name,
@@ -270,9 +295,9 @@ export async function GET(
 
     // Generate email HTML
     const emailHTML = generateProductPromoEmail(emailData);
-    
-    const emailSubject = discountPercent 
-      ? `🎉 Special Offer: ${discountPercent}% OFF ${product.name}` 
+
+    const emailSubject = discountPercent
+      ? `🎉 Special Offer: ${discountPercent}% OFF ${product.name}`
       : `Check out ${product.name} - Special Offer!`;
 
     return NextResponse.json({

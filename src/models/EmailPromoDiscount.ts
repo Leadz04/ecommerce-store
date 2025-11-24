@@ -10,6 +10,11 @@ export interface IEmailPromoDiscount extends Document {
   expiresAt: Date;
   status: 'active' | 'expired';
   usageCount: number;
+  maxUsageCount: number;
+  usedBy: Array<{
+    userId: mongoose.Types.ObjectId;
+    usedAt: Date;
+  }>;
   lastUsedAt?: Date;
   notes?: string;
   createdAt: Date;
@@ -66,6 +71,24 @@ const EmailPromoDiscountSchema = new Schema<IEmailPromoDiscount>(
       type: Number,
       default: 0,
     },
+    maxUsageCount: {
+      type: Number,
+      default: 1,
+      min: 1,
+      required: true,
+    },
+    usedBy: [{
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      usedAt: {
+        type: Date,
+        required: true,
+        default: Date.now,
+      },
+    }],
     lastUsedAt: Date,
     notes: String,
   },

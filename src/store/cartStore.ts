@@ -2,21 +2,33 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CartItem, Product } from '@/types';
 
+interface PromoCode {
+  token: string;
+  discountPercent: number;
+  productId?: string;
+}
+
 interface CartStore {
   items: CartItem[];
+  promoCode: PromoCode | null;
   addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
+  applyPromoCode: (promo: PromoCode) => void;
+  removePromoCode: () => void;
+  getDiscountAmount: () => number;
+  getFinalTotal: () => number;
 }
 
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
-      
+      promoCode: null,
+
       // Ensure no duplicate ids exist in the cart
       _dedupeItems: (items: CartItem[]) => {
         const map = new Map<string, CartItem>();
@@ -38,9 +50,9 @@ export const useCartStore = create<CartStore>()(
         const nSize = normalize(size);
         const nColor = normalize(color);
         const existingItemIndex = items.findIndex(
-          item => 
-            (item.product._id || item.product.id) === (product._id || product.id) && 
-            normalize(item.size) === nSize && 
+          item =>
+            (item.product._id || item.product.id) === (product._id || product.id) &&
+            normalize(item.size) === nSize &&
             normalize(item.color) === nColor
         );
 
@@ -77,7 +89,7 @@ export const useCartStore = create<CartStore>()(
           get().removeItem(itemId);
           return;
         }
-        
+
         const items = get().items.map(item =>
           item.id === itemId ? { ...item, quantity } : item
         );
@@ -85,7 +97,7 @@ export const useCartStore = create<CartStore>()(
       },
 
       clearCart: () => {
-        set({ items: [] });
+        set({ items: [], promoCode: null });
       },
 
       getTotalItems: () => {
@@ -98,6 +110,41 @@ export const useCartStore = create<CartStore>()(
           0
         );
       },
+
+      applyPromoCode: (promo: PromoCode) => {
+        set({ promoCode: promo });
+      },
+
+      removePromoCode: () => {
+        set({ promoCode: null });
+      },
+
+      getDiscountAmount: () => {
+        const { promoCode, items } = get();
+        if (!promoCode) return 0;
+
+        // If promo is product-specific, only apply to that product
+        if (promoCode.productId) {
+          const applicableItems = items.filter(
+            item => (item.product._id || item.product.id) === promoCode.productId
+          );
+          const applicableTotal = applicableItems.reduce(
+            (total, item) => total + (item.product.price * item.quantity),
+            0
+          );
+          return applicableTotal * (promoCode.discountPercent / 100);
+        }
+
+        // Otherwise apply to entire cart
+        const subtotal = get().getTotalPrice();
+        return subtotal * (promoCode.discountPercent / 100);
+      },
+
+      getFinalTotal: () => {
+        const subtotal = get().getTotalPrice();
+        const discount = get().getDiscountAmount();
+        return subtotal - discount;
+      },
     }),
     {
       name: 'cart-storage',
@@ -108,7 +155,7 @@ export const useCartStore = create<CartStore>()(
           // @ts-ignore - internal helper
           const deduped = (state as any)._dedupeItems((state as any).items);
           (state as any).items = deduped;
-        } catch {}
+        } catch { }
       },
     }
   )
