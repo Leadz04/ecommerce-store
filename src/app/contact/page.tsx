@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle, AlertCircle, Loader2, Star } from 'lucide-react';
 import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -132,54 +133,60 @@ export default function ContactPage() {
     {
       icon: Mail,
       title: 'Email Us',
-      details: ['support@shopease.com', 'sales@shopease.com'],
-      description: 'We typically respond within 24 hours'
+      details: [companyInfo.email],
+      description: 'We answer within 12–24 hours',
     },
     {
       icon: Phone,
-      title: 'Call Us',
-      details: ['+1 (555) 123-4567', '+1 (555) 987-6543'],
-      description: 'Mon-Fri 9AM-6PM EST'
+      title: 'Call / WhatsApp',
+      details: [companyInfo.phone],
+      description: 'Voice & WhatsApp support daily 10AM–8PM PKT',
     },
     {
       icon: MapPin,
-      title: 'Visit Us',
-      details: ['123 Commerce Street', 'Business City, BC 12345'],
-      description: 'Showroom open Mon-Sat 10AM-8PM'
+      title: 'Studio Address',
+      details: [companyInfo.address],
+      description: 'Order pickups by appointment only',
     },
     {
       icon: Clock,
-      title: 'Business Hours',
-      details: ['Monday - Friday: 9AM - 6PM', 'Saturday: 10AM - 4PM', 'Sunday: Closed'],
-      description: 'Customer support available 24/7 online'
-    }
+      title: 'Support Hours',
+      details: [companyInfo.supportHours, 'Sunday: Emergency support via WhatsApp only'],
+      description: 'Same-day responses for urgent delivery requests',
+    },
   ];
 
   const faqs = [
     {
-      question: 'How long does shipping take?',
-      answer: 'Standard shipping takes 3-5 business days. Express shipping is available for 1-2 business days. Free shipping on orders over $50.'
+      question: 'How long does domestic delivery take?',
+      answer:
+        'Orders within Pakistan ship within 24 hours. Standard courier delivery takes 2-4 business days nationwide, while express service for Karachi, Lahore, Islamabad, and Sialkot arrives in 1-2 days.',
     },
     {
-      question: 'Do you ship internationally?',
-      answer: 'Yes, we ship to over 50 countries worldwide. International shipping rates and delivery times vary by location.'
+      question: 'Do you offer Cash on Delivery (COD)?',
+      answer:
+        'Yes, COD is available across Pakistan for orders up to Rs 25,000. Larger or custom orders require a 50% advance via bank transfer, Easypaisa, or JazzCash, and international shipments must be prepaid via card/Stripe/PayPal.',
     },
     {
-      question: 'How can I track my order?',
-      answer: 'Once your order ships, you\'ll receive a tracking number via email. You can also track your order in your account dashboard.'
+      question: 'Can I track my shipment?',
+      answer:
+        'Absolutely. We email and WhatsApp your TCS / Leopards tracking ID as soon as the parcel leaves our studio. You can also view tracking inside your account dashboard.',
     },
     {
-      question: 'What payment methods do you accept?',
-      answer: 'We accept all major credit cards (Visa, MasterCard, American Express), PayPal, Apple Pay, and Google Pay.'
+      question: 'Do you ship outside Pakistan?',
+      answer:
+        'We currently deliver to the GCC, UK, EU, and North America using DHL Express. Transit time ranges from 5-10 business days and duties are billed directly by the carrier.',
     },
     {
-      question: 'How do I cancel or modify my order?',
-      answer: 'You can cancel or modify your order within 1 hour of placing it. After that, please contact customer service for assistance.'
+      question: 'What if I need a rush gift?',
+      answer:
+        'Message us on WhatsApp with the product link and city. We can arrange same-day motorbike delivery in Sialkot and Lahore and next-day dispatch for Karachi/Islamabad with personalized gift notes.',
     },
     {
-      question: 'What is your return policy?',
-      answer: 'We offer a 30-day return policy for most items. Items must be in original condition with tags attached. Some items may have different return policies.'
-    }
+      question: 'What is your return window?',
+      answer:
+        'Non-custom items can be exchanged or returned within 3 days of delivery if unused and in original packaging. Contact us first so we can book the pickup and keep your claim prioritized.',
+    },
   ];
 
   if (isLoading) {
@@ -247,8 +254,7 @@ export default function ContactPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">Contact Us</h1>
           <p className="text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto">
-            We're here to help! Get in touch with our team for any questions, 
-            support, or feedback about your shopping experience.
+            Our studio team is on standby to help you customise gifts, confirm sizing, or fast-track deliveries anywhere in Pakistan.
           </p>
         </div>
       </section>
@@ -459,11 +465,11 @@ export default function ContactPage() {
               <h2 className="text-3xl font-bold text-gray-900 mb-6">Find Us</h2>
               
               {/* Map Placeholder */}
-              <div className="bg-gray-200 rounded-lg h-64 mb-6 flex items-center justify-center">
+                <div className="bg-gray-200 rounded-lg h-64 mb-6 flex items-center justify-center">
                 <div className="text-center text-gray-500">
                   <MapPin className="h-12 w-12 mx-auto mb-2" />
-                  <p>Interactive Map</p>
-                  <p className="text-sm">123 Commerce Street, Business City</p>
+                  <p>Studio Pickup</p>
+                  <p className="text-sm">{companyInfo.address}</p>
                 </div>
               </div>
 
@@ -476,7 +482,7 @@ export default function ContactPage() {
                     We pride ourselves on providing excellent support and quick response times.
                   </p>
                   <p className="text-gray-600">
-                    For urgent matters, please call us directly at <span className="font-semibold">+1 (555) 123-4567</span>
+                    For urgent matters, please call or WhatsApp us directly at <span className="font-semibold">{companyInfo.phone}</span>
                   </p>
                 </div>
 
@@ -487,7 +493,7 @@ export default function ContactPage() {
                     We'd love to hear from you.
                   </p>
                   <p className="text-gray-600">
-                    Email us at <span className="font-semibold">business@shopease.com</span>
+                    Email us at <span className="font-semibold">{companyInfo.email}</span>
                   </p>
                 </div>
               </div>

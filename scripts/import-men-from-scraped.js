@@ -52,7 +52,7 @@ const ProductSchema = new mongoose.Schema({
   brand: {
     type: String,
     trim: true,
-    default: 'Wolveyes'
+    default: 'EverStyleCrafts'
   },
   rating: {
     type: Number,
@@ -235,7 +235,7 @@ async function importMenFromScraped() {
               image: mainImage,
               images: images,
               category: 'Men', // Force to Men category
-              brand: 'Wolveyes',
+              brand: 'EverStyleCrafts',
               rating: 0,
               reviewCount: 0,
               inStock: !outOfStock,

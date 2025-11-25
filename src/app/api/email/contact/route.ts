@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail, generateContactEmailHTML, ContactFormData } from '@/lib/email';
+import { companyInfo } from '@/data/companyInfo';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     
     // Send email to admin
     const emailSent = await sendEmail({
-      to: 'testleadz04@gmail.com',
+      to: companyInfo.email,
       subject: `Contact Form: ${data.subject}`,
       html: emailHTML,
       text: `New contact form submission from ${data.name} (${data.email})\n\nSubject: ${data.subject}\n\nMessage:\n${data.message}`
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         
         <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
           <p style="margin: 0; color: #1e40af; font-size: 14px;">
-            <strong>Need immediate assistance?</strong> Call us at +1 (555) 123-4567 or email support@shopease.com
+            <strong>Need immediate assistance?</strong> Call us at ${companyInfo.phone} or email ${companyInfo.email}
           </p>
         </div>
       </div>
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       to: data.email,
       subject: 'Thank you for contacting us - We\'ll be in touch soon!',
       html: customerEmailHTML,
-      text: `Thank you for contacting us!\n\nWe've received your message about "${data.subject}" and will get back to you within 24 hours.\n\nYour message:\n${data.message}\n\nNeed immediate assistance? Call us at +1 (555) 123-4567 or email support@shopease.com`
+      text: `Thank you for contacting us!\n\nWe've received your message about "${data.subject}" and will get back to you within 24 hours.\n\nYour message:\n${data.message}\n\nNeed immediate assistance? Call us at ${companyInfo.phone} or email ${companyInfo.email}`
     });
 
     return NextResponse.json(

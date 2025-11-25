@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClientBridge from "@/components/ClientBridge";
 import VisitorEmailTracker from "@/components/VisitorEmailTracker";
+import { companyInfo } from "@/data/companyInfo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,9 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ShopEase - Your Online Shopping Destination",
-  description: "Discover amazing products at great prices. Fast shipping, excellent customer service, and quality guaranteed.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
+  title: `${companyInfo.name} – ${companyInfo.tagline}`,
+  description: companyInfo.description,
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || companyInfo.siteUrl || "http://localhost:3000"),
   openGraph: defaultOpenGraph,
   twitter: defaultTwitter,
 };
@@ -40,7 +41,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
         {/* Canonical URL */}
-        <link rel="canonical" href={(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000') + '/'} />
+        <link rel="canonical" href={(process.env.NEXT_PUBLIC_SITE_URL || companyInfo.siteUrl || 'http://localhost:3000') + '/'} />
         {/* Organization JSON-LD */}
         <script
           type="application/ld+json"
@@ -48,9 +49,16 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Organization",
-              name: "ShopEase",
-              url: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-              logo: (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000') + '/favicon.ico'
+              name: companyInfo.legalName,
+              url: process.env.NEXT_PUBLIC_SITE_URL || companyInfo.siteUrl || 'http://localhost:3000',
+              contactPoint: {
+                "@type": "ContactPoint",
+                contactType: "customer support",
+                email: companyInfo.email,
+                telephone: companyInfo.phone,
+                areaServed: "PK"
+              },
+              logo: (process.env.NEXT_PUBLIC_SITE_URL || companyInfo.siteUrl || 'http://localhost:3000') + '/favicon.ico'
             })
           }}
         />

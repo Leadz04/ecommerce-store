@@ -1,4 +1,5 @@
 import { Shield, Eye, Lock, Database, UserCheck, Globe, Mail, Phone, MapPin, AlertTriangle, Settings, FileText } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function PrivacyPage() {
   const lastUpdated = "March 8, 2025";
@@ -322,9 +323,9 @@ export default function PrivacyPage() {
   ];
 
   const contactInfo = {
-    email: 'info@wolveyes.com',
-    phone: '+92 330 6663786',
-    address: 'Al Hayat Center, Shop#12, Near Citi Housing Society Gate, Daska Road Sialkot, Pakistan'
+    email: companyInfo.email,
+    phone: companyInfo.phone,
+    address: companyInfo.address
   };
 
   return (
@@ -337,7 +338,7 @@ export default function PrivacyPage() {
             <h1 className="text-4xl md:text-5xl font-bold">Privacy Policy</h1>
           </div>
           <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            This Privacy Policy describes how Wolveyes collects, uses, and discloses your personal information.
+            This Privacy Policy describes how EverStyleCrafts collects, uses, and discloses your personal information.
           </p>
           <p className="text-blue-200 mt-4">Last updated: {lastUpdated}</p>
         </div>
@@ -349,9 +350,9 @@ export default function PrivacyPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Introduction</h2>
             <p className="text-gray-600 mb-4">
-              This Privacy Policy describes how Wolveyes (the "Site", "we", "us", or "our") collects, uses, 
+              This Privacy Policy describes how EverStyleCrafts (the "Site", "we", "us", or "our") collects, uses, 
               and discloses your personal information when you visit, use our services, or make a purchase from 
-              wolv-eyes.myshopify.com (the "Site") or otherwise communicate with us regarding the Site.
+              everstylecrafts.com (the "Site") or otherwise communicate with us regarding the Site.
             </p>
             <p className="text-gray-600 mb-4">
               For purposes of this Privacy Policy, "you" and "your" means you as the user of the Services, 
@@ -523,9 +524,9 @@ export default function PrivacyPage() {
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">About Wolveyes</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">About EverStyleCrafts</h3>
                   <p className="text-gray-600 mb-4">
-                    At Wolveyes, Asad Sanaullah envisioned premium leather for every Pakistani. 
+                    At EverStyleCrafts, Asad Sanaullah envisioned premium leather for every Pakistani. 
                     Timeless designs, unmatched craftsmanship, and enduring quality.
                   </p>
                 </div>

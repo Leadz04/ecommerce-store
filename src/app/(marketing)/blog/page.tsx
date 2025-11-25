@@ -4,6 +4,7 @@ export const fetchCache = 'force-no-store';
 import Link from 'next/link';
 import connectDB from '@/lib/mongodb';
 import Blog from '@/models/Blog';
+import { companyInfo } from '@/data/companyInfo';
 
 async function getBlogs() {
   await connectDB();
@@ -27,8 +28,10 @@ export default async function BlogIndexPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-purple-900">Blog</h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1">Insights, announcements, and tips from ShopEase.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-purple-900">Journal</h1>
+        <p className="text-sm sm:text-base text-gray-600 mt-1">
+          Insights, care guides, and launch news from {companyInfo.name}.
+        </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {blogs.map((b: any) => {

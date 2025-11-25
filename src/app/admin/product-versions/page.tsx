@@ -120,7 +120,7 @@ export default function ProductVersionsPage() {
               className="w-full"
             />
           </div>
-          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Source (e.g., wolveyes)" className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
+          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Source (e.g., everstylecrafts)" className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
           <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="External ID" className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800" />

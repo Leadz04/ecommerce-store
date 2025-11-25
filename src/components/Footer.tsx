@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Facebook, Twitter, Instagram, Mail, Phone, MapPin } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -11,19 +12,18 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10 md:gap-12">
           {/* Company Info */}
           <div className="space-y-6">
-            <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">ShopEase</h3>
+            <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{companyInfo.name}</h3>
             <p className="text-gray-300 text-sm leading-relaxed">
-              Your one-stop destination for quality products at great prices. 
-              We're committed to providing excellent customer service and fast delivery.
+              {companyInfo.description}
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
+              <a href="https://www.facebook.com" target="_blank" rel="noreferrer" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
                 <Facebook className="h-5 w-5" />
               </a>
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
+              <a href="https://www.twitter.com" target="_blank" rel="noreferrer" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
+              <a href="https://www.instagram.com" target="_blank" rel="noreferrer" className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 backdrop-blur-sm">
                 <Instagram className="h-5 w-5" />
               </a>
             </div>
@@ -111,21 +111,24 @@ export default function Footer() {
                 <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-all duration-300">
                   <Mail className="h-5 w-5 text-blue-400" />
                 </div>
-                <span className="text-gray-300 text-sm group-hover:text-white transition-colors">support@shopease.com</span>
+                <a href={`mailto:${companyInfo.email}`} className="text-gray-300 text-sm group-hover:text-white transition-colors">
+                  {companyInfo.email}
+                </a>
               </div>
               <div className="flex items-center space-x-3 group">
                 <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-all duration-300">
                   <Phone className="h-5 w-5 text-green-400" />
                 </div>
-                <span className="text-gray-300 text-sm group-hover:text-white transition-colors">+1 (555) 123-4567</span>
+                <a href={`tel:${companyInfo.phone}`} className="text-gray-300 text-sm group-hover:text-white transition-colors">
+                  {companyInfo.phone}
+                </a>
               </div>
               <div className="flex items-start space-x-3 group">
                 <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white/20 transition-all duration-300 mt-0.5">
                   <MapPin className="h-5 w-5 text-purple-400" />
                 </div>
                 <span className="text-gray-300 text-sm group-hover:text-white transition-colors leading-relaxed">
-                  123 Commerce Street<br />
-                  Business City, BC 12345
+                  {companyInfo.address}
                 </span>
               </div>
             </div>
@@ -135,7 +138,7 @@ export default function Footer() {
         <div className="border-t border-white/10 mt-8 sm:mt-12 pt-6 sm:pt-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-xs sm:text-sm text-center sm:text-left">
-              © {currentYear} ShopEase. All rights reserved.
+              © {currentYear} {companyInfo.legalName}. All rights reserved.
             </p>
             <div className="flex flex-wrap justify-center sm:justify-end gap-4 sm:gap-6">
               <Link href="/privacy" className="text-gray-400 hover:text-white text-sm transition-all duration-200 hover:underline">

@@ -60,7 +60,7 @@ function mapExternalProduct(p: any) {
   const originalPrice = p.variants?.[0]?.compare_at_price ? parseFloat(p.variants[0].compare_at_price) : undefined;
   const stockCount = p.variants?.reduce((sum: number, v: any) => sum + (v.available ? 1 : 0), 0) || 0;
   const inStock = stockCount > 0;
-  const brand = (p.vendor && String(p.vendor).trim()) || 'Wolveyes';
+  const brand = (p.vendor && String(p.vendor).trim()) || 'EverStyleCrafts';
   const rawType = (p.product_type && typeof p.product_type === 'string') ? p.product_type : '';
   const category = normalizeCategory(rawType);
   const tags = Array.isArray(p.tags) ? p.tags : (typeof p.tags === 'string' && p.tags.length ? String(p.tags).split(',').map((t) => t.trim()) : []);
@@ -87,7 +87,7 @@ function mapExternalProduct(p: any) {
     specifications,
     isActive: true,
     productType: rawType || category,
-    sourceUrl: p.handle ? `https://wolveyes.com/products/${p.handle}` : undefined,
+    sourceUrl: p.handle ? `https://everstylecrafts.com/products/${p.handle}` : undefined,
     status: 'published' as const,
     publishAt: new Date(p.published_at || Date.now()),
   };
@@ -131,8 +131,8 @@ export async function POST(request: NextRequest) {
     const limitParam = parseInt(searchParams.get('limit') || '100');
     const limit = Math.min(Math.max(limitParam, 1), 200);
     const dryRun = searchParams.get('dryRun') === 'true';
-    const source = 'wolveyes';
-    const endpoint = `https://wolveyes.com/collections/all/products.json?limit=${limit}`;
+    const source = 'everstylecrafts';
+    const endpoint = `https://everstylecrafts.com/collections/all/products.json?limit=${limit}`;
 
     console.log(`[sync] Starting external sync from ${source} (limit=${limit}, dryRun=${dryRun})`);
     

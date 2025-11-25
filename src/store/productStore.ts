@@ -3,6 +3,24 @@
 import { create } from 'zustand';
 import { Product } from '@/types';
 
+const normalizeProductStock = (product: Product | null): Product | null => {
+  if (!product) return product;
+  const rawStock =
+    typeof product.stockCount === 'number' && !Number.isNaN(product.stockCount)
+      ? product.stockCount
+      : 0;
+  const normalizedStock = product.inStock ? Math.max(0, rawStock) : 0;
+
+  if (normalizedStock === product.stockCount) {
+    return product;
+  }
+
+  return {
+    ...product,
+    stockCount: normalizedStock,
+  };
+};
+
 interface ProductStore {
   products: Product[];
   currentProduct: Product | null;
@@ -131,7 +149,9 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       console.log('[ProductStore] Successfully fetched', data.products?.length, 'products');
 
       set({
-        products: data.products,
+        products: Array.isArray(data.products)
+          ? data.products.map((product: Product) => normalizeProductStock(product) as Product)
+          : [],
         pagination: data.pagination,
         isLoading: false,
         error: null
@@ -161,7 +181,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       console.log('[ProductStore] Successfully fetched product:', data.product?.name);
 
       set({
-        currentProduct: data.product,
+        currentProduct: normalizeProductStock(data.product) as Product,
         isLoading: false,
         error: null
       });

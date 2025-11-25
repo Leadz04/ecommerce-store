@@ -1,6 +1,7 @@
-"use client"
+"use client";
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Search, HelpCircle } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function FAQPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,22 +21,25 @@ export default function FAQPage() {
       icon: '❓',
       questions: [
         {
-          question: 'What is ShopEase?',
-          answer: 'ShopEase is an online marketplace offering a wide variety of products across multiple categories including electronics, clothing, home & kitchen, food & beverage, and more. We focus on providing quality products at competitive prices with excellent customer service.'
+          question: `What is ${companyInfo.name}?`,
+          answer: `${companyInfo.name} is a Pakistan-based leather and lifestyle studio crafting premium bags, wallets, and gifting essentials in small batches. We design everything in Sialkot, collaborate directly with artisan workshops, and ship worldwide.`,
         },
         {
           question: 'How do I create an account?',
-          answer: 'Creating an account is easy! Click on the "Sign Up" button in the top right corner, enter your email address and create a password. You can also sign up using your Google or Facebook account for faster registration.'
+          answer:
+            'Select “Sign Up” in the header, enter your email, and set a secure password. You can also use Google sign-in. An account lets you track orders, save shipping addresses, and request aftercare services with one click.',
         },
         {
           question: 'Is my personal information secure?',
-          answer: 'Yes, we take your privacy and security seriously. All personal information is encrypted and stored securely. We never share your information with third parties without your consent, and we use industry-standard security measures to protect your data.'
+          answer:
+            'Yes. We encrypt all personal and payment information, restrict access to vetted team members, and follow strict data-retention policies. We never sell customer data and only share what is necessary with our courier partners.',
         },
         {
           question: 'Do you have a mobile app?',
-          answer: 'Currently, we have a responsive website that works perfectly on mobile devices. We are working on developing a dedicated mobile app that will be available for both iOS and Android devices in the near future.'
-        }
-      ]
+          answer:
+            'Our responsive website is optimized for mobile checkout and WhatsApp chat. A dedicated iOS and Android experience is on the roadmap, but every feature—including order tracking and returns—is already mobile friendly.',
+        },
+      ],
     },
     {
       title: 'Orders & Payment',
@@ -43,25 +47,30 @@ export default function FAQPage() {
       questions: [
         {
           question: 'What payment methods do you accept?',
-          answer: 'We accept all major credit cards (Visa, MasterCard, American Express), PayPal, Apple Pay, Google Pay, and bank transfers. All payments are processed securely through encrypted channels.'
+          answer:
+            'Within Pakistan we support Cash on Delivery (up to Rs 25,000), debit/credit cards, bank transfers, Easypaisa, and JazzCash. International shoppers can pay through Stripe or PayPal. All payments are processed via PCI-compliant gateways.',
         },
         {
           question: 'How do I track my order?',
-          answer: 'Once your order ships, you\'ll receive a tracking number via email. You can also track your order by logging into your account and visiting the "Order History" section. Click on your order to see real-time tracking information.'
+          answer:
+            'Once your parcel leaves our studio you will receive an email and WhatsApp message containing the courier tracking ID. You can also view real-time status inside “Orders” when signed in.',
         },
         {
           question: 'Can I modify or cancel my order?',
-          answer: 'You can modify or cancel your order within 1 hour of placing it through your account dashboard. After that, please contact our customer service team immediately, and we\'ll do our best to accommodate your request.'
+          answer:
+            'Yes—use the order confirmation page or your dashboard to request changes within one hour of placing your order. After that window, contact support so we can intercept the package before dispatch.',
         },
         {
           question: 'What if I receive the wrong item?',
-          answer: 'If you receive the wrong item, please contact us immediately with your order number and photos of the item received. We\'ll arrange for the correct item to be sent to you and provide a prepaid return label for the incorrect item.'
+          answer:
+            'Snap a quick photo, share your order number, and we’ll ship the correct product immediately. We arrange the pickup for the incorrect item at no cost to you.',
         },
         {
           question: 'Do you offer gift wrapping?',
-          answer: 'Yes! We offer gift wrapping services for an additional fee. You can select this option during checkout, and we\'ll wrap your items beautifully with a personalized message if desired.'
-        }
-      ]
+          answer:
+            'Complimentary gift notes are available at checkout. Premium gift boxing and wax-sealed envelopes can be added for Rs 600, and corporate gifting kits are fully customizable—just reach out to our team.',
+        },
+      ],
     },
     {
       title: 'Shipping & Delivery',
@@ -69,25 +78,30 @@ export default function FAQPage() {
       questions: [
         {
           question: 'How long does shipping take?',
-          answer: 'Standard shipping takes 3-5 business days, while express shipping takes 1-2 business days. International shipping times vary by location but typically take 7-14 business days. You\'ll receive tracking information once your order ships.'
+          answer:
+            'Domestic standard shipping arrives in 2-4 business days, while express service for Karachi, Lahore, Islamabad, and Sialkot lands within 1-2 business days. DHL international deliveries typically arrive within 5-10 business days depending on customs.',
         },
         {
           question: 'Do you offer free shipping?',
-          answer: 'Yes! We offer free standard shipping on all orders over $50. For orders under $50, standard shipping is $9.99. Express shipping is available for $19.99 regardless of order value.'
+          answer:
+            'Yes. Orders above Rs 7,500 ship free across Pakistan. Below that threshold we charge Rs 299 for standard and Rs 699 for express delivery. International rates are calculated at checkout.',
         },
         {
           question: 'Do you ship internationally?',
-          answer: 'Yes, we ship to over 50 countries worldwide. International shipping rates and delivery times vary by location. You can see the available shipping options and costs during checkout.'
+          answer:
+            'We ship to the GCC, UK, EU, and North America using DHL Express. Duties or import taxes (if any) are collected directly by the carrier in your country. You will still receive full tracking and delivery alerts from us.',
         },
         {
           question: 'What if my package is damaged during shipping?',
-          answer: 'If your package arrives damaged, please contact us immediately with photos of the damage. We\'ll arrange for a replacement to be sent at no cost to you, and we\'ll handle the return of the damaged item.'
+          answer:
+            'Document the box within 24 hours and contact us via WhatsApp or email. We will file the claim with the courier and ship a replacement once the damage is verified.',
         },
         {
           question: 'Can I change my shipping address after placing an order?',
-          answer: 'You can change your shipping address within 1 hour of placing your order. After that, please contact customer service immediately, and we\'ll do our best to update the address before the order ships.'
-        }
-      ]
+          answer:
+            'Address changes are possible until the parcel is scanned by the courier. Message us as soon as possible and we’ll update the destination or reroute the package for you.',
+        },
+      ],
     },
     {
       title: 'Returns & Exchanges',
@@ -95,25 +109,30 @@ export default function FAQPage() {
       questions: [
         {
           question: 'What is your return policy?',
-          answer: 'We offer a 30-day return policy for most items. Items must be in original condition with tags attached and in the original packaging. Some items like electronics and personal care products may have different return policies.'
+          answer:
+            'Non-custom items can be exchanged or returned within 3 days of delivery if they are unused and include all accessories. Custom monogrammed items and sale pieces are final unless they arrive damaged.',
         },
         {
           question: 'How do I return an item?',
-          answer: 'To return an item, log into your account, go to "Order History," and click "Return Item" next to the order. Follow the instructions to print a prepaid return label and package your item. Drop it off at any authorized shipping location.'
+          answer:
+            'Submit a return request from your account or email us with your order number. We’ll share pickup instructions for TCS/Leopards or provide our studio drop-off details. International returns receive a DHL label via email.',
         },
         {
           question: 'How long does it take to process a return?',
-          answer: 'Once we receive your returned item, we\'ll process the refund within 3-5 business days. The refund will appear on your original payment method within 5-10 business days, depending on your bank or credit card company.'
+          answer:
+            'Once the item is inspected, refunds are issued within 3 business days via your original payment method. Bank transfers reflect instantly; card reversals can take 5-7 business days depending on your bank.',
         },
         {
           question: 'Do I have to pay for return shipping?',
-          answer: 'Return shipping is free for items returned due to our error or if the item is defective. For other returns, return shipping costs will be deducted from your refund unless you choose to pay for return shipping upfront.'
+          answer:
+            'Return shipping is free if the item arrived damaged or incorrect. For preference-based returns, we can arrange pickup at cost (deducted from your refund) or you may ship it yourself.',
         },
         {
           question: 'Can I exchange an item for a different size or color?',
-          answer: 'Yes! You can exchange items for different sizes or colors within 30 days of purchase. Simply follow the return process and specify that you want an exchange. We\'ll send the new item once we receive the original.'
-        }
-      ]
+          answer:
+            'Absolutely. Indicate the preferred size/color while submitting the return request. We reserve your replacement immediately so it doesn’t sell out while we wait for the original to arrive.',
+        },
+      ],
     },
     {
       title: 'Account & Security',
@@ -121,22 +140,26 @@ export default function FAQPage() {
       questions: [
         {
           question: 'How do I reset my password?',
-          answer: 'Click "Forgot Password" on the login page and enter your email address. We\'ll send you a secure link to reset your password. The link will expire after 24 hours for security reasons.'
+          answer:
+            'Click “Forgot Password” on the login page, enter your email, and follow the secure link we send. Links expire after 24 hours for your safety.',
         },
         {
           question: 'How do I update my account information?',
-          answer: 'Log into your account and go to "Account Settings." You can update your personal information, shipping addresses, payment methods, and communication preferences from there.'
+          answer:
+            'Navigate to Account Settings to change your name, shipping addresses, saved payment methods, or communication preferences at any time.',
         },
         {
           question: 'Can I have multiple shipping addresses?',
-          answer: 'Yes! You can save multiple shipping addresses in your account. During checkout, you can select from your saved addresses or add a new one. This is especially convenient for sending gifts to different recipients.'
+          answer:
+            'Yes. Save as many addresses as you like and choose the right one during checkout. This is ideal for gifting or shipping to the office.',
         },
         {
           question: 'How do I delete my account?',
-          answer: 'To delete your account, contact our customer service team. We\'ll process your request within 48 hours. Please note that deleting your account will permanently remove all your order history and saved information.'
-        }
-      ]
-    }
+          answer:
+            'Email us from your registered address and we’ll complete the deletion within 48 hours. Keep in mind that removing your account permanently erases order history and warranty records.',
+        },
+      ],
+    },
   ];
 
   // Filter questions based on search term
@@ -155,8 +178,7 @@ export default function FAQPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Frequently Asked Questions</h1>
           <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            Find answers to common questions about shopping, shipping, returns, and more. 
-            Can't find what you're looking for? Contact our support team.
+            Everything you need to know about ordering from {companyInfo.name}. If you still need help, our WhatsApp line is open daily.
           </p>
         </div>
       </section>
@@ -257,7 +279,7 @@ export default function FAQPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Still have questions?</h2>
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            Our customer support team is here to help! Contact us and we'll get back to you within 24 hours.
+            Our customer support team is on standby Monday through Saturday. Reach out and we’ll respond within 12–24 hours.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
@@ -267,12 +289,15 @@ export default function FAQPage() {
               Contact Support
             </a>
             <a
-              href="mailto:support@shopease.com"
+              href={`mailto:${companyInfo.email}`}
               className="border-2 border-blue-600 text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-blue-600 hover:text-white transition-colors"
             >
               Email Us
             </a>
           </div>
+          <p className="text-gray-500 text-sm mt-6">
+            Prefer WhatsApp? Message us at <a href={`tel:${companyInfo.phone}`} className="font-semibold text-blue-600 hover:text-blue-700">{companyInfo.phone}</a>.
+          </p>
         </div>
       </section>
     </div>

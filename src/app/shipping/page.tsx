@@ -1,103 +1,105 @@
 import { Truck, Clock, Globe, Shield, Package, MapPin } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function ShippingPage() {
   const shippingOptions = [
     {
-      name: 'Standard Shipping',
-      price: '$9.99',
-      freeThreshold: '$50',
-      deliveryTime: '3-5 business days',
-      description: 'Our most popular shipping option with reliable delivery',
+      name: 'Standard Courier (Pakistan)',
+      price: companyInfo.domesticShipping.standardFee,
+      freeThreshold: `Free over ${companyInfo.domesticShipping.freeThreshold}`,
+      deliveryTime: companyInfo.domesticShipping.standardTimeline,
+      description: 'Best for everyday orders across Pakistan',
       icon: Truck,
-      features: ['Tracking included', 'Signature confirmation available', 'Insurance included']
+      features: ['TCS / Leopards tracking', 'Cash on Delivery up to Rs 25,000 (Pakistan only)', 'Complimentary insurance up to Rs 20,000'],
     },
     {
-      name: 'Express Shipping',
-      price: '$19.99',
-      freeThreshold: 'Not available',
-      deliveryTime: '1-2 business days',
-      description: 'Fast delivery for when you need your items quickly',
+      name: 'Express Priority (Major Cities)',
+      price: 'Rs 699',
+      freeThreshold: 'Free over Rs 15,000',
+      deliveryTime: companyInfo.domesticShipping.expressTimeline,
+      description: 'Guaranteed next business day for Karachi, Lahore, Islamabad & Sialkot',
       icon: Clock,
-      features: ['Priority handling', 'Tracking included', 'Signature confirmation', 'Insurance included']
+      features: ['Midnight order cut-off', 'Dedicated fulfillment lane', 'Live courier updates via WhatsApp', 'Full insurance'],
     },
     {
-      name: 'Overnight Shipping',
-      price: '$39.99',
-      freeThreshold: 'Not available',
-      deliveryTime: 'Next business day',
-      description: 'Get your items delivered the very next day',
+      name: 'Same-Day Dispatch (Studio Pickup / Rider)',
+      price: 'Rs 1,200',
+      freeThreshold: 'Available on all orders',
+      deliveryTime: 'Within hours for Sialkot & Lahore',
+      description: 'Ideal for gifting emergencies or VIP clients',
       icon: Package,
-      features: ['Same-day processing', 'Priority handling', 'Tracking included', 'Signature required', 'Insurance included']
-    }
+      features: ['Personal concierge updates', 'On-site unboxing support', 'Signature required', 'Available Mon–Sat'],
+    },
   ];
 
   const internationalShipping = [
     {
-      region: 'Canada',
+      region: 'Middle East (UAE, KSA, Qatar)',
       standardTime: '5-7 business days',
-      expressTime: '2-3 business days',
-      standardPrice: '$15.99',
-      expressPrice: '$29.99'
+      expressTime: '3-4 business days',
+      standardPrice: 'USD 22',
+      expressPrice: 'USD 35',
     },
     {
-      region: 'United Kingdom',
-      standardTime: '7-10 business days',
-      expressTime: '3-5 business days',
-      standardPrice: '$19.99',
-      expressPrice: '$39.99'
-    },
-    {
-      region: 'Australia',
-      standardTime: '10-14 business days',
-      expressTime: '5-7 business days',
-      standardPrice: '$24.99',
-      expressPrice: '$49.99'
-    },
-    {
-      region: 'Europe (EU)',
-      standardTime: '8-12 business days',
+      region: 'United Kingdom & Europe',
+      standardTime: '7-12 business days',
       expressTime: '4-6 business days',
-      standardPrice: '$22.99',
-      expressPrice: '$44.99'
+      standardPrice: 'USD 28',
+      expressPrice: 'USD 42',
     },
     {
-      region: 'Asia',
+      region: 'North America',
+      standardTime: '8-12 business days',
+      expressTime: '5-7 business days',
+      standardPrice: 'USD 32',
+      expressPrice: 'USD 55',
+    },
+    {
+      region: 'Australia & New Zealand',
+      standardTime: '10-14 business days',
+      expressTime: '6-8 business days',
+      standardPrice: 'USD 38',
+      expressPrice: 'USD 62',
+    },
+    {
+      region: 'Rest of World',
       standardTime: '10-15 business days',
-      expressTime: '5-8 business days',
-      standardPrice: '$19.99',
-      expressPrice: '$39.99'
-    }
+      expressTime: '6-9 business days',
+      standardPrice: 'USD 42',
+      expressPrice: 'USD 70',
+    },
   ];
 
   const shippingPolicies = [
     {
       title: 'Processing Time',
-      description: 'All orders are processed within 1-2 business days. Orders placed on weekends or holidays will be processed on the next business day.',
-      icon: Clock
+      description: 'Orders confirmed before 2:00 PM PKT ship the same business day. Monogrammed or made-to-order items require an additional 1-2 days for finishing.',
+      icon: Clock,
     },
     {
       title: 'Delivery Areas',
-      description: 'We ship to all 50 US states, Puerto Rico, and over 50 countries worldwide. Some remote areas may have extended delivery times.',
-      icon: MapPin
+      description: 'Domestic deliveries cover every Pakistani city via TCS and Leopards. International shipments leave via DHL Express with doorstep delivery and customs handling.',
+      icon: MapPin,
     },
     {
       title: 'Package Protection',
-      description: 'All packages are carefully packed and insured. We use high-quality packaging materials to ensure your items arrive in perfect condition.',
-      icon: Shield
+      description: 'Each parcel includes tamper-proof seals, moisture barriers, and dust bags. Insurance covers the invoiced amount until delivery confirmation.',
+      icon: Shield,
     },
     {
       title: 'Tracking Information',
-      description: 'You\'ll receive tracking information via email once your order ships. Track your package in real-time from our website or the carrier\'s site.',
-      icon: Package
-    }
+      description: 'Tracking IDs are sent via email and WhatsApp the moment we lodge your parcel. Use your dashboard or the carrier app for live updates.',
+      icon: Package,
+    },
   ];
 
   const restrictions = [
-    'Hazardous materials and flammable items',
-    'Perishable goods (unless specifically designed for shipping)',
-    'Items over 70 lbs or 108 inches in length',
-    'Liquids over 32 oz (unless properly packaged)',
-    'Items requiring special handling or permits'
+    'Cash on Delivery unavailable for orders above Rs 25,000',
+    'Cash on Delivery is not offered outside Pakistan (international shipments must be prepaid)',
+    'International shipments cannot include liquids, aerosols, or power banks',
+    'Gift notes for international deliveries must exclude currency values for customs purposes',
+    'Same-day rider service currently limited to Sialkot and Lahore',
+    'Customs duties are payable by the recipient outside Pakistan',
   ];
 
   return (
@@ -107,8 +109,7 @@ export default function ShippingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Shipping Information</h1>
           <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            Fast, reliable shipping options to get your orders delivered quickly and safely. 
-            Free shipping on orders over $50!
+            Fast, reliable nationwide delivery backed by DHL-supported international shipping. Every parcel leaves Sialkot fully insured and tracked.
           </p>
         </div>
       </section>
@@ -119,8 +120,8 @@ export default function ShippingPage() {
           <div className="flex items-center justify-center space-x-4">
             <Truck className="h-8 w-8" />
             <div>
-              <h2 className="text-2xl font-bold">Free Standard Shipping on Orders Over $50</h2>
-              <p className="text-blue-100">No minimum order required for express shipping upgrades</p>
+              <h2 className="text-2xl font-bold">Free Standard Shipping on Orders Over {companyInfo.domesticShipping.freeThreshold}</h2>
+              <p className="text-blue-100">Express upgrades available for time-critical deliveries</p>
             </div>
           </div>
         </div>
@@ -194,7 +195,7 @@ export default function ShippingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">International Shipping</h2>
-            <p className="text-gray-600">We ship worldwide to over 50 countries</p>
+            <p className="text-gray-600">We ship worldwide to over 50 countries (prepaid only, COD is not available outside Pakistan)</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
@@ -236,6 +237,7 @@ export default function ShippingPage() {
                   <li>• Additional duties and taxes may apply and are the customer's responsibility</li>
                   <li>• Some items may be restricted in certain countries</li>
                   <li>• International orders cannot be expedited once shipped</li>
+                  <li>• Cash on Delivery is unavailable outside Pakistan; all international orders must be prepaid</li>
                 </ul>
               </div>
             </div>
@@ -287,7 +289,7 @@ export default function ShippingPage() {
             
             <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-sm text-yellow-800">
-                <strong>Note:</strong> If you're unsure whether an item can be shipped, please contact our customer service team before placing your order. We're here to help!
+                <strong>Note:</strong> Not sure if your order qualifies? Email us at <a href={`mailto:${companyInfo.email}`} className="underline">{companyInfo.email}</a> or WhatsApp {companyInfo.phone} before placing the order.
               </p>
             </div>
           </div>
@@ -299,7 +301,7 @@ export default function ShippingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">Need Help with Shipping?</h2>
           <p className="text-blue-100 mb-8 max-w-2xl mx-auto">
-            Our customer service team is here to help with any shipping questions or concerns.
+            Chat with our logistics team for delivery timelines, rush orders, or bulk gifting routes.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
@@ -309,10 +311,16 @@ export default function ShippingPage() {
               Contact Support
             </a>
             <a
-              href="mailto:shipping@shopease.com"
+              href={`mailto:${companyInfo.email}`}
               className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
             >
               Email Shipping Team
+            </a>
+            <a
+              href={`tel:${companyInfo.phone}`}
+              className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
+            >
+              Call / WhatsApp Us
             </a>
           </div>
         </div>

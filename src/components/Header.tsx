@@ -1,19 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState('');
   const { items, getTotalItems, getTotalPrice, removeItem, updateQuantity } = useCartStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isProductsPage = pathname?.startsWith('/products');
 
   // Set mounted state to prevent hydration mismatch
   useEffect(() => {
@@ -56,6 +63,52 @@ export default function Header() {
     };
   }, [isMenuOpen, isCartOpen]);
 
+  useEffect(() => {
+    if (!isProductsPage) return;
+    const currentSearch = searchParams?.get('search') || '';
+    setHeaderSearch((prev) => (prev === currentSearch ? prev : currentSearch));
+  }, [isProductsPage, searchParams]);
+
+  const buildProductSearchURL = (term: string) => {
+    const params = isProductsPage
+      ? new URLSearchParams(searchParams?.toString())
+      : new URLSearchParams();
+
+    const trimmed = term.trim();
+
+    if (trimmed) {
+      params.set('search', trimmed);
+      params.set('page', '1');
+    } else {
+      params.delete('search');
+      params.delete('page');
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/products?${queryString}` : '/products';
+  };
+
+  const handleHeaderSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const targetUrl = buildProductSearchURL(headerSearch);
+
+    if (isProductsPage) {
+      router.push(targetUrl, { scroll: false });
+    } else {
+      router.push(targetUrl);
+    }
+  };
+
+  const handleHeaderSearchClear = () => {
+    if (!headerSearch) return;
+    setHeaderSearch('');
+
+    if (isProductsPage) {
+      const targetUrl = buildProductSearchURL('');
+      router.push(targetUrl, { scroll: false });
+    }
+  };
+
   return (
     <header className="bg-white/95 backdrop-blur-md shadow-md border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
@@ -63,7 +116,7 @@ export default function Header() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hover:from-blue-700 hover:to-purple-700 transition-all duration-300">
-              ShopEase
+              {companyInfo.name}
             </Link>
           </div>
 
@@ -83,16 +136,33 @@ export default function Header() {
 
           {/* Search Bar */}
           <div className="hidden md:flex flex-1 max-w-lg mx-8">
-            <div className="relative w-full">
+            <form
+              onSubmit={handleHeaderSearchSubmit}
+              className="relative w-full"
+              role="search"
+              aria-label="Product search"
+            >
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-5 w-5 text-gray-400" />
               </div>
               <input
                 type="text"
                 placeholder="Search products..."
-                className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-200 rounded-xl leading-5 bg-white/80 backdrop-blur-sm placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                value={headerSearch}
+                onChange={(e) => setHeaderSearch(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2.5 border-2 border-gray-200 rounded-xl leading-5 bg-white/80 backdrop-blur-sm placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md text-blue-700"
               />
-            </div>
+              {headerSearch && (
+                <button
+                  type="button"
+                  onClick={handleHeaderSearchClear}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </form>
           </div>
 
           {/* Right side icons */}
@@ -268,8 +338,8 @@ export default function Header() {
                 </div>
                 <div className="text-xs text-gray-500 border-t border-gray-100 pt-3">
                   <p className="font-medium text-gray-700">Need help?</p>
-                  <p>Email: support@shopease.com</p>
-                  <p>Phone: +1 (555) 123-4567</p>
+                  <p>Email: {companyInfo.email}</p>
+                  <p>Phone: {companyInfo.phone}</p>
                 </div>
               </div>
             </div>

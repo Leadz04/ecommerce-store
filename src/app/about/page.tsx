@@ -1,35 +1,36 @@
 import Image from 'next/image';
 import { Users, Award, Globe, Heart } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function AboutPage() {
   const stats = [
-    { icon: Users, label: 'Happy Customers', value: '10,000+' },
-    { icon: Award, label: 'Awards Won', value: '15' },
-    { icon: Globe, label: 'Countries Served', value: '50+' },
-    { icon: Heart, label: 'Products Sold', value: '100,000+' }
+    { icon: Users, label: 'Returning Customers', value: '1,800+' },
+    { icon: Award, label: 'Artisans Onboarded', value: '35+' },
+    { icon: Globe, label: 'Countries Shipped', value: '18' },
+    { icon: Heart, label: 'Custom Orders Delivered', value: '650+' },
   ];
 
   const values = [
     {
-      title: 'Quality First',
-      description: 'We carefully curate every product to ensure the highest quality standards for our customers.',
-      icon: Award
+      title: 'Heritage Craftsmanship',
+      description: 'We partner with third-generation leather ateliers in Sialkot who tan, stitch, and finish every piece by hand.',
+      icon: Award,
     },
     {
-      title: 'Customer Focus',
-      description: 'Your satisfaction is our priority. We provide exceptional customer service and support.',
-      icon: Users
+      title: 'Customer Obsession',
+      description: 'Same-day support on WhatsApp, transparent order tracking, and proactive aftercare tips keep you informed at every step.',
+      icon: Users,
     },
     {
-      title: 'Global Reach',
-      description: 'We ship worldwide, bringing quality products to customers across the globe.',
-      icon: Globe
+      title: 'Responsible Sourcing',
+      description: 'We work in small batches using locally sourced hides and recycled hardware to reduce waste.',
+      icon: Globe,
     },
     {
-      title: 'Community Impact',
-      description: 'We believe in giving back and supporting communities through various initiatives.',
-      icon: Heart
-    }
+      title: 'Long-Term Care',
+      description: 'Each order ships with a care guide, complimentary conditioning session, and access to lifetime repair assistance.',
+      icon: Heart,
+    },
   ];
 
   return (
@@ -37,10 +38,9 @@ export default function AboutPage() {
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-12 sm:py-16 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6">About ShopEase</h1>
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4 sm:mb-6">About {companyInfo.name}</h1>
           <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            We're passionate about bringing you the best products at unbeatable prices, 
-            with exceptional customer service and fast, reliable shipping.
+            {companyInfo.tagline}. We blend heritage leather craft with modern silhouettes so every carry feels personal, purposeful, and built to last.
           </p>
         </div>
       </section>
@@ -52,18 +52,13 @@ export default function AboutPage() {
             <div>
               <h2 className="text-3xl font-bold text-white-900 mb-6">Our Story</h2>
               <p className="text-offwhite-600 mb-4">
-                Founded in 2020, ShopEase started as a small online store with a simple mission: 
-                to make quality products accessible to everyone. What began as a passion project 
-                has grown into a trusted e-commerce platform serving customers worldwide.
+                EverStyleCrafts was born inside a small Sialkot workshop where our founder Asad Sanaullah grew up watching artisans cut, burnish, and saddle-stitch leather by hand. After years of sourcing for global labels, he decided to build a house brand that keeps Pakistani craftsmanship front and center.
               </p>
               <p className="text-offwhite-600 mb-4">
-                We believe that shopping should be easy, enjoyable, and rewarding. That's why we've 
-                built our platform with user experience at its core, offering intuitive navigation, 
-                secure payments, and fast delivery.
+                We work directly with family-owned tanneries, invest in fair wages, and keep production runs intentionally small. This approach lets us trace every hide, finish every edge with care, and share the full story of each piece with you.
               </p>
               <p className="text-offwhite-600">
-                Today, we're proud to offer thousands of products across multiple categories, 
-                all carefully selected for their quality, value, and customer satisfaction.
+                From messenger bags and travel wallets to bespoke gifting sets, our collections are designed for daily wear, business travel, and heirloom celebrations. Every order is quality checked in {companyInfo.address.split(',')[0]}, wrapped in recyclable packaging, and backed by responsive local support.
               </p>
             </div>
             <div className="relative">
@@ -128,13 +123,13 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Meet Our Team</h2>
-            <p className="text-gray-600">The people behind ShopEase</p>
+            <p className="text-gray-600">The people behind {companyInfo.name}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { name: 'Sarah Johnson', role: 'CEO & Founder', image: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=300&h=300&fit=crop' },
-              { name: 'Michael Chen', role: 'CTO', image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop' },
-              { name: 'Emily Rodriguez', role: 'Head of Customer Experience', image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&h=300&fit=crop' }
+              { name: 'Asad Sanaullah', role: 'Founder & Creative Director', image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300&h=300&fit=crop' },
+              { name: 'Ayesha Khan', role: 'Head of Merchandising', image: 'https://images.unsplash.com/photo-1504593811423-6dd665756598?w=300&h=300&fit=crop' },
+              { name: 'Hassan Raza', role: 'Customer Experience Lead', image: 'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?w=300&h=300&fit=crop' }
             ].map((member, index) => (
               <div key={index} className="text-center">
                 <div className="relative w-32 h-32 mx-auto mb-4">
@@ -156,9 +151,9 @@ export default function AboutPage() {
       {/* CTA Section */}
       <section className="py-16 bg-blue-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to Shop?</h2>
+          <h2 className="text-3xl font-bold mb-4">Ready to Carry Better?</h2>
           <p className="text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join thousands of satisfied customers and discover amazing products at great prices.
+            Explore small-batch drops, customize gifting sets, or chat with our stylists for leather care tips. Your next signature piece is a click away.
           </p>
           <a
             href="/products"

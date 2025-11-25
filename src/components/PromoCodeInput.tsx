@@ -62,8 +62,8 @@ export default function PromoCodeInput({ onApply, onRemove, currentPromo, discou
 
     if (currentPromo) {
         return (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                         <div className="bg-green-100 p-2 rounded-full">
                             <Tag className="h-5 w-5 text-green-600" />
@@ -77,7 +77,7 @@ export default function PromoCodeInput({ onApply, onRemove, currentPromo, discou
                     </div>
                     <button
                         onClick={handleRemove}
-                        className="p-2 hover:bg-green-100 rounded-full transition-colors"
+                        className="p-2 hover:bg-green-100 rounded-full transition-colors self-start sm:self-auto"
                         aria-label="Remove promo code"
                     >
                         <X className="h-5 w-5 text-green-600" />
@@ -88,24 +88,24 @@ export default function PromoCodeInput({ onApply, onRemove, currentPromo, discou
     }
 
     return (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
                 Have a promo code?
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
                 <input
                     type="text"
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                     onKeyPress={(e) => e.key === 'Enter' && handleApply()}
                     placeholder="Enter code"
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="flex-1 min-w-0 px-4 py-3 border-2 border-slate-200 rounded-lg bg-white text-slate-900 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     disabled={isValidating}
                 />
                 <button
                     onClick={handleApply}
                     disabled={isValidating || !promoCode.trim()}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    className="w-full sm:w-auto sm:flex-none px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                     {isValidating ? (
                         <>

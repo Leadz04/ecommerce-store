@@ -5,6 +5,7 @@ import { Star, ThumbsUp, CheckCircle, Flag, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 import ReviewForm from './ReviewForm';
+import { companyInfo } from '@/data/companyInfo';
 
 interface Review {
   _id: string;
@@ -347,11 +348,11 @@ export default function ReviewList({ productId }: ReviewListProps) {
                       <div className="flex items-start gap-4">
                         <div className="flex-shrink-0">
                           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
-                            S
+                            {companyInfo.name.charAt(0)}
                           </div>
                         </div>
                         <div className="flex-1">
-                          <p className="text-base font-bold text-emerald-900 mb-2">Response from ShopEase</p>
+                          <p className="text-base font-bold text-emerald-900 mb-2">Response from {companyInfo.name}</p>
                           <p className="text-sm text-emerald-800 leading-relaxed mb-3">{review.adminResponse.message}</p>
                           <p className="text-xs text-emerald-700 font-semibold">
                             {formatDate(review.adminResponse.respondedAt)}

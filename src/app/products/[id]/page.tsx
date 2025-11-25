@@ -196,6 +196,21 @@ export default function ProductPage() {
   const { user } = useAuthStore();
   
   const isSuperAdmin = user?.role?.name === 'SUPER_ADMIN';
+  const product = currentProduct as any;
+  const availableStock =
+    product && product.inStock
+      ? Math.max(0, typeof product.stockCount === 'number' ? product.stockCount : 0)
+      : 0;
+  
+  useEffect(() => {
+    setQuantity((prev) => {
+      if (availableStock <= 0) {
+        return 0;
+      }
+      const next = Math.min(Math.max(1, prev), availableStock);
+      return next;
+    });
+  }, [availableStock]);
   
   // Verify token and fetch user on mount
   useEffect(() => {
@@ -774,8 +789,6 @@ export default function ProductPage() {
     );
   }
   
-  const product = currentProduct as any;
-
   const buildProductWithPromo = () => {
     if (!promoDetails) return product;
     const originalPrice =
@@ -791,7 +804,11 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    const productPayload = buildProductWithPromo();
+    if (availableStock <= 0) {
+      toast.error('This product is currently out of stock.');
+      return;
+    }
+    const productPayload = { ...buildProductWithPromo(), stockCount: availableStock };
     addItem(productPayload, quantity, selectedSize, selectedColor);
     // Fire analytics event
     try {
@@ -1705,21 +1722,21 @@ export default function ProductPage() {
             <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Quantity</h3>
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                onClick={() => setQuantity(Math.max(availableStock > 0 ? 1 : 0, quantity - 1))}
                 className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
               >
                 <Minus className="h-4 w-4 text-gray-600 " />
               </button>
               <span className="text-lg font-medium w-12 text-center text-gray-900 ">{quantity}</span>
               <button
-                onClick={() => setQuantity(Math.min(product.stockCount, quantity + 1))}
+                onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
                 className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
               >
                 <Plus className="h-4 w-4 text-gray-600 " />
               </button>
             </div>
             <p className="text-sm text-gray-500  mt-2 font-medium">
-              {product.stockCount} items in stock
+              {availableStock} items in stock
             </p>
           </div>
 
@@ -1727,18 +1744,25 @@ export default function ProductPage() {
           <div className="flex space-x-4">
             <button
               onClick={handleAddToCart}
-              disabled={!product.inStock}
+              disabled={!product.inStock || availableStock <= 0}
               className="flex-1 bg-blue-600 hover:bg-blue-700   text-white py-3 px-6 rounded-lg font-semibold disabled:bg-gray-300  disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
             >
-              <span>{product.inStock ? 'Add to Cart' : 'Out of Stock'}</span>
+              <span>{product.inStock && availableStock > 0 ? 'Add to Cart' : 'Out of Stock'}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
             <button
               onClick={async () => {
+                if (!user) {
+                  toast.error('Please sign in to save items to your wishlist');
+                  router.push('/login');
+                  return;
+                }
                 try {
                   const res = await toggleWishlist(product._id as any);
                   setIsLiked(res === 'added');
-                } catch {}
+                } catch {
+                  toast.error('Unable to update wishlist right now');
+                }
               }}
               className="p-3 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
             >

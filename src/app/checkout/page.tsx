@@ -13,11 +13,21 @@ import StripePaymentForm from '@/components/StripePaymentForm';
 import PaymentConfirmation from '@/components/PaymentConfirmation';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
+import PromoCodeInput from '@/components/PromoCodeInput';
 import toast from 'react-hot-toast';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getTotalPrice, clearCart } = useCartStore();
+  const {
+    items,
+    getTotalPrice,
+    clearCart,
+    promoCode,
+    applyPromoCode,
+    removePromoCode,
+    getDiscountAmount,
+  } = useCartStore();
+  const enforceStockLimits = useCartStore((state) => state.enforceStockLimits);
   const { isAuthenticated, user } = useAuthStore();
   const { createOrder, isLoading: isOrderLoading } = useOrderStore();
   const { createPaymentIntent, isLoading: isPaymentLoading } = usePaymentStore();
@@ -61,6 +71,19 @@ export default function CheckoutPage() {
     }
   }, [isAuthenticated, user, router]);
 
+  useEffect(() => {
+    const adjustments = enforceStockLimits();
+    adjustments.forEach((adj) => {
+      if (adj.removed) {
+        toast.error(`${adj.name} was removed from your cart because it is out of stock.`);
+      } else {
+        toast.error(
+          `${adj.name}: Only ${adj.availableStock} left. Quantity updated to ${adj.newQuantity}.`
+        );
+      }
+    });
+  }, [enforceStockLimits]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -84,14 +107,16 @@ export default function CheckoutPage() {
 
   const calculateTotals = () => {
     const subtotal = getTotalPrice();
-    const shipping = subtotal > 100 ? 0 : 9.99; // Free shipping over $100
-    const tax = subtotal * 0.08; // 8% tax
-    const total = subtotal + shipping + tax;
+    const discount = Math.min(getDiscountAmount(), subtotal);
+    const discountedSubtotal = Math.max(subtotal - discount, 0);
+    const shipping = discountedSubtotal > 100 ? 0 : 9.99; // Free shipping over $100
+    const tax = discountedSubtotal * 0.08; // 8% tax
+    const total = discountedSubtotal + shipping + tax;
     
-    return { subtotal, shipping, tax, total };
+    return { subtotal, discount, shipping, tax, total };
   };
 
-  const { subtotal, shipping, tax, total } = calculateTotals();
+  const { subtotal, discount, shipping, tax, total } = calculateTotals();
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,19 +228,41 @@ export default function CheckoutPage() {
 
         // Create order first
         const orderData = {
-          items: items.map(item => ({
-            productId: item.product._id || item.product.id,
-            name: item.product.name,
-            price: item.product.price,
-            quantity: item.quantity,
-            image: item.product.image,
-            size: item.size,
-            color: item.color,
-            promoToken: item.product.emailPromo?.token,
-            promoPercent: item.product.emailPromo?.discountPercent,
-            promoOriginalPrice: item.product.emailPromo?.originalPrice,
-          })),
+          items: items.map(item => {
+            const productId = item.product._id || item.product.id;
+            const normalizedProductId = productId?.toString();
+            const normalizedPromoProductId = promoCode?.productId?.toString();
+            const promoMatchesProduct = normalizedPromoProductId
+              ? normalizedPromoProductId === normalizedProductId
+              : Boolean(promoCode);
+
+            const appliedPromo = promoMatchesProduct && promoCode
+              ? {
+                  promoToken: promoCode.token,
+                  promoPercent: promoCode.discountPercent,
+                  promoOriginalPrice: item.product.price,
+                }
+              : item.product.emailPromo
+                ? {
+                    promoToken: item.product.emailPromo.token,
+                    promoPercent: item.product.emailPromo.discountPercent,
+                    promoOriginalPrice: item.product.emailPromo.originalPrice ?? item.product.price,
+                  }
+                : {};
+
+            return {
+              productId,
+              name: item.product.name,
+              price: item.product.price,
+              quantity: item.quantity,
+              image: item.product.image,
+              size: item.size,
+              color: item.color,
+              ...appliedPromo,
+            };
+          }),
           subtotal,
+          discount,
           shipping,
           tax,
           total,
@@ -522,12 +569,27 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
+              <div className="mb-6">
+                <PromoCodeInput
+                  onApply={applyPromoCode}
+                  onRemove={removePromoCode}
+                  currentPromo={promoCode}
+                  discountAmount={discount}
+                />
+              </div>
+
               {/* Totals */}
               <div className="space-y-3 border-t border-slate-200 pt-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Subtotal</span>
                   <span className="text-slate-900">${subtotal.toFixed(2)}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Promo savings</span>
+                    <span>- ${discount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Shipping</span>
                   <span className="text-slate-900">

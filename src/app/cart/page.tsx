@@ -11,12 +11,26 @@ import toast from 'react-hot-toast';
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotalPrice, getTotalItems } = useCartStore();
-  const { validateStock, isValidating, stockStatus } = useStockValidation();
+  const enforceStockLimits = useCartStore((state) => state.enforceStockLimits);
+  const { validateStock, isValidating } = useStockValidation();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    const adjustments = enforceStockLimits();
+    adjustments.forEach((adj) => {
+      if (adj.removed) {
+        toast.error(`${adj.name} was removed from your cart because it is out of stock.`);
+      } else {
+        toast.error(
+          `${adj.name}: Only ${adj.availableStock} left. Quantity updated to ${adj.newQuantity}.`
+        );
+      }
+    });
+  }, [enforceStockLimits]);
 
   const handleQuantityChange = (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) {

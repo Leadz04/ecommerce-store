@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
 
     // Create new product
     const normalizedStock = typeof stockCount === 'number' ? stockCount : 0;
-    const normalizedBrand = (brand && brand !== 'Other') ? brand : 'Wolveyes';
+    const normalizedBrand = (brand && brand !== 'Other') ? brand : 'EverStyleCrafts';
     const product = new Product({
       name,
       description,

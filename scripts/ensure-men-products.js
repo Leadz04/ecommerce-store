@@ -50,7 +50,7 @@ const ProductSchema = new mongoose.Schema({
   brand: {
     type: String,
     trim: true,
-    default: 'Wolveyes'
+    default: 'EverStyleCrafts'
   },
   rating: {
     type: Number,

@@ -1,4 +1,5 @@
 import { RefreshCw, Clock, Package, AlertTriangle, Mail, Phone, MapPin } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function RefundPage() {
   const lastUpdated = "December 1, 2024";
@@ -29,7 +30,7 @@ export default function RefundPage() {
         {
           subtitle: 'How to Start a Return',
           details: [
-            'Contact us at info@wolveyes.com to initiate return',
+            `Contact us at ${companyInfo.email} to initiate return`,
             'Provide your order number and reason for return',
             'We will send you a return shipping label',
             'Follow the instructions for packaging and shipping'
@@ -139,9 +140,9 @@ export default function RefundPage() {
   ];
 
   const contactInfo = {
-    email: 'info@wolveyes.com',
-    phone: '+92 330 6663786',
-    address: 'Al Hayat Center, Shop#12, Near Citi Housing Society Gate, Daska Road Sialkot, Pakistan',
+    email: companyInfo.email,
+    phone: companyInfo.phone,
+    address: companyInfo.address,
     returnAddress: 'Al Hayat Center Shop Number 12 Near Citi Housing Sialkot'
   };
 
@@ -168,7 +169,7 @@ export default function RefundPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">About Our Return Policy</h2>
             <p className="text-gray-600 mb-4">
-              At Wolveyes, we stand behind the quality of our products and want you to be completely 
+              At EverStyleCrafts, we stand behind the quality of our products and want you to be completely 
               satisfied with your purchase. Our return and refund policy is designed to be fair, 
               transparent, and customer-friendly.
             </p>
@@ -180,7 +181,7 @@ export default function RefundPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-blue-800 text-sm">
                 <strong>Quick Summary:</strong> 3-day return window, original condition required, 
-                contact us first at info@wolveyes.com, free return shipping for our errors, 
+                contact us first at {contactInfo.email}, free return shipping for our errors, 
                 refunds processed within 10 business days.
               </p>
             </div>

@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Order from '@/models/Order';
 import User from '@/models/User';
 import jwt from 'jsonwebtoken';
+import { companyInfo } from '@/data/companyInfo';
 
 // Helper function to verify JWT token and get user info
 async function verifyToken(request: NextRequest) {
@@ -299,7 +300,7 @@ function generateInvoiceHTML(order: any): string {
 <body>
     <div class="invoice-container">
         <div class="header">
-            <div class="company-name">ShopEase</div>
+            <div class="company-name">${companyInfo.name}</div>
             <div class="invoice-title">INVOICE</div>
             <div class="invoice-number">#${order.orderNumber}</div>
         </div>
@@ -376,7 +377,7 @@ function generateInvoiceHTML(order: any): string {
 
         <div class="footer">
             <p>Thank you for your business!</p>
-            <p>For questions about this invoice, please contact us at support@shopease.com</p>
+            <p>For questions about this invoice, please contact us at ${companyInfo.email}</p>
         </div>
     </div>
 </body>

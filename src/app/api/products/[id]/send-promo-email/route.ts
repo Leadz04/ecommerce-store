@@ -29,10 +29,14 @@ export async function POST(
     const {
       emails,
       discountPercent,
+      discountCode,
       customMessage,
       subject,
       template
     } = body;
+    const normalizedDiscountCode = typeof discountCode === 'string'
+      ? discountCode.trim().toUpperCase()
+      : '';
 
     // Validate inputs
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
@@ -73,6 +77,7 @@ export async function POST(
       productImage: product.image || '',
       productUrl,
       discountPercent,
+      discountCode: normalizedDiscountCode || undefined,
       customMessage,
       siteUrl,
       template: template || 'purple',
@@ -140,8 +145,8 @@ export async function POST(
         let promoToken: string | null = null;
         let promoExpiresAt: Date | null = null;
         if (discountPercent && discountPercent > 0) {
-          // Generate secure random promo token
-          promoToken = crypto.randomBytes(16).toString('hex');
+          // Use custom discount code if provided, otherwise generate secure random token
+          promoToken = normalizedDiscountCode || crypto.randomBytes(16).toString('hex');
           promoExpiresAt = new Date(Date.now() + PROMO_EXPIRY_HOURS * 60 * 60 * 1000);
 
           // CRITICAL FIX: Create EmailPromoDiscount with ALL required fields
@@ -181,6 +186,7 @@ export async function POST(
 
         const personalizedHtml = generateProductPromoEmail({
           ...baseEmailData,
+          discountCode: promoToken || undefined,
           productUrl: productLink.toString(),
         });
 

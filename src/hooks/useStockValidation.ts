@@ -36,13 +36,17 @@ export function useStockValidation() {
 
                 const data = await response.json();
                 const product = data.product;
+                if (!product) continue;
+                const availableStock = product.inStock
+                    ? (typeof product.stockCount === 'number' ? product.stockCount : 0)
+                    : 0;
 
-                if (!product.inStock || product.stockCount < item.quantity) {
+                if (!product.inStock || availableStock < item.quantity) {
                     outOfStockItems.push({
                         productId: productId as string,
                         name: item.product.name,
                         requestedQty: item.quantity,
-                        availableStock: product.stockCount || 0
+                        availableStock
                     });
                 }
             }

@@ -1,4 +1,5 @@
 import { FileText, Scale, AlertTriangle, Shield, CreditCard, Truck, Mail, Phone, MapPin, Globe, Users, Settings, Lock } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function TermsPage() {
   const lastUpdated = "December 1, 2024";
@@ -322,7 +323,7 @@ export default function TermsPage() {
         {
           subtitle: 'Liability Exclusions',
           details: [
-            'Wolveyes shall not be liable for any injury, loss, claim, or damages',
+            'EverStyleCrafts shall not be liable for any injury, loss, claim, or damages',
             'We are not liable for direct, indirect, incidental, punitive, special, or consequential damages',
             'This includes lost profits, lost revenue, lost savings, loss of data, or replacement costs',
             'Liability limitations apply whether based in contract, tort, strict liability or otherwise'
@@ -346,7 +347,7 @@ export default function TermsPage() {
         {
           subtitle: 'Your Obligations',
           details: [
-            'You agree to indemnify, defend and hold harmless Wolveyes and our affiliates',
+            'You agree to indemnify, defend and hold harmless EverStyleCrafts and our affiliates',
             'This includes our parent, subsidiaries, partners, officers, directors, agents, and employees',
             'You are responsible for any claims or demands made by third-parties',
             'This includes reasonable attorneys\' fees arising from your breach of these terms'
@@ -468,10 +469,10 @@ export default function TermsPage() {
   ];
 
   const contactInfo = {
-    email: 'info@wolveyes.com',
-    phone: '+92 330 6663786',
-    phone2: '+92 528 153486',
-    address: 'Al Hayat Center, Shop#12, Near Citi Housing Society Gate, Daska Road Sialkot, Pakistan'
+    email: companyInfo.email,
+    phone: companyInfo.phone,
+    phone2: companyInfo.phone,
+    address: companyInfo.address
   };
 
   return (
@@ -484,7 +485,7 @@ export default function TermsPage() {
             <h1 className="text-4xl md:text-5xl font-bold">Terms of Service</h1>
           </div>
           <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            These terms and conditions outline the rules and regulations for the use of Wolveyes' website and services.
+            These terms and conditions outline the rules and regulations for the use of EverStyleCrafts' website and services.
           </p>
           <p className="text-blue-200 mt-4">Last updated: {lastUpdated}</p>
         </div>
@@ -496,8 +497,8 @@ export default function TermsPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
             <p className="text-gray-600 mb-4">
-              This website is operated by Wolveyes. Throughout the site, the terms "we", "us" and "our" refer to Wolveyes. 
-              Wolveyes offers this website, including all information, tools and Services available from this site to you, 
+              This website is operated by EverStyleCrafts. Throughout the site, the terms "we", "us" and "our" refer to EverStyleCrafts. 
+              EverStyleCrafts offers this website, including all information, tools and Services available from this site to you, 
               the user, conditioned upon your acceptance of all terms, conditions, policies and notices stated here.
             </p>
             <p className="text-gray-600 mb-4">
@@ -604,9 +605,9 @@ export default function TermsPage() {
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">About Wolveyes</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">About EverStyleCrafts</h3>
                   <p className="text-gray-600 mb-4">
-                    At Wolveyes, Asad Sanaullah envisioned premium leather for every Pakistani. 
+                    At EverStyleCrafts, Asad Sanaullah envisioned premium leather for every Pakistani. 
                     Timeless designs, unmatched craftsmanship, and enduring quality.
                   </p>
                 </div>

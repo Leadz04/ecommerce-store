@@ -52,7 +52,7 @@ const ProductSchema = new mongoose.Schema({
   brand: {
     type: String,
     trim: true,
-    default: 'Wolveyes'
+    default: 'EverStyleCrafts'
   },
   rating: {
     type: Number,
@@ -270,7 +270,7 @@ async function categorizeAllProducts() {
               image: mainImage,
               images: images,
               category: category,
-              brand: 'Wolveyes',
+              brand: 'EverStyleCrafts',
               rating: 0,
               reviewCount: 0,
               inStock: !outOfStock,

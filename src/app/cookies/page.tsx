@@ -1,4 +1,5 @@
 import { Cookie, Settings, Eye, Shield, Database, Globe } from 'lucide-react';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function CookiesPage() {
   const lastUpdated = "December 1, 2024";
@@ -126,7 +127,7 @@ export default function CookiesPage() {
               They are widely used to make websites work more efficiently and to provide information to website owners.
             </p>
             <p className="text-gray-600 mb-6">
-              At ShopEase, we use cookies and similar technologies to improve your shopping experience, 
+              At {companyInfo.name}, we use cookies and similar technologies to improve your shopping experience, 
               analyze website traffic, and provide personalized content and advertisements.
             </p>
             
@@ -341,7 +342,7 @@ export default function CookiesPage() {
                 Contact Us
               </a>
               <a
-                href="mailto:privacy@shopease.com"
+                href={`mailto:${companyInfo.email}`}
                 className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors"
               >
                 Email Privacy Team

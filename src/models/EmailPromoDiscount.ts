@@ -26,7 +26,6 @@ const EmailPromoDiscountSchema = new Schema<IEmailPromoDiscount>(
     token: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     email: {
@@ -97,7 +96,7 @@ const EmailPromoDiscountSchema = new Schema<IEmailPromoDiscount>(
   }
 );
 
-EmailPromoDiscountSchema.index({ token: 1 }, { unique: true });
+EmailPromoDiscountSchema.index({ token: 1 });
 EmailPromoDiscountSchema.index({ productId: 1, status: 1 });
 EmailPromoDiscountSchema.index({ email: 1, productId: 1 });
 

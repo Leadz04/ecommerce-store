@@ -4,7 +4,7 @@ export interface IProductVersion extends Document {
   productId?: string | null;
   action: 'created' | 'updated' | 'unchanged';
   externalId?: string | null;
-  source: string; // e.g., wolveyes
+  source: string; // e.g., everstylecrafts
   before?: Record<string, any> | null;
   after?: Record<string, any> | null;
   diff?: Array<{ field: string; before: any; after: any }>;

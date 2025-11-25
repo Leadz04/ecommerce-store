@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { companyInfo } from "@/data/companyInfo";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || companyInfo.siteUrl || "http://localhost:3000";
 
 export function getCanonicalUrl(pathname: string = "/"): string {
   const cleanPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
@@ -10,16 +11,15 @@ export function getCanonicalUrl(pathname: string = "/"): string {
 export const defaultOpenGraph: NonNullable<Metadata["openGraph"]> = {
   type: "website",
   url: siteUrl,
-  siteName: "ShopEase",
-  title: "ShopEase - Your Online Shopping Destination",
-  description:
-    "Discover amazing products at great prices. Fast shipping, excellent customer service, and quality guaranteed.",
+  siteName: companyInfo.name,
+  title: `${companyInfo.name} – ${companyInfo.tagline}`,
+  description: companyInfo.description,
   images: [
     {
       url: "/og-image.png",
       width: 1200,
       height: 630,
-      alt: "ShopEase",
+      alt: companyInfo.name,
     },
   ],
   locale: "en_US",
@@ -27,15 +27,15 @@ export const defaultOpenGraph: NonNullable<Metadata["openGraph"]> = {
 
 export const defaultTwitter: NonNullable<Metadata["twitter"]> = {
   card: "summary_large_image",
-  site: "@shopease",
-  creator: "@shopease",
+  site: "@everstylecrafts",
+  creator: "@everstylecrafts",
 };
 
 export function websiteJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "ShopEase",
+    name: companyInfo.name,
     url: siteUrl,
     potentialAction: {
       "@type": "SearchAction",
@@ -49,8 +49,15 @@ export function organizationJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "ShopEase",
+    name: companyInfo.legalName,
     url: siteUrl,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: companyInfo.email,
+      telephone: companyInfo.phone,
+      availableLanguage: ["en", "ur"],
+    },
     logo: `${siteUrl}/favicon.ico`,
   };
 }

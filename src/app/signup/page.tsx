@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { SignupCredentials } from '@/types';
+import { companyInfo } from '@/data/companyInfo';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -103,8 +104,8 @@ export default function SignupPage() {
               Back to Home
             </Link>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold">Join ShopEase</h1>
-          <p className="text-xl text-blue-100 mt-2">Create your account and start shopping today</p>
+          <h1 className="text-4xl md:text-5xl font-bold">Join {companyInfo.name}</h1>
+          <p className="text-xl text-blue-100 mt-2">Create your account to track bespoke orders, save measurements, and view care tips.</p>
         </div>
       </section>
 

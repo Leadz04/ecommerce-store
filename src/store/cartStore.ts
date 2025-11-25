@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import toast from 'react-hot-toast';
 import { CartItem, Product } from '@/types';
 
 interface PromoCode {
@@ -8,12 +9,22 @@ interface PromoCode {
   productId?: string;
 }
 
+interface StockAdjustment {
+  id: string;
+  name: string;
+  previousQuantity: number;
+  newQuantity: number;
+  availableStock: number;
+  removed: boolean;
+}
+
 interface CartStore {
   items: CartItem[];
   promoCode: PromoCode | null;
   addItem: (product: Product, quantity?: number, size?: string, color?: string) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  enforceStockLimits: () => StockAdjustment[];
   clearCart: () => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
@@ -23,29 +34,95 @@ interface CartStore {
   getFinalTotal: () => number;
 }
 
+const normalizeCartItems = (items: CartItem[]) => {
+  const map = new Map<string, CartItem>();
+  for (const it of items) {
+    const key = it.id;
+    if (map.has(key)) {
+      const existing = map.get(key)!;
+      map.set(key, { ...existing, quantity: existing.quantity + it.quantity });
+    } else {
+      map.set(key, { ...it });
+    }
+  }
+
+  const deduped = Array.from(map.values());
+  const adjustments: StockAdjustment[] = [];
+  const normalized: CartItem[] = [];
+
+  for (const item of deduped) {
+    const hasFiniteStock = typeof item.product.stockCount === 'number' && item.product.stockCount >= 0;
+    const stockLimit = hasFiniteStock ? item.product.stockCount : null;
+    const normalizedQuantity = Math.max(0, Math.floor(item.quantity || 0));
+
+    if (stockLimit === 0) {
+      adjustments.push({
+        id: item.id,
+        name: item.product.name,
+        previousQuantity: normalizedQuantity,
+        newQuantity: 0,
+        availableStock: 0,
+        removed: true,
+      });
+      continue;
+    }
+
+    let nextQuantity = normalizedQuantity;
+    if (stockLimit !== null && nextQuantity > stockLimit) {
+      adjustments.push({
+        id: item.id,
+        name: item.product.name,
+        previousQuantity: normalizedQuantity,
+        newQuantity: stockLimit,
+        availableStock: stockLimit,
+        removed: false,
+      });
+      nextQuantity = stockLimit;
+    }
+
+    if (nextQuantity <= 0) {
+      adjustments.push({
+        id: item.id,
+        name: item.product.name,
+        previousQuantity: normalizedQuantity,
+        newQuantity: 0,
+        availableStock: stockLimit ?? 0,
+        removed: true,
+      });
+      continue;
+    }
+
+    normalized.push({ ...item, quantity: nextQuantity });
+  }
+
+  return { items: normalized, adjustments };
+};
+
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
       promoCode: null,
 
-      // Ensure no duplicate ids exist in the cart
-      _dedupeItems: (items: CartItem[]) => {
-        const map = new Map<string, CartItem>();
-        for (const it of items) {
-          const key = it.id;
-          if (map.has(key)) {
-            const existing = map.get(key)!;
-            map.set(key, { ...existing, quantity: existing.quantity + it.quantity });
-          } else {
-            map.set(key, it);
-          }
-        }
-        return Array.from(map.values());
+      // Normalize cart to remove duplicates and clamp to available stock
+      _normalizeItems: (items: CartItem[]) => {
+        return normalizeCartItems(items).items;
       },
 
       addItem: (product: Product, quantity = 1, size, color) => {
         const items = get().items;
+        const safeQuantity = Math.max(1, quantity);
+        const hasFiniteStock = typeof product.stockCount === 'number' && product.stockCount >= 0;
+        const stockLimit = hasFiniteStock ? product.stockCount : null;
+        const stockErrorMessage = stockLimit === 0
+          ? `${product.name} is out of stock`
+          : `Only ${stockLimit} ${product.name}${stockLimit === 1 ? '' : 's'} available`;
+
+        if (stockLimit === 0) {
+          toast.error(stockErrorMessage);
+          return;
+        }
+
         const normalize = (v?: string) => (v && v.trim() !== '' ? v : 'default');
         const nSize = normalize(size);
         const nColor = normalize(color);
@@ -59,14 +136,34 @@ export const useCartStore = create<CartStore>()(
         if (existingItemIndex > -1) {
           // Update existing item quantity
           const updatedItems = [...items];
-          updatedItems[existingItemIndex].quantity += quantity;
-          set({ items: updatedItems });
+          const existingItem = updatedItems[existingItemIndex];
+          if (stockLimit !== null) {
+            const availableSlots = stockLimit - existingItem.quantity;
+            if (availableSlots <= 0) {
+              toast.error(stockErrorMessage);
+              return;
+            }
+            const quantityToAdd = Math.min(safeQuantity, availableSlots);
+            existingItem.quantity += quantityToAdd;
+            set({ items: updatedItems });
+            if (quantityToAdd < safeQuantity) {
+              toast.error(stockErrorMessage);
+            }
+          } else {
+            existingItem.quantity += safeQuantity;
+            set({ items: updatedItems });
+          }
         } else {
           // Add new item
+          const allowedQuantity = stockLimit === null ? safeQuantity : Math.min(safeQuantity, stockLimit);
+          if (allowedQuantity <= 0) {
+            toast.error(stockErrorMessage);
+            return;
+          }
           const newItem: CartItem = {
             id: `${product._id || product.id}-${nSize}-${nColor}`,
             product,
-            quantity,
+            quantity: allowedQuantity,
             size: size,
             color: color,
             price: product.price,
@@ -75,8 +172,8 @@ export const useCartStore = create<CartStore>()(
           // Append then dedupe to guard against any legacy duplicates
           const next = [...items, newItem];
           // @ts-ignore - internal helper
-          const deduped = (get() as any)._dedupeItems(next);
-          set({ items: deduped });
+          const normalized = (get() as any)._normalizeItems(next);
+          set({ items: normalized });
         }
       },
 
@@ -85,15 +182,46 @@ export const useCartStore = create<CartStore>()(
       },
 
       updateQuantity: (itemId: string, quantity: number) => {
-        if (quantity <= 0) {
+        const normalizedQuantity = Math.floor(quantity);
+        if (normalizedQuantity <= 0) {
           get().removeItem(itemId);
           return;
         }
 
-        const items = get().items.map(item =>
-          item.id === itemId ? { ...item, quantity } : item
-        );
-        set({ items });
+        const items = get().items;
+        const itemIndex = items.findIndex(item => item.id === itemId);
+        if (itemIndex === -1) return;
+
+        const targetItem = items[itemIndex];
+        const product = targetItem.product;
+        const hasFiniteStock = typeof product.stockCount === 'number' && product.stockCount >= 0;
+        const stockLimit = hasFiniteStock ? product.stockCount : null;
+
+        if (stockLimit === 0) {
+          toast.error(`${product.name} is out of stock`);
+          get().removeItem(itemId);
+          return;
+        }
+
+        if (stockLimit !== null && normalizedQuantity > stockLimit) {
+          const clamped = stockLimit;
+          const updatedItems = [...items];
+          updatedItems[itemIndex] = { ...targetItem, quantity: clamped };
+          set({ items: updatedItems });
+          toast.error(`Only ${stockLimit} ${product.name}${stockLimit === 1 ? '' : 's'} available`);
+          return;
+        }
+
+        const updatedItems = [...items];
+        updatedItems[itemIndex] = { ...targetItem, quantity: normalizedQuantity };
+        set({ items: updatedItems });
+      },
+
+      enforceStockLimits: () => {
+        const currentItems = get().items;
+        const { items: normalizedItems, adjustments } = normalizeCartItems(currentItems);
+        set({ items: normalizedItems });
+        return adjustments;
       },
 
       clearCart: () => {
@@ -153,8 +281,8 @@ export const useCartStore = create<CartStore>()(
         try {
           if (!state || !(state as any).items) return;
           // @ts-ignore - internal helper
-          const deduped = (state as any)._dedupeItems((state as any).items);
-          (state as any).items = deduped;
+          const normalized = (state as any)._normalizeItems((state as any).items);
+          (state as any).items = normalized;
         } catch { }
       },
     }
