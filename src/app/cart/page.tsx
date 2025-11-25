@@ -223,7 +223,12 @@ export default function CartPage() {
                             <div className="text-left sm:text-right">
                               <p className="text-xs sm:text-sm text-gray-600">Item Total</p>
                               <p className="text-lg sm:text-xl font-bold text-gray-900">
-                                ${(item.product.price * item.quantity).toFixed(2)}
+                                ${(() => {
+                                  // Use discounted price if email promo exists, otherwise use regular price
+                                  const itemPrice = item.product.emailPromo?.discountedPrice 
+                                    || item.product.price;
+                                  return (itemPrice * item.quantity).toFixed(2);
+                                })()}
                               </p>
                             </div>
                           </div>

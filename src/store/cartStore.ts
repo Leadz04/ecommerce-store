@@ -234,7 +234,13 @@ export const useCartStore = create<CartStore>()(
 
       getTotalPrice: () => {
         return get().items.reduce(
-          (total, item) => total + (item.product.price * item.quantity),
+          (total, item) => {
+            // Use original price if email promo is applied, otherwise use current price
+            const basePrice = item.product.emailPromo?.originalPrice 
+              || item.product.originalPrice 
+              || item.product.price;
+            return total + (basePrice * item.quantity);
+          },
           0
         );
       },
@@ -257,7 +263,13 @@ export const useCartStore = create<CartStore>()(
             item => (item.product._id || item.product.id) === promoCode.productId
           );
           const applicableTotal = applicableItems.reduce(
-            (total, item) => total + (item.product.price * item.quantity),
+            (total, item) => {
+              // Use original price if email promo is applied, otherwise use current price
+              const basePrice = item.product.emailPromo?.originalPrice 
+                || item.product.originalPrice 
+                || item.product.price;
+              return total + (basePrice * item.quantity);
+            },
             0
           );
           return applicableTotal * (promoCode.discountPercent / 100);

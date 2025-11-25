@@ -421,11 +421,6 @@ export default function CustomerDashboard() {
                               alt={product.name}
                               className="w-20 h-20 object-cover rounded-lg"
                             />
-                            {!product.inStock && (
-                              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                                <span className="text-white text-xs font-medium">Out of Stock</span>
-                              </div>
-                            )}
                           </div>
                         </div>
 

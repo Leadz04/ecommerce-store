@@ -9,11 +9,12 @@ import Link from "next/link";
 import { ArrowRight, Truck, Shield, RotateCcw, Headphones, CheckCircle2, Loader2 } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/LoadingSkeleton";
-import { sampleProducts } from "@/data/products";
 import toast from 'react-hot-toast';
+import type { Product } from '@/types';
 
 export default function Home() {
-  const featuredProducts = sampleProducts.slice(0, 4);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [isLoadingFeatured, setIsLoadingFeatured] = useState(true);
   const baseCategories = [
     { name: 'Men', image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&h=300&fit=crop', count: 0 },
     { name: 'Women', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop', count: 0 },
@@ -22,6 +23,27 @@ export default function Home() {
     { name: 'Gifting', image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=300&fit=crop', count: 0 },
   ];
   const [categories, setCategories] = useState(baseCategories);
+
+  // Fetch featured products
+  useEffect(() => {
+    const fetchFeaturedProducts = async () => {
+      try {
+        setIsLoadingFeatured(true);
+        const response = await fetch('/api/products?limit=4&sortBy=rating');
+        if (!response.ok) {
+          throw new Error('Failed to fetch featured products');
+        }
+        const data = await response.json();
+        setFeaturedProducts(data.products || []);
+      } catch (error) {
+        console.error('Error fetching featured products:', error);
+      } finally {
+        setIsLoadingFeatured(false);
+      }
+    };
+
+    fetchFeaturedProducts();
+  }, []);
 
   // Fetch category counts
   useEffect(() => {
@@ -181,11 +203,30 @@ export default function Home() {
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-4">Featured Products</h2>
             <p className="text-sm sm:text-base text-gray-600">Handpicked items just for you</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {isLoadingFeatured ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[...Array(4)].map((_, i) => (
+                <ProductCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : featuredProducts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {featuredProducts.map((product) => (
+                <ProductCard key={product.id || product._id} product={product} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-600 mb-4">No featured products available at the moment.</p>
+              <Link
+                href="/products"
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center"
+              >
+                Browse All Products
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </div>
+          )}
           <div className="text-center mt-12">
             <Link
               href="/products"

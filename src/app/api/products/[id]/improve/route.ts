@@ -175,7 +175,11 @@ function buildImprovementPrompt(product: any, reviewSummary: any) {
 }
 
 async function runGeminiImprovement(prompt: string) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.STAGE_GEMINI_API_KEY;
+  const primaryKey = process.env.GEMINI_API_KEY;
+  const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
+  const tertiaryKey = process.env.TEST_LEADZ07_FIRST_API_KEY;
+  const apiKey = primaryKey || secondaryKey || tertiaryKey;
+  
   if (!apiKey) {
     console.log('[Improve] Gemini API key not configured');
     return { ok: false, error: 'Gemini API key not configured' } as const;

@@ -149,10 +149,10 @@ export default function ProductCard({ product }: ProductCardProps) {
             </button>
           )}
           
-          {/* Stock Status */}
+          {/* Stock Status Badge */}
           {!product.inStock && (
-            <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center">
-              <span className="text-white font-semibold text-sm">Out of Stock</span>
+            <div className="absolute bottom-3 right-3 bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg z-10">
+              Out of Stock
             </div>
           )}
         </div>

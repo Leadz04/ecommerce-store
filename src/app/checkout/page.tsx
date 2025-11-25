@@ -236,24 +236,29 @@ export default function CheckoutPage() {
               ? normalizedPromoProductId === normalizedProductId
               : Boolean(promoCode);
 
+            // Get the base/original price for calculations
+            const basePrice = item.product.emailPromo?.originalPrice 
+              || item.product.originalPrice 
+              || item.product.price;
+
             const appliedPromo = promoMatchesProduct && promoCode
               ? {
                   promoToken: promoCode.token,
                   promoPercent: promoCode.discountPercent,
-                  promoOriginalPrice: item.product.price,
+                  promoOriginalPrice: basePrice,
                 }
               : item.product.emailPromo
                 ? {
                     promoToken: item.product.emailPromo.token,
                     promoPercent: item.product.emailPromo.discountPercent,
-                    promoOriginalPrice: item.product.emailPromo.originalPrice ?? item.product.price,
+                    promoOriginalPrice: item.product.emailPromo.originalPrice || basePrice,
                   }
                 : {};
 
             return {
               productId,
               name: item.product.name,
-              price: item.product.price,
+              price: basePrice, // Send original price, order API will calculate discount
               quantity: item.quantity,
               image: item.product.image,
               size: item.size,

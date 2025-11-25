@@ -48,7 +48,7 @@ Output requirements:
 `;
 
     const openaiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.STAGE_GEMINI_API_KEY || process.env.TEST_LEADZ07_FIRST_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     let contentHtml = '';
 
     // Prefer Gemini if provided (fast, low-cost), fallback to OpenAI

@@ -1,8 +1,5 @@
 import connectDB from './mongodb';
 import Product from '@/models/Product';
-import { sampleProducts } from '@/data/products';
-
-const products = sampleProducts;
 
 export async function seedDatabase() {
   try {
@@ -11,10 +8,8 @@ export async function seedDatabase() {
     // Clear existing products
     await Product.deleteMany({});
     
-    // Insert new products
-    await Product.insertMany(products);
-    
-    console.log('Database seeded successfully with', products.length, 'products');
+    console.log('Database cleared. No static products to seed.');
+    console.log('Please use the product import scripts to add products to the database.');
   } catch (error) {
     console.error('Error seeding database:', error);
   }

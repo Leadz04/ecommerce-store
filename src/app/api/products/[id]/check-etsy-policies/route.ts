@@ -480,7 +480,8 @@ async function runGeminiPolicyReview(
   const handbookUrl = ETSY_SELLER_HANDBOOK_URL;
   const primaryKey = process.env.GEMINI_API_KEY;
   const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
-  const availableKey = primaryKey || secondaryKey;
+  const tertiaryKey = process.env.TEST_LEADZ07_FIRST_API_KEY;
+  const availableKey = primaryKey || secondaryKey || tertiaryKey;
 
   if (!availableKey) {
     return {
@@ -513,8 +514,11 @@ async function runGeminiPolicyReview(
   const prompt = buildPolicyPrompt(listingContext, deterministicSummary);
 
   let response = await callGeminiPolicyReview(prompt, primaryKey || availableKey);
-  if (!response.ok && primaryKey && secondaryKey) {
+  if (!response.ok && secondaryKey) {
     response = await callGeminiPolicyReview(prompt, secondaryKey);
+  }
+  if (!response.ok && tertiaryKey) {
+    response = await callGeminiPolicyReview(prompt, tertiaryKey);
   }
 
   if (!response.ok) {

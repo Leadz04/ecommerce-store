@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
     const brand = searchParams.get('brand') || '';
     const status = searchParams.get('status') || '';
     const organized = searchParams.get('organized') || ''; // 'all', 'organized', 'unorganized'
+    const stockCount = searchParams.get('stockCount') || '';
+    const isActive = searchParams.get('isActive') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -82,6 +84,23 @@ export async function GET(request: NextRequest) {
             { images: { $exists: true, $ne: null, $elemMatch: cloudinaryRegex } }
           ]
         });
+      }
+    }
+
+    // Filter by stock count (exact match or range)
+    if (stockCount) {
+      const stockNum = parseInt(stockCount);
+      if (!isNaN(stockNum)) {
+        query.stockCount = stockNum;
+      }
+    }
+
+    // Filter by isActive status
+    if (isActive && isActive !== 'all') {
+      if (isActive === 'active') {
+        query.isActive = true;
+      } else if (isActive === 'inactive') {
+        query.isActive = false;
       }
     }
 

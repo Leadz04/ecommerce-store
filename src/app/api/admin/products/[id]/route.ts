@@ -4,6 +4,7 @@ import Product from '@/models/Product';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import { AuditLog } from '@/models';
+import { deleteImagesFromCloudinary, isCloudinaryUrl } from '@/lib/cloudinary';
 
 // GET /api/admin/products/[id] - Get specific product
 export async function GET(
@@ -100,6 +101,27 @@ export async function PUT(
 
     const before = product.toObject();
 
+    // Track images to delete from Cloudinary
+    const imagesToDelete: string[] = [];
+
+    // If image or images are being updated, check for removed Cloudinary images
+    if (image !== undefined || images !== undefined) {
+      const oldMainImage = product.image;
+      const oldImages = product.images || [];
+      const oldAllImages = [oldMainImage, ...oldImages].filter(Boolean) as string[];
+
+      const newMainImage = image !== undefined ? image : product.image;
+      const newImages = images !== undefined ? images : (product.images || []);
+      const newAllImages = [newMainImage, ...newImages].filter(Boolean) as string[];
+
+      // Find images that were removed (exist in old but not in new)
+      for (const oldImageUrl of oldAllImages) {
+        if (isCloudinaryUrl(oldImageUrl) && !newAllImages.includes(oldImageUrl)) {
+          imagesToDelete.push(oldImageUrl);
+        }
+      }
+    }
+
     // Update product fields
     if (name !== undefined) product.name = name;
     if (description !== undefined) product.description = description;
@@ -131,6 +153,14 @@ export async function PUT(
     }
 
     await product.save();
+
+    // Delete removed images from Cloudinary (non-blocking)
+    if (imagesToDelete.length > 0) {
+      // Don't await - delete in background to not slow down the response
+      deleteImagesFromCloudinary(imagesToDelete).catch(error => {
+        console.error('Error deleting images from Cloudinary:', error);
+      });
+    }
 
     // Audit log
     try {
@@ -187,7 +217,28 @@ export async function DELETE(
       );
     }
 
+    // Collect all Cloudinary images to delete
+    const imagesToDelete: string[] = [];
+    if (product.image && isCloudinaryUrl(product.image)) {
+      imagesToDelete.push(product.image);
+    }
+    if (product.images && Array.isArray(product.images)) {
+      for (const img of product.images) {
+        if (img && isCloudinaryUrl(img) && !imagesToDelete.includes(img)) {
+          imagesToDelete.push(img);
+        }
+      }
+    }
+
     await Product.findByIdAndDelete(id);
+
+    // Delete all product images from Cloudinary (non-blocking)
+    if (imagesToDelete.length > 0) {
+      // Don't await - delete in background to not slow down the response
+      deleteImagesFromCloudinary(imagesToDelete).catch(error => {
+        console.error('Error deleting product images from Cloudinary:', error);
+      });
+    }
 
     // Audit log
     try {

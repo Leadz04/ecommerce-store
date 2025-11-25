@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     const primaryKey = process.env.GEMINI_API_KEY;
     const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
+    const tertiaryKey = process.env.TEST_LEADZ07_FIRST_API_KEY;
 
     async function callGeminiStream(apiKey?: string) {
       if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
@@ -120,9 +121,20 @@ export async function POST(request: NextRequest) {
     if (!primary.ok) {
       const secondary = await callGeminiStream(secondaryKey);
       if (!secondary.ok) {
-        const detail = { primaryStatus: primary.status, primaryDetail: primary.error, secondaryStatus: secondary.status, secondaryDetail: secondary.error };
-        console.error('Gemini request failed with both keys', detail);
-        return NextResponse.json({ error: 'Gemini request failed with both keys', detail }, { status: 502 });
+        const tertiary = await callGeminiStream(tertiaryKey);
+        if (!tertiary.ok) {
+          const detail = { 
+            primaryStatus: primary.status, 
+            primaryDetail: primary.error, 
+            secondaryStatus: secondary.status, 
+            secondaryDetail: secondary.error,
+            tertiaryStatus: tertiary.status,
+            tertiaryDetail: tertiary.error
+          };
+          console.error('Gemini request failed with all three keys', detail);
+          return NextResponse.json({ error: 'Gemini request failed with all three keys', detail }, { status: 502 });
+        }
+        return NextResponse.json({ output: tertiary.output });
       }
       return NextResponse.json({ output: secondary.output });
     }

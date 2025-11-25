@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { FileCode2, Play, Wrench, Sparkles } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { FileCode2, Play, Wrench, Sparkles, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -18,6 +18,16 @@ export default function AdminToolsPage() {
   const [cleanSpecsDryRun, setCleanSpecsDryRun] = useState(true);
   const [cleanSpecsLimit, setCleanSpecsLimit] = useState(1000);
   const [cleanSpecsResult, setCleanSpecsResult] = useState<any>(null);
+  const [optimizeGeminiLoading, setOptimizeGeminiLoading] = useState(false);
+  const [optimizeGeminiLogs, setOptimizeGeminiLogs] = useState<string[]>([]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll logs to bottom when new logs are added
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [optimizeGeminiLogs]);
 
   const pollProgress = (operationId: string, label: string) => {
     console.log(`Starting progress polling for ${label} with operationId: ${operationId}`);
@@ -259,6 +269,63 @@ export default function AdminToolsPage() {
     };
   }, [user]);
 
+  const handleOptimizeGemini = async () => {
+    try {
+      setOptimizeGeminiLoading(true);
+      setOptimizeGeminiLogs([]);
+      
+      const res = await authorizedFetch('/api/admin/products/optimize-gemini', {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to start optimization');
+      }
+
+      // Read the stream
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'complete') {
+                setOptimizeGeminiLoading(false);
+                if (data.exitCode === 0) {
+                  toast.success('Product optimization completed successfully');
+                } else {
+                  toast.error(`Optimization completed with exit code ${data.exitCode}`);
+                }
+                break;
+              } else if (data.type === 'log' || data.type === 'error') {
+                setOptimizeGeminiLogs(prev => [...prev, data.message]);
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error running optimize script:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to run optimization');
+      setOptimizeGeminiLoading(false);
+    }
+  };
+
   const handleRunScript = async (file: string) => {
     setActiveScript(file);
     try {
@@ -369,6 +436,49 @@ export default function AdminToolsPage() {
                       : '0%'
                   }}
                 ></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Optimize Products with Gemini Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Optimize Products with Gemini</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Optimize product titles and tags using Gemini API. Products with stockCount ≠ 5 will be processed and set to 5 after successful optimization. Script will stop automatically if 3 consecutive products fail with all API keys.
+          </p>
+          
+          <button
+            onClick={handleOptimizeGemini}
+            disabled={optimizeGeminiLoading || loading !== null}
+            className="w-full px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {optimizeGeminiLoading ? 'Optimizing…' : 'Start Optimization'}
+          </button>
+
+          {/* Logs Display */}
+          {optimizeGeminiLogs.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-gray-900">Logs</h4>
+                <button
+                  onClick={() => setOptimizeGeminiLogs([])}
+                  className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+              <div className="bg-gray-900 text-gray-100 text-xs rounded-md p-4 overflow-auto max-h-96 font-mono">
+                {optimizeGeminiLogs.map((log, idx) => (
+                  <div key={idx} className="whitespace-pre-wrap break-words">
+                    {log}
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
               </div>
             </div>
           )}

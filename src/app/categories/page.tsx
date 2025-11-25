@@ -9,7 +9,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Star, Search, X } from 'lucide-react';
 import { CategoriesSkeleton } from '@/components/LoadingSkeleton';
-import { sampleProducts } from '@/data/products';
 
 const baseCategories = [
     {

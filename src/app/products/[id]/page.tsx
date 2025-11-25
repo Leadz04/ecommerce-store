@@ -12,7 +12,6 @@ import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
-import { sampleProducts } from '@/data/products';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
