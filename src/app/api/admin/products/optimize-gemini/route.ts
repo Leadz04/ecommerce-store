@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
-import path from 'path';
 import { verifyToken } from '@/lib/auth';
+import { optimizeProducts } from '@/lib/optimize-products-gemini';
 
-// Ensure this route runs on the Node.js runtime (needed for child_process and CJS require)
+// Ensure this route runs on the Node.js runtime
 export const runtime = 'nodejs';
-
-// Ensure Vercel's bundler includes @google/genai in this function's bundle
-// so the spawned script can require it at runtime.
-import '@google/genai';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,48 +12,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Create a readable stream for Server-Sent Events
     const encoder = new TextEncoder();
+
     const stream = new ReadableStream({
       async start(controller) {
-        const scriptPath = path.join(process.cwd(), 'scripts', 'optimize-products-gemini.js');
-        
-        // Spawn the script process
-        const child = spawn(process.execPath, [scriptPath], {
-          cwd: process.cwd(),
-          env: {
-            ...process.env,
-            NODE_ENV: process.env.NODE_ENV ?? 'production',
-          },
-        });
-
-        // Send stdout data as SSE
-        child.stdout.on('data', (data) => {
-          const message = data.toString();
-          const sseData = `data: ${JSON.stringify({ type: 'log', message })}\n\n`;
+        const send = (type: 'log' | 'error' | 'complete', message: string) => {
+          const sseData = `data: ${JSON.stringify({ type, message })}\n\n`;
           controller.enqueue(encoder.encode(sseData));
-        });
+        };
 
-        // Send stderr data as SSE
-        child.stderr.on('data', (data) => {
-          const message = data.toString();
-          const sseData = `data: ${JSON.stringify({ type: 'error', message })}\n\n`;
-          controller.enqueue(encoder.encode(sseData));
-        });
-
-        // Handle process completion
-        child.on('close', (code) => {
-          const sseData = `data: ${JSON.stringify({ type: 'complete', exitCode: code ?? -1 })}\n\n`;
-          controller.enqueue(encoder.encode(sseData));
+        try {
+          await optimizeProducts((type, message) => {
+            send(type, message);
+          });
+          send('complete', 'Optimization completed');
+        } catch (error: any) {
+          send('error', error?.message || 'Unknown error');
+        } finally {
           controller.close();
-        });
-
-        // Handle process errors
-        child.on('error', (error) => {
-          const sseData = `data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`;
-          controller.enqueue(encoder.encode(sseData));
-          controller.close();
-        });
+        }
       },
     });
 
@@ -66,7 +38,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
