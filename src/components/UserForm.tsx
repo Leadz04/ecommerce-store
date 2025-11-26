@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, User, Mail, Phone, MapPin, Shield, Settings, Eye, EyeOff } from 'lucide-react';
 import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/store/authStore';
 
 interface User {
   _id: string;
@@ -51,6 +52,8 @@ interface UserFormProps {
 }
 
 export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: UserFormProps) {
+  const authUser = useAuthStore((state) => state.user);
+  const isSuperAdmin = authUser?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -142,6 +145,9 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
     setLoading(true);
 
     try {
+      // Capture password before any state changes so we can show it once on success
+      const plainPassword = formData.password;
+
       const token = localStorage.getItem('token');
       const url = user ? `/api/admin/users/${user._id}` : '/api/admin/users';
       const method = user ? 'PUT' : 'POST';
@@ -167,7 +173,33 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
         throw new Error(data.error || 'Failed to save user');
       }
 
+      // Basic success message
       toast.success(user ? 'User updated successfully' : 'User created successfully');
+
+      // If a password was set/changed, show it once so SUPER_ADMIN can copy it
+      if (plainPassword) {
+        // For security, only show password reveal for:
+        // - New users (creation), or
+        // - Existing users when current admin is SUPER_ADMIN
+        if (!user || isSuperAdmin) {
+          toast.custom((t) => (
+            <div className="max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 p-4">
+              <div className="flex flex-col space-y-2">
+                <p className="text-sm font-semibold text-gray-900">
+                  New password for {user ? user.email : formData.email}
+                </p>
+                <p className="text-sm text-gray-800 break-all">
+                  {plainPassword}
+                </p>
+                <p className="text-xs text-gray-500">
+                  This password is shown only once. Please copy it and share it securely with the user.
+                </p>
+              </div>
+            </div>
+          ), { duration: 15000 });
+        }
+      }
+
       onSuccess();
       onClose();
     } catch (error) {
@@ -296,6 +328,7 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                 />
               </div>
 
+              {/* Password handling */}
               {!user && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -309,6 +342,30 @@ export default function UserForm({ user, roles, isOpen, onClose, onSuccess }: Us
                       onChange={(e) => handleInputChange('password', e.target.value)}
                       className="w-full px-3 py-2 pr-10 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {user && isSuperAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Password (optional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300  text-gray-700 mb-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter new password (leave blank to keep current)"
                     />
                     <button
                       type="button"

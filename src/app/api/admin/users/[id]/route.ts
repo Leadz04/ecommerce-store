@@ -54,7 +54,7 @@ export async function PUT(
 
     const { id } = await context.params;
     const body = await request.json();
-    const { name, email, roleId, isActive, settings, phone, address } = body;
+    const { name, email, roleId, isActive, settings, phone, address, password } = body;
 
     const targetUser = await User.findById(id);
     if (!targetUser) {
@@ -90,6 +90,18 @@ export async function PUT(
     if (typeof isActive === 'boolean') targetUser.isActive = isActive;
     if (settings) targetUser.settings = { ...targetUser.settings, ...settings };
     if (address) targetUser.address = { ...targetUser.address, ...address };
+
+    // Only SUPER_ADMIN can directly set/reset another user's password
+    if (password) {
+      if (user.role !== 'SUPER_ADMIN') {
+        return NextResponse.json(
+          { error: 'Only SUPER_ADMIN can change user passwords' },
+          { status: 403 }
+        );
+      }
+      // Assigning a new password will trigger the pre-save hook to hash it
+      (targetUser as any).password = password;
+    }
 
     // Update role if provided
     if (roleId) {

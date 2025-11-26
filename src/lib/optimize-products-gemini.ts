@@ -188,6 +188,34 @@ NOTE: Do NOT add random keywords to image alt text - this is keyword stuffing an
 Return ONLY the comma-separated list.`;
 }
 
+// Simple global rate limiter state (per lambda invocation)
+let lastGeminiCallTime = 0;
+let currentBackoffMs = 0;
+const BASE_DELAY_MS = 2000; // base delay between calls
+const MAX_BACKOFF_MS = 60000; // max backoff 60s
+
+async function applyRateLimitDelay() {
+  const now = Date.now();
+  const baseWait = Math.max(0, lastGeminiCallTime + BASE_DELAY_MS - now);
+  const totalWait = baseWait + currentBackoffMs;
+  if (totalWait > 0) {
+    await delay(totalWait);
+  }
+  lastGeminiCallTime = Date.now();
+}
+
+function increaseBackoff() {
+  if (currentBackoffMs === 0) {
+    currentBackoffMs = 5000; // start with 5s
+  } else {
+    currentBackoffMs = Math.min(currentBackoffMs * 2, MAX_BACKOFF_MS);
+  }
+}
+
+function resetBackoff() {
+  currentBackoffMs = 0;
+}
+
 async function optimizeTitle(product: any) {
   const primaryKey = process.env.GEMINI_API_KEY;
   const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
@@ -214,6 +242,7 @@ async function optimizeTitle(product: any) {
     }
 
     try {
+      await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
       const model = 'gemini-2.5-pro';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
@@ -244,6 +273,8 @@ async function optimizeTitle(product: any) {
         } as const;
       }
 
+      resetBackoff();
+
       return {
         ok: true,
         status: 200,
@@ -258,6 +289,7 @@ async function optimizeTitle(product: any) {
         statusCode === 429 ||
         detail.toLowerCase().includes('rate limit')
       ) {
+        increaseBackoff();
         return {
           ok: false,
           status: 429,
@@ -320,6 +352,7 @@ async function optimizeTags(product: any) {
     }
 
     try {
+      await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
       const model = 'gemini-2.5-pro';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
@@ -350,6 +383,8 @@ async function optimizeTags(product: any) {
         } as const;
       }
 
+      resetBackoff();
+
       return {
         ok: true,
         status: 200,
@@ -364,6 +399,7 @@ async function optimizeTags(product: any) {
         statusCode === 429 ||
         detail.toLowerCase().includes('rate limit')
       ) {
+        increaseBackoff();
         return {
           ok: false,
           status: 429,
