@@ -119,7 +119,7 @@ Optimize for high CTR, clear benefits, relevant keywords, and natural language t
 
   const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${input.description || ''}\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${input.category || ''}\n- Brand: ${input.brand || ''}`;
 
-  return `${baseContext}${productBits}\nTask: Write an Etsy-optimized product title. 
+  return `${baseContext}${productBits}\nTask: Write an Etsy-optimized product title.
 
 TITLE OPTIMIZATION:
 - Short, clear, easy-to-read (max 140 chars)
@@ -138,38 +138,24 @@ PHASE 1 (Query Matching): Etsy uses holistic view (title, tags, attributes, cate
 PHASE 2 (Ranking): Etsy ranks using Context Specific Ranking (CSR) to show items shoppers are most likely to purchase.
 
 RANKING FACTORS:
-- Listing Quality/Engagement Rate (conversion: views → clicks → favorites → purchases)
-- Customer Service Quality (4-5 star reviews, 48h message response, low case rate)
-- Shipping Price: US domestic < $6 prioritized (high shipping is barrier)
-- Recency: New/renewed listings get temporary boost
-- Personalization: CSR learns individual buyer interests
+- Listing Quality/Engagement Rate
+- Customer Service Quality
+- Shipping Price
+- Recency
+- Personalization
 
-Optimize for high CTR, clear benefits, relevant keywords, and natural language that helps buyers find and purchase. Keep language natural and compliant.`;
+Optimize for high CTR, relevant keywords, and natural language.`;
 
   const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${input.description || ''}\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${input.category || ''}\n- Brand: ${input.brand || ''}`;
 
-  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 Etsy tags (use all 13 - Etsy best practice), comma-separated. 
+  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 Etsy tags, comma-separated.
 
 ETSY TAG GUIDELINES:
-- USE ALL 13 TAGS (not optional - Etsy best practice)
-- Maximum length: 20 characters per tag
-- Multi-word phrases are REQUIRED (e.g., "custom bracelet" not "custom" and "bracelet" separately)
-- If a desired keyword phrase is longer than 20 characters, break it into multiple phrasal tags
-- Tags are used in PHASE 1 (Query Matching) - help buyers find your listing
-- Use "LONG TAIL" keywords: specific, descriptive phrases that convert better than generic terms
-- Do NOT repeat phrases already covered by categories or attributes as separate tags
-
-CRITICAL ANTI-KEYWORD-STUFFING RULES:
-- Tags must be RELEVANT and SPECIFIC to this exact product
-- NO random or irrelevant keywords just to appear in more searches
-- NO repetition of the same phrases across tags
-- Focus on buyer intent: what would a real shopper search for?
-- Use natural, human-written language that sounds authentic
-- Each tag should describe a distinct aspect (material, style, color, use case, occasion)
-- Avoid generic terms unless they genuinely apply to this product
-- NO keyword stuffing - but still use all 13 tags with relevant, specific phrases
-
-NOTE: Do NOT add random keywords to image alt text - this is keyword stuffing and unhelpful for screen readers.
+- USE ALL 13 TAGS
+- Max 20 chars per tag
+- Multi-word phrases required
+- No duplicates
+- No keyword stuffing
 
 Return ONLY the comma-separated list.`;
 }
@@ -215,7 +201,6 @@ async function optimizeTitle(product) {
     } catch (e) {
       const detail = e?.message || String(e);
       const statusCode = e?.status || e?.statusCode || 500;
-      // Check for rate limiting (429)
       if (detail.includes('429') || statusCode === 429 || detail.toLowerCase().includes('rate limit')) {
         return { ok: false, status: 429, output: '', error: 'Rate limit exceeded (429)' };
       }
@@ -280,7 +265,6 @@ async function optimizeTags(product) {
     } catch (e) {
       const detail = e?.message || String(e);
       const statusCode = e?.status || e?.statusCode || 500;
-      // Check for rate limiting (429)
       if (detail.includes('429') || statusCode === 429 || detail.toLowerCase().includes('rate limit')) {
         return { ok: false, status: 429, output: '', error: 'Rate limit exceeded (429)' };
       }
@@ -313,10 +297,10 @@ function parseTags(tagsString) {
     .split(',')
     .map(tag => tag.trim())
     .filter(tag => tag.length > 0)
-    .slice(0, 13); // Limit to 13 tags
+    .slice(0, 13);
 }
 
-// Delay function to avoid rate limiting
+// Delay function
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -327,7 +311,6 @@ async function optimizeProducts() {
     console.log('🚀 Starting product optimization with Gemini API...');
     console.log('📋 Fetching products with stockCount !== 5...\n');
 
-    // Get all products where stockCount is not 5
     const products = await Product.find({
       $or: [
         { stockCount: { $ne: 5 } },
@@ -345,7 +328,7 @@ async function optimizeProducts() {
     let successCount = 0;
     let failureCount = 0;
     let skippedCount = 0;
-    let consecutiveFailures = 0; // Track consecutive failures where all 3 API keys fail
+    let consecutiveFailures = 0;
     const errors = [];
 
     for (let i = 0; i < products.length; i++) {
@@ -360,106 +343,90 @@ async function optimizeProducts() {
       console.log(`  Current tags: ${(product.tags || []).join(', ') || 'none'}`);
 
       try {
-        // Optimize title
         console.log('  🔄 Optimizing title...');
         const titleResult = await optimizeTitle(product);
 
         if (!titleResult.ok) {
           console.log(`  ❌ Title optimization failed: ${titleResult.error}`);
-          
-          // Check if all 3 API keys failed
+
           const allKeysFailed = titleResult.error && titleResult.error.includes('All three API keys failed');
           if (allKeysFailed) {
             consecutiveFailures++;
-            console.log(`  ⚠️  All 3 API keys failed. Consecutive failures: ${consecutiveFailures}/3`);
-            
+            console.log(`  ⚠️ All 3 API keys failed. Consecutive failures: ${consecutiveFailures}/3`);
+
             if (consecutiveFailures >= 3) {
-              console.log('\n🛑 STOPPING: 3 consecutive products failed with all API keys. Stopping script to prevent further failures.');
-              console.log('This usually indicates an issue with the Gemini API service or rate limits.');
-              break; // Exit the loop
+              console.log('\n🛑 STOPPING: 3 consecutive products failed with all API keys.');
+              break;
             }
           } else {
-            // Reset counter if not all keys failed (might be a temporary issue)
             consecutiveFailures = 0;
           }
-          
+
           errors.push({
             productId: product._id.toString(),
             productName: product.name,
             error: `Title optimization failed: ${titleResult.error}`
           });
           failureCount++;
-          
-          // If rate limited, wait longer before continuing
+
           if (titleResult.status === 429) {
-            console.log('  ⚠️  Rate limit detected. Waiting 10 seconds...');
+            console.log('  ⚠️ Rate limit detected. Waiting 10 seconds...');
             await delay(10000);
           } else {
-            // Add delay even on failure to avoid rate limiting
-            await delay(2000);
+            await delay(7000);
           }
           continue;
         }
-        
-        // Reset consecutive failures on success
+
         consecutiveFailures = 0;
 
         const optimizedTitle = titleResult.output;
         console.log(`  ✅ Optimized title: ${optimizedTitle}`);
 
-        // Add delay between API calls
-        console.log('  ⏳ Waiting 2 seconds before next API call...');
-        await delay(2000);
+        console.log('  ⏳ Waiting 7 seconds before next API call...');
+        await delay(7000);
 
-        // Optimize tags
         console.log('  🔄 Optimizing tags...');
         const tagsResult = await optimizeTags(product);
 
         if (!tagsResult.ok) {
           console.log(`  ❌ Tags optimization failed: ${tagsResult.error}`);
-          
-          // Check if all 3 API keys failed
+
           const allKeysFailed = tagsResult.error && tagsResult.error.includes('All three API keys failed');
           if (allKeysFailed) {
             consecutiveFailures++;
-            console.log(`  ⚠️  All 3 API keys failed. Consecutive failures: ${consecutiveFailures}/3`);
-            
+            console.log(`  ⚠️ All 3 API keys failed. Consecutive failures: ${consecutiveFailures}/3`);
+
             if (consecutiveFailures >= 3) {
-              console.log('\n🛑 STOPPING: 3 consecutive products failed with all API keys. Stopping script to prevent further failures.');
-              console.log('This usually indicates an issue with the Gemini API service or rate limits.');
-              break; // Exit the loop
+              console.log('\n🛑 STOPPING: 3 consecutive products failed with all API keys.');
+              break;
             }
           } else {
-            // Reset counter if not all keys failed (might be a temporary issue)
             consecutiveFailures = 0;
           }
-          
+
           errors.push({
             productId: product._id.toString(),
             productName: product.name,
             error: `Tags optimization failed: ${tagsResult.error}`
           });
           failureCount++;
-          
-          // If rate limited, wait longer before continuing
+
           if (tagsResult.status === 429) {
-            console.log('  ⚠️  Rate limit detected. Waiting 10 seconds...');
+            console.log('  ⚠️ Rate limit detected. Waiting 10 seconds...');
             await delay(10000);
           } else {
-            // Add delay even on failure
-            await delay(2000);
+            await delay(7000);
           }
           continue;
         }
-        
-        // Reset consecutive failures on success
+
         consecutiveFailures = 0;
 
         const optimizedTagsString = tagsResult.output;
         const optimizedTags = parseTags(optimizedTagsString);
         console.log(`  ✅ Optimized tags (${optimizedTags.length}): ${optimizedTags.join(', ')}`);
 
-        // Both optimizations succeeded, update the product
         const updateData = {
           name: optimizedTitle,
           tags: optimizedTags,
@@ -469,11 +436,11 @@ async function optimizeProducts() {
         await Product.findByIdAndUpdate(product._id, { $set: updateData });
         console.log(`  ✅ Product updated successfully!`);
         console.log(`  ✅ Stock count set to 5`);
+
         successCount++;
 
-        // Add delay before processing next product
-        console.log('  ⏳ Waiting 2 seconds before next product...');
-        await delay(2000);
+        console.log('  ⏳ Waiting 7 seconds before next product...');
+        await delay(7000);
 
       } catch (error) {
         console.error(`  ❌ Error processing product: ${error.message}`);
@@ -483,16 +450,14 @@ async function optimizeProducts() {
           error: error.message
         });
         failureCount++;
-        
-        // Add delay even on error
-        await delay(2000);
+
+        await delay(7000);
       }
     }
 
-    // Summary
     console.log('\n\n' + '='.repeat(60));
     if (consecutiveFailures >= 3) {
-      console.log('⚠️  Optimization process stopped early due to consecutive API failures!');
+      console.log('⚠️ Optimization process stopped early due to consecutive API failures!');
     } else {
       console.log('🎉 Optimization process completed!');
     }
@@ -511,7 +476,6 @@ async function optimizeProducts() {
       });
     }
 
-    // Final verification
     const remainingProducts = await Product.countDocuments({
       $or: [
         { stockCount: { $ne: 5 } },
@@ -536,4 +500,3 @@ async function optimizeProducts() {
 connectDB().then(() => {
   optimizeProducts();
 });
-
