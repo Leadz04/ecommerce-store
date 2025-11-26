@@ -1,27 +1,60 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, Gift } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { SignupCredentials } from '@/types';
 import { companyInfo } from '@/data/companyInfo';
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signup, isLoading, error, clearError } = useAuthStore();
+  
+  const referralCodeFromUrl = searchParams?.get('ref') || '';
+  const [referralCode, setReferralCode] = useState(referralCodeFromUrl);
+  const [referralValid, setReferralValid] = useState<boolean | null>(null);
+  const [referrerName, setReferrerName] = useState('');
   
   const [formData, setFormData] = useState<SignupCredentials>({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    phone: ''
+    phone: '',
+    referralCode: referralCodeFromUrl
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Partial<SignupCredentials>>({});
+
+  // Validate referral code when it changes
+  useEffect(() => {
+    if (referralCode && referralCode.trim()) {
+      const validateReferral = async () => {
+        try {
+          const response = await fetch(`/api/referrals/validate?code=${encodeURIComponent(referralCode.trim())}`);
+          const data = await response.json();
+          if (data.valid) {
+            setReferralValid(true);
+            setReferrerName(data.referrerName);
+            setFormData(prev => ({ ...prev, referralCode: referralCode.trim().toUpperCase() }));
+          } else {
+            setReferralValid(false);
+            setReferrerName('');
+          }
+        } catch {
+          setReferralValid(false);
+        }
+      };
+      validateReferral();
+    } else {
+      setReferralValid(null);
+      setReferrerName('');
+    }
+  }, [referralCode]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -274,6 +307,40 @@ export default function SignupPage() {
                 </div>
                 {validationErrors.confirmPassword && (
                   <p className="mt-1 text-sm text-red-600">{validationErrors.confirmPassword}</p>
+                )}
+              </div>
+
+              {/* Referral Code Field */}
+              <div>
+                <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 mb-2">
+                  Referral Code <span className="text-gray-400">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Gift className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    id="referralCode"
+                    name="referralCode"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                    className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 ${
+                      referralValid === false ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter referral code"
+                  />
+                </div>
+                {referralValid === true && (
+                  <p className="mt-1 text-sm text-green-600">
+                    ✓ Valid referral code from {referrerName}! You'll both get $20 off.
+                  </p>
+                )}
+                {referralValid === false && referralCode && (
+                  <p className="mt-1 text-sm text-red-600">Invalid referral code</p>
+                )}
+                {referralCode && referralValid === null && (
+                  <p className="mt-1 text-sm text-gray-500">Validating...</p>
                 )}
               </div>
 

@@ -6,15 +6,31 @@ export const fetchCache = 'force-no-store';
 import { useState, useEffect } from 'react';
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Truck, Shield, RotateCcw, Headphones, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowRight, Truck, Shield, RotateCcw, Headphones, CheckCircle2, Loader2, Sparkles, Heart, TrendingUp, Clock } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/LoadingSkeleton";
 import toast from 'react-hot-toast';
 import type { Product } from '@/types';
+import { useAuthStore } from '@/store/authStore';
+import { useRecentlyViewedStore } from '@/store/recentlyViewedStore';
+
+interface PersonalizedData {
+  recommendedForYou: Product[];
+  basedOnWishlist: Product[];
+  trendingInYourCategories: Product[];
+  continueShopping: Product[];
+  featuredProducts: Product[];
+}
 
 export default function Home() {
+  const { isAuthenticated } = useAuthStore();
+  const { getRecentProducts } = useRecentlyViewedStore();
+  
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(true);
+  const [personalizedData, setPersonalizedData] = useState<PersonalizedData | null>(null);
+  const [isLoadingPersonalized, setIsLoadingPersonalized] = useState(true);
+  const [hasPersonalizedData, setHasPersonalizedData] = useState(false);
   const baseCategories = [
     { name: 'Men', image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&h=300&fit=crop', count: 0 },
     { name: 'Women', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop', count: 0 },
@@ -24,8 +40,47 @@ export default function Home() {
   ];
   const [categories, setCategories] = useState(baseCategories);
 
-  // Fetch featured products
+  // Fetch personalized content
   useEffect(() => {
+    const fetchPersonalizedContent = async () => {
+      try {
+        setIsLoadingPersonalized(true);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch('/api/homepage/personalized', {
+          headers
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch personalized content');
+        }
+
+        const data = await response.json();
+        setPersonalizedData(data.personalized);
+        setHasPersonalizedData(data.hasPersonalizedData || false);
+        
+        // Set featured products from personalized data or fallback
+        if (data.personalized?.featuredProducts) {
+          setFeaturedProducts(data.personalized.featuredProducts.slice(0, 4));
+        }
+      } catch (error) {
+        console.error('Error fetching personalized content:', error);
+        // Fallback to regular featured products
+        fetchFeaturedProducts();
+      } finally {
+        setIsLoadingPersonalized(false);
+        setIsLoadingFeatured(false);
+      }
+    };
+
     const fetchFeaturedProducts = async () => {
       try {
         setIsLoadingFeatured(true);
@@ -42,8 +97,8 @@ export default function Home() {
       }
     };
 
-    fetchFeaturedProducts();
-  }, []);
+    fetchPersonalizedContent();
+  }, [isAuthenticated]);
 
   // Fetch category counts
   useEffect(() => {
@@ -196,12 +251,74 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Personalized Sections for Authenticated Users */}
+      {isAuthenticated && hasPersonalizedData && personalizedData && (
+        <>
+          {/* Recommended For You */}
+          {personalizedData.recommendedForYou.length > 0 && (
+            <PersonalizedSection
+              title="Recommended For You"
+              subtitle="Based on your purchase history"
+              products={personalizedData.recommendedForYou}
+              isLoading={isLoadingPersonalized}
+              icon={Sparkles}
+              iconColor="text-purple-600"
+            />
+          )}
+
+          {/* Based on Wishlist */}
+          {personalizedData.basedOnWishlist.length > 0 && (
+            <PersonalizedSection
+              title="You Might Like"
+              subtitle="Similar to items in your wishlist"
+              products={personalizedData.basedOnWishlist}
+              isLoading={isLoadingPersonalized}
+              icon={Heart}
+              iconColor="text-pink-600"
+            />
+          )}
+
+          {/* Trending in Your Categories */}
+          {personalizedData.trendingInYourCategories.length > 0 && (
+            <PersonalizedSection
+              title="Trending in Your Categories"
+              subtitle="Popular items in categories you love"
+              products={personalizedData.trendingInYourCategories}
+              isLoading={isLoadingPersonalized}
+              icon={TrendingUp}
+              iconColor="text-blue-600"
+            />
+          )}
+
+          {/* Continue Shopping - Recently Viewed */}
+          {(() => {
+            const recentlyViewed = getRecentProducts(8);
+            return recentlyViewed.length > 0 ? (
+              <PersonalizedSection
+                title="Continue Shopping"
+                subtitle="Pick up where you left off"
+                products={recentlyViewed}
+                isLoading={false}
+                icon={Clock}
+                iconColor="text-indigo-600"
+              />
+            ) : null;
+          })()}
+        </>
+      )}
+
       {/* Featured Products Section */}
-      <section className="py-10 sm:py-12 md:py-16 bg-gray-50">
+      <section className={`py-10 sm:py-12 md:py-16 ${isAuthenticated && hasPersonalizedData ? 'bg-white' : 'bg-gray-50'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-4">Featured Products</h2>
-            <p className="text-sm sm:text-base text-gray-600">Handpicked items just for you</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-4">
+              {isAuthenticated && hasPersonalizedData ? 'Featured Products' : 'Featured Products'}
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600">
+              {isAuthenticated && hasPersonalizedData 
+                ? 'Handpicked items just for you' 
+                : 'Handpicked items just for you'}
+            </p>
           </div>
           {isLoadingFeatured ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -242,6 +359,78 @@ export default function Home() {
       {/* Newsletter Section */}
       <NewsletterSection />
     </div>
+  );
+}
+
+// Personalized Section Component
+function PersonalizedSection({
+  title,
+  subtitle,
+  products,
+  isLoading,
+  icon: Icon,
+  iconColor
+}: {
+  title: string;
+  subtitle: string;
+  products: Product[];
+  isLoading: boolean;
+  icon: React.ElementType;
+  iconColor: string;
+}) {
+  if (isLoading) {
+    return (
+      <section className="py-10 sm:py-12 md:py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8 sm:mb-10 md:mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-4 flex items-center justify-center gap-2">
+              <Icon className={`h-6 w-6 ${iconColor}`} />
+              <span>{title}</span>
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600">{subtitle}</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {[...Array(4)].map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="py-10 sm:py-12 md:py-16 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-8 sm:mb-10 md:mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-4 flex items-center justify-center gap-2">
+            <Icon className={`h-6 w-6 ${iconColor}`} />
+            <span>{title}</span>
+          </h2>
+          <p className="text-sm sm:text-base text-gray-600">{subtitle}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {products.slice(0, 8).map((product) => (
+            <ProductCard key={product.id || product._id} product={product} />
+          ))}
+        </div>
+        {products.length > 8 && (
+          <div className="text-center mt-8">
+            <Link
+              href="/products"
+              className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center"
+            >
+              View More
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

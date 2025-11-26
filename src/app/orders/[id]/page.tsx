@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Download, RotateCcw, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
+import { useCartStore } from '@/store/cartStore';
 import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
@@ -14,7 +15,8 @@ export default function OrderDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { isAuthenticated } = useAuthStore();
-  const { currentOrder, isLoading, fetchOrder } = useOrderStore();
+  const { currentOrder, isLoading, fetchOrder, cancelOrder } = useOrderStore();
+  const { addItem } = useCartStore();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -52,6 +54,74 @@ export default function OrderDetailsPage() {
     }
   };
 
+  const handleReorder = async () => {
+    if (!currentOrder) return;
+    try {
+      // Fetch product details for each item and add to cart
+      let addedCount = 0;
+      for (const item of currentOrder.items) {
+        try {
+          const response = await fetch(`/api/products/${item.productId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.product && data.product.inStock) {
+              addItem(data.product, item.quantity, item.size, item.color);
+              addedCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch product ${item.productId}:`, error);
+        }
+      }
+      
+      if (addedCount > 0) {
+        toast.success(`${addedCount} item(s) added to cart`);
+        router.push('/cart');
+      } else {
+        toast.error('No items could be added to cart (may be out of stock)');
+      }
+    } catch (error) {
+      console.error('Error reordering:', error);
+      toast.error('Failed to reorder items');
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!currentOrder) return;
+    
+    // Check if order can be cancelled (within 24 hours and not already shipped/delivered)
+    const orderDate = new Date(currentOrder.createdAt);
+    const hoursSinceOrder = (Date.now() - orderDate.getTime()) / (1000 * 60 * 60);
+    const canCancel = hoursSinceOrder <= 24 && 
+                      currentOrder.status !== 'shipped' && 
+                      currentOrder.status !== 'delivered' &&
+                      currentOrder.status !== 'cancelled';
+
+    if (!canCancel) {
+      if (hoursSinceOrder > 24) {
+        toast.error('Orders can only be cancelled within 24 hours of placement');
+      } else if (currentOrder.status === 'shipped' || currentOrder.status === 'delivered') {
+        toast.error('This order cannot be cancelled as it has already been shipped or delivered');
+      } else if (currentOrder.status === 'cancelled') {
+        toast.error('This order is already cancelled');
+      }
+      return;
+    }
+
+    if (!confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await cancelOrder(currentOrder._id);
+      toast.success('Order cancelled successfully');
+      fetchOrder(currentOrder._id); // Refresh order details
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      toast.error('Failed to cancel order');
+    }
+  };
+
   if (!isAuthenticated) return null;
 
   return (
@@ -74,13 +144,39 @@ export default function OrderDetailsPage() {
               )}
             </div>
             {currentOrder && (
-              <button
-                onClick={handleDownloadInvoice}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors text-sm sm:text-base w-full sm:w-auto shrink-0"
-              >
-                <Download className="h-4 w-4" />
-                <span>Download Invoice</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <button
+                  onClick={handleReorder}
+                  className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-green-500/20 text-white rounded-lg hover:bg-green-500/30 transition-colors text-sm sm:text-base border border-green-400/30"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Reorder</span>
+                </button>
+                {(() => {
+                  const orderDate = new Date(currentOrder.createdAt);
+                  const hoursSinceOrder = (Date.now() - orderDate.getTime()) / (1000 * 60 * 60);
+                  const canCancel = hoursSinceOrder <= 24 && 
+                                    currentOrder.status !== 'shipped' && 
+                                    currentOrder.status !== 'delivered' &&
+                                    currentOrder.status !== 'cancelled';
+                  return canCancel ? (
+                    <button
+                      onClick={handleCancelOrder}
+                      className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-red-500/20 text-white rounded-lg hover:bg-red-500/30 transition-colors text-sm sm:text-base border border-red-400/30"
+                    >
+                      <X className="h-4 w-4" />
+                      <span>Cancel Order</span>
+                    </button>
+                  ) : null;
+                })()}
+                <button
+                  onClick={handleDownloadInvoice}
+                  className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors text-sm sm:text-base border border-white/20"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Invoice</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

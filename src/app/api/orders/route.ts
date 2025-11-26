@@ -7,20 +7,26 @@ import mongoose from 'mongoose';
 import { Order, Product, OrderCounter } from '@/models';
 import EmailPromoDiscount from '@/models/EmailPromoDiscount';
 import User from '@/models/User';
+import Referral from '@/models/Referral';
 import EmailTracking from '@/models/EmailTracking';
 import EmailSubscriber from '@/models/EmailSubscriber';
 import { applyDeduplication } from '@/lib/deduplication';
+import { verifyToken } from '@/lib/auth';
 
-// Helper function to verify JWT token
-async function verifyToken(request: NextRequest) {
+// Helper function to verify JWT token (optional for guest checkout)
+async function verifyTokenOptional(request: NextRequest): Promise<string | null> {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
 
   if (!token) {
-    throw new Error('No token provided');
+    return null; // Guest checkout allowed
   }
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-  return decoded.userId;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null; // Invalid token, treat as guest
+  }
 }
 
 // Helper function to generate order number with date/time and incremental counter
@@ -50,8 +56,26 @@ export async function GET(request: NextRequest) {
     await connectDB();
     console.log('[API /orders] Database connected');
 
-    const userId = await verifyToken(request);
-    console.log('[API /orders] Fetching orders for user:', userId);
+    // Try to get userId, but allow guest lookup if no token
+    let userId: string | null = null;
+    try {
+      const authResult = await verifyToken(request);
+      userId = authResult.userId;
+    } catch {
+      // Guest checkout - check if email is provided for guest order lookup
+      const { searchParams } = new URL(request.url);
+      const email = searchParams.get('email');
+      const orderNumber = searchParams.get('orderNumber');
+      
+      if (!email && !orderNumber) {
+        return NextResponse.json(
+          { error: 'Authentication required or provide email/orderNumber for guest orders' },
+          { status: 401 }
+        );
+      }
+    }
+    
+    console.log('[API /orders] Fetching orders for user:', userId || 'guest');
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -59,9 +83,27 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const dateRange = searchParams.get('dateRange');
+    const email = searchParams.get('email');
+    const orderNumber = searchParams.get('orderNumber');
 
     // Build query
-    const query: any = { userId };
+    const query: any = {};
+    
+    if (userId) {
+      query.userId = userId;
+    } else {
+      // Guest order lookup by email or order number
+      if (email) {
+        query.guestEmail = email.toLowerCase().trim();
+      } else if (orderNumber) {
+        query.orderNumber = orderNumber;
+      } else {
+        return NextResponse.json(
+          { error: 'Email or order number required for guest order lookup' },
+          { status: 400 }
+        );
+      }
+    }
 
     if (status && status !== 'all') {
       query.status = status;
@@ -129,8 +171,17 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const userId = await verifyToken(request);
+    // Try to get userId, but allow guest checkout if no token
+    const userId = await verifyTokenOptional(request);
     const orderData = await request.json();
+    
+    // For guest checkout, require email
+    if (!userId && !orderData.shippingAddress?.email && !orderData.guestEmail) {
+      return NextResponse.json(
+        { error: 'Email is required for guest checkout' },
+        { status: 400 }
+      );
+    }
 
     // Debug: Log the received order data
     console.log('Received order data:', JSON.stringify(orderData, null, 2));
@@ -201,8 +252,8 @@ export async function POST(request: NextRequest) {
             });
             item.promoToken = undefined;
             item.promoPercent = undefined;
-          } else if (promoRecord.usedBy && promoRecord.usedBy.some((usage: any) => usage.userId.toString() === userId)) {
-            // Check if this user already used this promo
+          } else if (userId && promoRecord.usedBy && promoRecord.usedBy.some((usage: any) => usage.userId.toString() === userId)) {
+            // Check if this user already used this promo (only for authenticated users)
             console.warn('[Order Promo] User already used this promo', {
               token: item.promoToken,
               userId,
@@ -218,9 +269,16 @@ export async function POST(request: NextRequest) {
             item.promoToken = undefined;
             item.promoPercent = undefined;
           } else if (product) {
-            // Get user email for validation
-            const user = await User.findById(userId).select('email').lean();
-            const userEmail = user?.email?.toLowerCase().trim();
+            // Get user email for validation (from user account or guest email)
+            let userEmail: string | null = null;
+            if (userId) {
+              const user = await User.findById(userId).select('email').lean();
+              userEmail = user?.email?.toLowerCase().trim() || null;
+            } else {
+              // For guest checkout, use guest email from order data
+              userEmail = orderData.guestEmail?.toLowerCase().trim() || 
+                         orderData.shippingAddress?.email?.toLowerCase().trim() || null;
+            }
 
             // Validate email matches
             if (userEmail && promoRecord.email !== userEmail) {
@@ -239,19 +297,24 @@ export async function POST(request: NextRequest) {
               item.promoPercent = promoRecord.discountPercent;
               item.promoOriginalPrice = product.price;
 
-              // Update usage count and track user
+              // Update usage count and track user (if authenticated)
+              const updateData: any = {
+                $inc: { usageCount: 1 },
+                $set: { lastUsedAt: new Date() }
+              };
+              
+              if (userId) {
+                updateData.$push = {
+                  usedBy: {
+                    userId: new mongoose.Types.ObjectId(userId),
+                    usedAt: new Date()
+                  }
+                };
+              }
+              
               await EmailPromoDiscount.updateOne(
                 { token: item.promoToken },
-                {
-                  $inc: { usageCount: 1 },
-                  $set: { lastUsedAt: new Date() },
-                  $push: {
-                    usedBy: {
-                      userId: new mongoose.Types.ObjectId(userId),
-                      usedAt: new Date()
-                    }
-                  }
-                }
+                updateData
               );
 
               console.info('[Order Promo] Promo applied', {
@@ -310,10 +373,14 @@ export async function POST(request: NextRequest) {
     // Generate order number with date/time and incremental counter
     const orderNumber = await generateOrderNumber();
 
+    // Get guest email if no userId
+    const guestEmail = !userId ? (orderData.guestEmail || orderData.shippingAddress?.email || orderData.email) : undefined;
+
     // Create order with field mapping for backward compatibility
     const orderDataWithMapping = {
       ...orderData,
-      userId,
+      userId: userId || undefined, // Only include if exists
+      guestEmail: guestEmail?.toLowerCase().trim(), // Include guest email for guest orders
       orderNumber,
       // Map address fields for backward compatibility
       shippingAddress: {
@@ -599,6 +666,91 @@ export async function POST(request: NextRequest) {
     } catch (emailError) {
       console.error('❌ [API /orders] Failed to send admin notification:', emailError);
       // Don't fail order creation if email fails
+    }
+
+    // Handle referral rewards if this is the user's first order
+    if (userId) {
+      try {
+        // Check if this is the user's first completed order
+        const previousOrders = await Order.countDocuments({ 
+          userId: userId,
+          status: { $in: ['completed', 'delivered'] },
+          _id: { $ne: order._id }
+        });
+
+        if (previousOrders === 0) {
+          // This is the user's first order - check for pending referrals
+          const pendingReferral = await Referral.findOne({
+            refereeId: userId,
+            status: 'pending'
+          });
+
+          if (pendingReferral) {
+            // Update referral record with first order info
+            pendingReferral.status = 'completed';
+            pendingReferral.refereeFirstOrderId = order._id;
+            pendingReferral.refereeFirstOrderAmount = order.total;
+            pendingReferral.refereeRewardGranted = true;
+            pendingReferral.refereeRewardGrantedAt = new Date();
+            await pendingReferral.save();
+
+            // Grant referrer reward (they get $20 off)
+            pendingReferral.referrerRewardGranted = true;
+            pendingReferral.referrerRewardGrantedAt = new Date();
+            pendingReferral.status = 'rewarded';
+            await pendingReferral.save();
+
+            console.log('✅ [API /orders] Referral rewards granted', {
+              referralId: pendingReferral._id,
+              referrerId: pendingReferral.referrerId,
+              refereeId: pendingReferral.refereeId
+            });
+
+            // Optionally send email notifications to both parties
+            try {
+              const { sendEmail } = await import('@/lib/email');
+              const referrer = await User.findById(pendingReferral.referrerId).select('name email').lean();
+              const referee = await User.findById(pendingReferral.refereeId).select('name email').lean();
+
+              if (referrer) {
+                await sendEmail({
+                  to: referrer.email,
+                  subject: '🎉 Your Referral Made a Purchase!',
+                  html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                      <h2 style="color: #333;">Congratulations, ${referrer.name}!</h2>
+                      <p>Great news! ${referee?.name || 'Your friend'} just made their first purchase using your referral code.</p>
+                      <p>You've earned a <strong>$${pendingReferral.referrerRewardValue} discount</strong> on your next order!</p>
+                      <p>Use code: <strong>REFERRAL${pendingReferral.referralCode}</strong> at checkout.</p>
+                    </div>
+                  `,
+                  text: `Congratulations! Your referral made a purchase. You've earned a $${pendingReferral.referrerRewardValue} discount.`
+                });
+              }
+
+              if (referee) {
+                await sendEmail({
+                  to: referee.email,
+                  subject: '🎉 Thank You for Your First Purchase!',
+                  html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                      <h2 style="color: #333;">Thank You, ${referee.name}!</h2>
+                      <p>Thank you for your first purchase! As a thank you for using a referral code, you've earned a <strong>$${pendingReferral.refereeRewardValue} discount</strong> on your next order.</p>
+                      <p>Use code: <strong>REFERRAL${pendingReferral.referralCode}</strong> at checkout.</p>
+                    </div>
+                  `,
+                  text: `Thank you for your first purchase! You've earned a $${pendingReferral.refereeRewardValue} discount.`
+                });
+              }
+            } catch (emailError) {
+              console.error('❌ [API /orders] Failed to send referral reward emails:', emailError);
+            }
+          }
+        }
+      } catch (referralError) {
+        console.error('❌ [API /orders] Error processing referral rewards:', referralError);
+        // Don't fail order creation if referral processing fails
+      }
     }
 
     return NextResponse.json({

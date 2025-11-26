@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit } from 'lucide-react';
+import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit, GitCompare } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
+import { useComparisonStore } from '@/store/comparisonStore';
 import { useAuthStore } from '@/store/authStore';
 import { companyInfo } from '@/data/companyInfo';
 
@@ -15,6 +16,7 @@ export default function Header() {
   const [isMounted, setIsMounted] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
   const { items, getTotalItems, getTotalPrice, removeItem, updateQuantity } = useCartStore();
+  const { getComparisonCount } = useComparisonStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -46,6 +48,7 @@ export default function Header() {
     { name: 'Products', href: '/products' },
     { name: 'Categories', href: '/categories' },
     { name: 'Collections', href: '/collections/new' },
+    { name: 'Support', href: '/support' },
     { name: 'About', href: '/about' },
     { name: 'Contact', href: '/contact' },
   ];
@@ -248,6 +251,19 @@ export default function Header() {
                 </Link>
               </div>
             )}
+
+            {/* Comparison */}
+            <Link
+              href="/compare"
+              className="relative p-1.5 sm:p-2 text-gray-700 hover:text-gray-900"
+            >
+              <GitCompare className="h-5 w-5 sm:h-6 sm:w-6" />
+              {isMounted && getComparisonCount() > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-blue-500 text-white text-[10px] sm:text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center">
+                  {getComparisonCount()}
+                </span>
+              )}
+            </Link>
 
             {/* Shopping Cart */}
             <button

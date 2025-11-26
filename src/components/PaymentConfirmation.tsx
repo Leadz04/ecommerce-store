@@ -1,7 +1,10 @@
 'use client';
 
-import { CheckCircle, Package, Truck, Clock, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, Package, Truck, Clock, ArrowRight, UserPlus, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { useAuthStore } from '@/store/authStore';
+import toast from 'react-hot-toast';
 
 interface PaymentConfirmationProps {
   order: {
@@ -11,11 +14,22 @@ interface PaymentConfirmationProps {
     status: string;
     items: any[];
     shippingAddress: any;
+    guestEmail?: string;
+    userId?: string;
     createdAt: string;
   };
 }
 
 export default function PaymentConfirmation({ order }: PaymentConfirmationProps) {
+  const { isAuthenticated } = useAuthStore();
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [password, setPassword] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [accountCreated, setAccountCreated] = useState(false);
+  
+  const isGuestOrder = !order.userId;
+  const guestEmail = order.guestEmail || order.shippingAddress?.email;
+
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -24,6 +38,64 @@ export default function PaymentConfirmation({ order }: PaymentConfirmationProps)
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!password || password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`,
+          email: guestEmail,
+          password,
+          phone: order.shippingAddress.phone || '',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create account');
+      }
+
+      // Auto-login after account creation
+      const loginResponse = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: guestEmail,
+          password,
+        }),
+      });
+
+      if (loginResponse.ok) {
+        const loginData = await loginResponse.json();
+        localStorage.setItem('token', loginData.token);
+        // Refresh auth state
+        window.location.reload();
+      }
+
+      setAccountCreated(true);
+      toast.success('Account created successfully!');
+    } catch (error) {
+      console.error('Account creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create account');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -120,14 +192,87 @@ export default function PaymentConfirmation({ order }: PaymentConfirmationProps)
           </div>
         </div>
 
+        {/* Guest Account Creation */}
+        {isGuestOrder && !isAuthenticated && !accountCreated && (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200 p-6 mb-6">
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0">
+                <UserPlus className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Create an Account</h3>
+                <p className="text-slate-600 mb-4">
+                  Create a free account to track your orders, save your address, and enjoy faster checkout next time!
+                </p>
+                {!showCreateAccount ? (
+                  <button
+                    onClick={() => setShowCreateAccount(true)}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    Create Account
+                  </button>
+                ) : (
+                  <form onSubmit={handleCreateAccount} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Email
+                      </label>
+                      <div className="flex items-center space-x-2 px-4 py-2 bg-slate-100 rounded-lg">
+                        <Mail className="h-4 w-4 text-slate-500" />
+                        <span className="text-slate-700">{guestEmail}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Create Password *
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter password (min 6 characters)"
+                        className="w-full px-4 py-2 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        type="submit"
+                        disabled={isCreating}
+                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isCreating ? 'Creating...' : 'Create Account'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateAccount(false)}
+                        className="px-4 py-2 border-2 border-slate-300 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4">
-          <Link
-            href="/orders"
-            className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-xl font-semibold text-center hover:bg-blue-700 transition-colors"
-          >
-            View Order Details
-          </Link>
+          {isAuthenticated || accountCreated ? (
+            <Link
+              href="/orders"
+              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-xl font-semibold text-center hover:bg-blue-700 transition-colors"
+            >
+              View Order Details
+            </Link>
+          ) : (
+            <div className="flex-1 text-center py-3 px-6 text-slate-600">
+              <p className="text-sm">Check your email for order updates</p>
+            </div>
+          )}
           <Link
             href="/"
             className="flex-1 bg-slate-100 text-slate-700 py-3 px-6 rounded-xl font-semibold text-center hover:bg-slate-200 transition-colors flex items-center justify-center space-x-2"

@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, ShoppingCart, Heart, CheckCircle2, Circle } from 'lucide-react';
+import { Star, ShoppingCart, Heart, CheckCircle2, Circle, GitCompare } from 'lucide-react';
 import { Product } from '@/types';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { useComparisonStore } from '@/store/comparisonStore';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 
@@ -22,6 +23,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const [etsyPending, setEtsyPending] = useState(false);
   const { addItem } = useCartStore();
   const { toggleWishlist, isInWishlist } = useWishlistStore();
+  const { addProduct, isInComparison, getComparisonCount } = useComparisonStore();
   const { user } = useAuthStore();
 
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
@@ -45,6 +47,26 @@ export default function ProductCard({ product }: ProductCardProps) {
       const result = await toggleWishlist(id);
       setIsLiked(result === 'added');
     } catch {}
+  };
+
+  const handleCompare = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const productId = (product as any)._id || (product as any).id;
+    const inComparison = isInComparison(productId);
+    
+    if (inComparison) {
+      toast.info('Product already in comparison');
+      return;
+    }
+    
+    if (getComparisonCount() >= 4) {
+      toast.error('Maximum 4 products can be compared at once');
+      return;
+    }
+    
+    addProduct(product);
+    toast.success('Added to comparison');
   };
 
   const handleToggleExport = async (e: React.MouseEvent) => {
@@ -117,15 +139,29 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
           
-          {/* Like Button */}
-          <button
-            onClick={handleLike}
-            className="absolute top-3 right-3 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            <Heart 
-              className={`h-4 w-4 ${(isLiked || isInWishlist((product as any)._id || (product as any).id)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} 
-            />
-          </button>
+          {/* Action Buttons */}
+          <div className="absolute top-3 right-3 flex flex-col space-y-2">
+            <button
+              onClick={handleLike}
+              className="p-2 bg-white dark:bg-gray-800 rounded-full shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              aria-label="Add to wishlist"
+            >
+              <Heart 
+                className={`h-4 w-4 ${(isLiked || isInWishlist((product as any)._id || (product as any).id)) ? 'fill-red-500 text-red-500' : 'text-gray-400 dark:text-gray-500'}`} 
+              />
+            </button>
+            <button
+              onClick={handleCompare}
+              className={`p-2 rounded-full shadow-md transition-colors ${
+                isInComparison((product as any)._id || (product as any).id)
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+              aria-label="Add to comparison"
+            >
+              <GitCompare className="h-4 w-4" />
+            </button>
+          </div>
 
           {/* Super Admin Etsy Export Badge */}
           {isSuperAdmin && (

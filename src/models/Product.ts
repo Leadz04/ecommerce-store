@@ -16,6 +16,7 @@ export interface IProduct extends Document {
   reviewCount: number;
   inStock: boolean;
   stockCount?: number;
+  expectedReleaseDate?: Date; // For pre-orders
   tags: string[];
   specifications: Record<string, string>;
   faqs?: string[];
@@ -119,6 +120,11 @@ const ProductSchema = new Schema<IProduct>({
     required: false,
     default: 0,
     min: [0, 'Stock count cannot be negative']
+  },
+  expectedReleaseDate: {
+    type: Date,
+    required: false,
+    index: true,
   },
   tags: [{
     type: String,

@@ -105,26 +105,60 @@ export async function PUT(
       try {
         const plain = updatedOrder.toObject();
         const user = await User.findById(plain.userId).select('name email phone address');
+        const customerEmail = user?.email || updatedOrder.guestEmail;
+        const customerName = user?.name || `${updatedOrder.shippingAddress.firstName} ${updatedOrder.shippingAddress.lastName}`;
         
-        if (user && user.email) {
+        if (customerEmail) {
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-          const statusEmailHTML = generateOrderStatusEmailHTML({
-            orderNumber: updatedOrder.orderNumber || updatedOrder._id.toString(),
-            customerName: user.name || 'Customer',
-            customerEmail: user.email,
-            status: status,
-            previousStatus: previousStatus,
-            notes: body.notes,
-            siteUrl
-          });
+          
+          // Special delivery confirmation email
+          if (status === 'delivered') {
+            const { generateDeliveryConfirmationEmailHTML } = await import('@/lib/email-templates-delivery');
+            const deliveryEmailHTML = generateDeliveryConfirmationEmailHTML({
+              orderNumber: updatedOrder.orderNumber || updatedOrder._id.toString(),
+              customerName: customerName,
+              customerEmail: customerEmail,
+              items: updatedOrder.items.map((item: any) => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                image: item.image,
+              })),
+              shippingAddress: updatedOrder.shippingAddress,
+              trackingNumber: updatedOrder.trackingNumber,
+              estimatedDeliveryDate: updatedOrder.estimatedDeliveryDate 
+                ? new Date(updatedOrder.estimatedDeliveryDate).toLocaleDateString()
+                : undefined,
+              siteUrl,
+            });
 
-          await sendEmail({
-            to: user.email,
-            subject: `Order Status Update - #${updatedOrder.orderNumber || updatedOrder._id.toString()}`,
-            html: statusEmailHTML,
-            text: `Your order #${updatedOrder.orderNumber || updatedOrder._id.toString()} status has been updated to: ${status}`
-          });
-          console.log('✅ [API /admin/orders] Status update email sent to customer');
+            await sendEmail({
+              to: customerEmail,
+              subject: `🎉 Your Order Has Been Delivered - #${updatedOrder.orderNumber || updatedOrder._id.toString()}`,
+              html: deliveryEmailHTML,
+            });
+            console.log('✅ [API /admin/orders] Delivery confirmation email sent to customer');
+          } else {
+            // Regular status update email
+            const statusEmailHTML = generateOrderStatusEmailHTML({
+              orderNumber: updatedOrder.orderNumber || updatedOrder._id.toString(),
+              customerName: customerName,
+              customerEmail: customerEmail,
+              status: status,
+              previousStatus: previousStatus,
+              trackingNumber: updatedOrder.trackingNumber,
+              notes: body.notes,
+              siteUrl
+            });
+
+            await sendEmail({
+              to: customerEmail,
+              subject: `Order Status Update - #${updatedOrder.orderNumber || updatedOrder._id.toString()}`,
+              html: statusEmailHTML,
+              text: `Your order #${updatedOrder.orderNumber || updatedOrder._id.toString()} status has been updated to: ${status}`
+            });
+            console.log('✅ [API /admin/orders] Status update email sent to customer');
+          }
         }
       } catch (emailError) {
         console.error('❌ [API /admin/orders] Failed to send status update email:', emailError);

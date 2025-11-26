@@ -6,7 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
 import { usePaymentStore } from '@/store/paymentStore';
-import { CreditCard, Lock, ArrowLeft, CheckCircle, AlertCircle, Package, Truck, MapPin } from 'lucide-react';
+import { CreditCard, Lock, ArrowLeft, CheckCircle, AlertCircle, Package, Truck, MapPin, Calendar, FileText, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import StripePaymentForm from '@/components/StripePaymentForm';
@@ -14,6 +14,7 @@ import PaymentConfirmation from '@/components/PaymentConfirmation';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
 import PromoCodeInput from '@/components/PromoCodeInput';
+import { formatDeliveryDate, getDeliveryDateRange } from '@/lib/delivery-date';
 import toast from 'react-hot-toast';
 
 export default function CheckoutPage() {
@@ -42,6 +43,20 @@ export default function CheckoutPage() {
     zipCode: '',
     country: 'United States',
     phone: '',
+    // Billing address (separate from shipping)
+    billingSameAsShipping: true,
+    billingFirstName: '',
+    billingLastName: '',
+    billingAddress: '',
+    billingCity: '',
+    billingState: '',
+    billingZipCode: '',
+    billingCountry: 'United States',
+    billingPhone: '',
+    // Additional fields
+    orderNotes: '',
+    deliveryInstructions: '',
+    estimatedDeliveryDate: '',
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -49,27 +64,28 @@ export default function CheckoutPage() {
   const [createdOrder, setCreatedOrder] = useState<any>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<'shipping' | 'payment' | 'confirmation'>('shipping');
-  const [openSelect, setOpenSelect] = useState<'country' | null>(null);
+  const [openSelect, setOpenSelect] = useState<'country' | 'billingCountry' | null>(null);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<any[]>([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
+  const [useSavedPayment, setUseSavedPayment] = useState(false);
 
-  // Check authentication and pre-fill user data
+  // Pre-fill user data if authenticated (guest checkout allowed)
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login?redirect=/checkout');
-    } else if (user) {
+    if (isAuthenticated && user) {
       setFormData(prev => ({
         ...prev,
-        email: user.email || '',
-        firstName: user.name?.split(' ')[0] || '',
-        lastName: user.name?.split(' ').slice(1).join(' ') || '',
-        phone: user.phone || '',
-        address: user.address?.address1 || '',
-        city: user.address?.city || '',
-        state: user.address?.state || '',
-        zipCode: user.address?.zipCode || '',
-        country: user.address?.country || 'United States'
+        email: user.email || prev.email || '',
+        firstName: user.name?.split(' ')[0] || prev.firstName || '',
+        lastName: user.name?.split(' ').slice(1).join(' ') || prev.lastName || '',
+        phone: user.phone || prev.phone || '',
+        address: user.address?.address1 || prev.address || '',
+        city: user.address?.city || prev.city || '',
+        state: user.address?.state || prev.state || '',
+        zipCode: user.address?.zipCode || prev.zipCode || '',
+        country: user.address?.country || prev.country || 'United States'
       }));
     }
-  }, [isAuthenticated, user, router]);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     const adjustments = enforceStockLimits();
@@ -93,12 +109,30 @@ export default function CheckoutPage() {
   };
 
   const validateShippingForm = () => {
-    const requiredFields = ['firstName', 'lastName', 'address', 'city', 'state', 'zipCode', 'phone'];
+    const requiredFields = ['email', 'firstName', 'lastName', 'address', 'city', 'state', 'zipCode', 'phone'];
     
     for (const field of requiredFields) {
       if (!formData[field as keyof typeof formData]) {
         toast.error(`Please fill in ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
         return false;
+      }
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Please enter a valid email address');
+      return false;
+    }
+
+    // Validate billing address if different from shipping
+    if (!formData.billingSameAsShipping) {
+      const billingRequiredFields = ['billingFirstName', 'billingLastName', 'billingAddress', 'billingCity', 'billingState', 'billingZipCode', 'billingPhone'];
+      for (const field of billingRequiredFields) {
+        if (!formData[field as keyof typeof formData]) {
+          toast.error(`Please fill in billing ${field.replace('billing', '').replace(/([A-Z])/g, ' $1').toLowerCase()}`);
+          return false;
+        }
       }
     }
     
@@ -165,6 +199,11 @@ export default function CheckoutPage() {
       setOrderSuccess(true);
       setCurrentStep('confirmation');
       clearCart();
+      
+      // Pass guest email to confirmation component
+      if (!isAuthenticated && formData.email) {
+        updatedOrder.guestEmail = formData.email;
+      }
 
       // Send order confirmation email
       try {
@@ -281,7 +320,7 @@ export default function CheckoutPage() {
             country: formData.country,
             phone: formData.phone
           },
-          billingAddress: {
+          billingAddress: formData.billingSameAsShipping ? {
             firstName: formData.firstName,
             lastName: formData.lastName,
             address1: formData.address,
@@ -290,9 +329,22 @@ export default function CheckoutPage() {
             zipCode: formData.zipCode,
             country: formData.country,
             phone: formData.phone
+          } : {
+            firstName: formData.billingFirstName,
+            lastName: formData.billingLastName,
+            address1: formData.billingAddress,
+            city: formData.billingCity,
+            state: formData.billingState,
+            zipCode: formData.billingZipCode,
+            country: formData.billingCountry,
+            phone: formData.billingPhone
           },
+          notes: formData.orderNotes || undefined,
+          deliveryInstructions: formData.deliveryInstructions || undefined,
+          estimatedDeliveryDate: formData.estimatedDeliveryDate ? new Date(formData.estimatedDeliveryDate) : undefined,
           paymentMethod: 'card',
-          paymentStatus: 'pending' as const
+          paymentStatus: 'pending' as const,
+          guestEmail: !isAuthenticated ? formData.email : undefined // Include guest email
         };
 
         console.log('Creating order with data:', orderData);
@@ -315,9 +367,12 @@ export default function CheckoutPage() {
         throw new Error('No valid order found');
       }
 
-      // Create payment intent
+      // Create payment intent (with saved payment method if selected)
       console.log('Creating payment intent for order:', orderToUse._id);
-      const secret = await createPaymentIntent(orderToUse._id);
+      const secret = await createPaymentIntent(
+        orderToUse._id,
+        useSavedPayment && selectedPaymentMethod ? selectedPaymentMethod : undefined
+      );
       console.log('Payment intent created, client secret:', secret);
       setClientSecret(secret);
       // Ensure checkout_start is tracked if not already
@@ -335,9 +390,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  // Guest checkout is now allowed, so we don't need to check authentication
 
   if (orderSuccess && createdOrder) {
     return <PaymentConfirmation order={createdOrder} />;
@@ -403,6 +456,29 @@ export default function CheckoutPage() {
               <form onSubmit={handleShippingSubmit} className="space-y-4 sm:space-y-6">
                 <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-4 sm:p-6">
                   <h2 className="text-lg sm:text-xl font-semibold text-slate-900 mb-4 sm:mb-6">Shipping Information</h2>
+                  
+                  {!isAuthenticated && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Guest Checkout:</strong> You can complete your purchase without creating an account. 
+                        We'll send order updates to your email.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Email Address *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900 placeholder-slate-500"
+                      placeholder="your.email@example.com"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-slate-500">We'll send your order confirmation here</p>
+                  </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -507,6 +583,226 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Delivery Instructions */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
+                      <Truck className="h-4 w-4 mr-2" />
+                      Delivery Instructions (Optional)
+                    </label>
+                    <textarea
+                      name="deliveryInstructions"
+                      value={formData.deliveryInstructions}
+                      onChange={(e) => setFormData(prev => ({ ...prev, deliveryInstructions: e.target.value }))}
+                      rows={3}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900 placeholder-slate-500"
+                      placeholder="e.g., Leave at front door, Ring doorbell, etc."
+                      maxLength={500}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{formData.deliveryInstructions.length}/500 characters</p>
+                  </div>
+
+                  {/* Estimated Delivery Date Selection */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Preferred Delivery Date (Optional)
+                    </label>
+                    <select
+                      name="estimatedDeliveryDate"
+                      value={formData.estimatedDeliveryDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, estimatedDeliveryDate: e.target.value }))}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                    >
+                      <option value="">Select preferred date (or leave for earliest delivery)</option>
+                      {(() => {
+                        const options = [];
+                        const today = new Date();
+                        for (let i = 0; i < 14; i++) {
+                          const date = new Date(today);
+                          date.setDate(today.getDate() + i);
+                          // Skip weekends
+                          if (date.getDay() === 0 || date.getDay() === 6) continue;
+                          const dateStr = date.toISOString().split('T')[0];
+                          const formatted = formatDeliveryDate(date);
+                          options.push(
+                            <option key={dateStr} value={dateStr}>
+                              {formatted}
+                            </option>
+                          );
+                        }
+                        return options;
+                      })()}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Default: {(() => {
+                        const deliveryRange = getDeliveryDateRange({
+                          shippingMethod: 'standard',
+                          processingDays: 1,
+                          businessDaysOnly: true,
+                        });
+                        return deliveryRange.formatted;
+                      })()}
+                    </p>
+                  </div>
+
+                  {/* Order Notes */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Order Notes/Comments (Optional)
+                    </label>
+                    <textarea
+                      name="orderNotes"
+                      value={formData.orderNotes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, orderNotes: e.target.value }))}
+                      rows={3}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900 placeholder-slate-500"
+                      placeholder="Any special instructions or notes for your order..."
+                      maxLength={1000}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{formData.orderNotes.length}/1000 characters</p>
+                  </div>
+
+                  {/* Billing Address Section */}
+                  <div className="mt-6 pt-6 border-t border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Billing Address
+                    </h3>
+                    
+                    <div className="mb-4">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.billingSameAsShipping}
+                          onChange={(e) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              billingSameAsShipping: e.target.checked,
+                              billingFirstName: e.target.checked ? prev.firstName : prev.billingFirstName,
+                              billingLastName: e.target.checked ? prev.lastName : prev.billingLastName,
+                              billingAddress: e.target.checked ? prev.address : prev.billingAddress,
+                              billingCity: e.target.checked ? prev.city : prev.billingCity,
+                              billingState: e.target.checked ? prev.state : prev.billingState,
+                              billingZipCode: e.target.checked ? prev.zipCode : prev.billingZipCode,
+                              billingCountry: e.target.checked ? prev.country : prev.billingCountry,
+                              billingPhone: e.target.checked ? prev.phone : prev.billingPhone,
+                            }));
+                          }}
+                          className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-slate-700">Same as shipping address</span>
+                      </label>
+                    </div>
+
+                    {!formData.billingSameAsShipping && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">First Name *</label>
+                            <input
+                              type="text"
+                              name="billingFirstName"
+                              value={formData.billingFirstName}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingFirstName: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Last Name *</label>
+                            <input
+                              type="text"
+                              name="billingLastName"
+                              value={formData.billingLastName}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingLastName: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">Address *</label>
+                          <input
+                            type="text"
+                            name="billingAddress"
+                            value={formData.billingAddress}
+                            onChange={(e) => setFormData(prev => ({ ...prev, billingAddress: e.target.value }))}
+                            className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                            required={!formData.billingSameAsShipping}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">City *</label>
+                            <input
+                              type="text"
+                              name="billingCity"
+                              value={formData.billingCity}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingCity: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">State *</label>
+                            <input
+                              type="text"
+                              name="billingState"
+                              value={formData.billingState}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingState: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">ZIP Code *</label>
+                            <input
+                              type="text"
+                              name="billingZipCode"
+                              value={formData.billingZipCode}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingZipCode: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <SelectField
+                              label="Country"
+                              options={[
+                                { value: 'United States', label: 'United States' },
+                                { value: 'Canada', label: 'Canada' },
+                                { value: 'United Kingdom', label: 'United Kingdom' },
+                                { value: 'Australia', label: 'Australia' },
+                              ]}
+                              value={formData.billingCountry}
+                              isOpen={openSelect === 'billingCountry'}
+                              onOpenChange={(open) => setOpenSelect(open ? 'billingCountry' : null)}
+                              onSelect={(value) => setFormData(prev => ({ ...prev, billingCountry: value }))}
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Phone *</label>
+                            <input
+                              type="tel"
+                              name="billingPhone"
+                              value={formData.billingPhone}
+                              onChange={(e) => setFormData(prev => ({ ...prev, billingPhone: e.target.value }))}
+                              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                              required={!formData.billingSameAsShipping}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full mt-4 sm:mt-6 bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-semibold text-base sm:text-lg hover:bg-blue-700 transition-colors"
@@ -520,26 +816,103 @@ export default function CheckoutPage() {
             {/* Payment Form */}
             {currentStep === 'payment' && (
               <div className="space-y-6">
+                {/* Saved Payment Methods */}
+                {isAuthenticated && savedPaymentMethods.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">
+                    <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center">
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Saved Payment Methods
+                    </h2>
+                    <div className="space-y-3 mb-4">
+                      {savedPaymentMethods.map((method) => (
+                        <label
+                          key={method._id}
+                          className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                            selectedPaymentMethod === method.paymentMethodId
+                              ? 'border-blue-600 bg-blue-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value={method.paymentMethodId}
+                            checked={selectedPaymentMethod === method.paymentMethodId}
+                            onChange={() => {
+                              setSelectedPaymentMethod(method.paymentMethodId);
+                              setUseSavedPayment(true);
+                            }}
+                            className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                          />
+                          <div className="ml-3 flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-slate-900">
+                                  {method.card.brand.toUpperCase()} •••• {method.card.last4}
+                                </p>
+                                <p className="text-sm text-slate-600">
+                                  Expires {method.card.expMonth}/{method.card.expYear}
+                                  {method.isDefault && (
+                                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">Default</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseSavedPayment(false);
+                        setSelectedPaymentMethod(null);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Use a different payment method
+                    </button>
+                  </div>
+                )}
+
                 {!clientSecret ? (
                   <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">
                     <h2 className="text-xl font-semibold text-slate-900 mb-4">Payment Information</h2>
-                    <p className="text-slate-600 mb-6">Click the button below to initialize secure payment processing.</p>
-                    <button
-                      onClick={handleCreatePaymentIntent}
-                      disabled={isPaymentLoading}
-                      className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                      {isPaymentLoading ? 'Initializing...' : 'Initialize Payment'}
-                    </button>
+                    {useSavedPayment && selectedPaymentMethod ? (
+                      <div className="mb-6">
+                        <p className="text-slate-600 mb-4">Using saved payment method. Click below to proceed.</p>
+                        <button
+                          onClick={handleCreatePaymentIntent}
+                          disabled={isPaymentLoading}
+                          className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        >
+                          {isPaymentLoading ? 'Processing...' : 'Pay with Saved Card'}
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-slate-600 mb-6">Click the button below to initialize secure payment processing.</p>
+                        <button
+                          onClick={handleCreatePaymentIntent}
+                          disabled={isPaymentLoading}
+                          className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        >
+                          {isPaymentLoading ? 'Initializing...' : 'Initialize Payment'}
+                        </button>
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <StripePaymentForm
-                    clientSecret={clientSecret}
-                    onPaymentSuccess={handlePaymentSuccess}
-                    onPaymentError={handlePaymentError}
-                    isLoading={isProcessing}
-                  />
-                )}
+                ) : !useSavedPayment ? (
+                  <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">
+                    <h2 className="text-xl font-semibold text-slate-900 mb-4">Payment Information</h2>
+                    <StripePaymentForm
+                      clientSecret={clientSecret}
+                      onPaymentSuccess={handlePaymentSuccess}
+                      onPaymentError={handlePaymentError}
+                      isLoading={isProcessing}
+                    />
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

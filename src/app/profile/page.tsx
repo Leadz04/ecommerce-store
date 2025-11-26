@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, LogOut, ShoppingBag, Heart, Settings, ArrowRight } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, Edit, Save, X, LogOut, ShoppingBag, Heart, Settings, ArrowRight, Clock, Gift } from 'lucide-react';
 import Link from 'next/link';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { useRecentlyViewedStore } from '@/store/recentlyViewedStore';
+import ProductCard from '@/components/ProductCard';
 import { ProfileSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
@@ -19,12 +21,16 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<AuthUser>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [activeSection, setActiveSection] = useState<'profile' | 'wishlist' | 'settings'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'wishlist' | 'recently-viewed' | 'settings'>('profile');
   const [openSelect, setOpenSelect] = useState<'country' | null>(null);
 
 
   // Wishlist
   const { items: wishlistItems, isLoading: isWishlistLoading, error: wishlistError, fetchWishlist, removeFromWishlist } = useWishlistStore();
+  
+  // Recently Viewed
+  const { getRecentProducts, clearHistory } = useRecentlyViewedStore();
+  const recentlyViewedProducts = getRecentProducts(12);
 
   // Settings (only email/sms toggles)
   const [settings, setSettings] = useState({ emailNotifications: true, smsNotifications: false });
@@ -73,7 +79,7 @@ export default function ProfilePage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const tab = searchParams?.get('tab');
-    if (tab === 'wishlist' || tab === 'settings' || tab === 'profile') {
+    if (tab === 'wishlist' || tab === 'settings' || tab === 'profile' || tab === 'recently-viewed') {
       setActiveSection(tab);
     }
   }, [searchParams]);
@@ -257,11 +263,19 @@ export default function ProfilePage() {
                     <ShoppingBag className="h-5 w-5 mr-3" />
                     Order History
                   </Link>
-                  <button onClick={() => setActiveSection('wishlist')} className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                  <button onClick={() => setActiveSection('wishlist')} className={`w-full flex items-center px-4 py-2 rounded-lg transition-colors ${activeSection === 'wishlist' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}>
                     <Heart className="h-5 w-5 mr-3" />
                     Wishlist
                   </button>
-                  <button onClick={() => setActiveSection('settings')} className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                  <button onClick={() => setActiveSection('recently-viewed')} className={`w-full flex items-center px-4 py-2 rounded-lg transition-colors ${activeSection === 'recently-viewed' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}>
+                    <Clock className="h-5 w-5 mr-3" />
+                    Recently Viewed
+                  </button>
+                  <Link href="/referrals" className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+                    <Gift className="h-5 w-5 mr-3" />
+                    Referral Program
+                  </Link>
+                  <button onClick={() => setActiveSection('settings')} className={`w-full flex items-center px-4 py-2 rounded-lg transition-colors ${activeSection === 'settings' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}>
                     <Settings className="h-5 w-5 mr-3" />
                     Settings
                   </button>
@@ -543,6 +557,42 @@ export default function ProfilePage() {
                       </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {/* Recently Viewed Section */}
+              {activeSection === 'recently-viewed' && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900">Recently Viewed</h3>
+                  {recentlyViewedProducts.length > 0 && (
+                    <button
+                      onClick={clearHistory}
+                      className="text-sm text-gray-600 hover:text-red-600 transition-colors"
+                    >
+                      Clear History
+                    </button>
+                  )}
+                </div>
+                {recentlyViewedProducts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Clock className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">No recently viewed products</p>
+                    <p className="text-sm text-gray-500 mb-6">Products you view will appear here</p>
+                    <Link
+                      href="/products"
+                      className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                    >
+                      Browse Products
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {recentlyViewedProducts.map((product) => (
+                      <ProductCard key={(product as any)._id || (product as any).id} product={product} />
+                    ))}
                   </div>
                 )}
               </div>

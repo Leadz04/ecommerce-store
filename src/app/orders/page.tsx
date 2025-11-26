@@ -70,14 +70,13 @@ export default function OrdersPage() {
     { value: '365', label: 'Last year' },
   ];
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router]);
+  // Guest order lookup state
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestOrderNumber, setGuestOrderNumber] = useState('');
+  const [showGuestForm, setShowGuestForm] = useState(false);
+  const [guestLookupError, setGuestLookupError] = useState('');
 
-  // Fetch orders on mount
+  // Fetch orders on mount (only for authenticated users)
   useEffect(() => {
     if (isAuthenticated) {
       fetchOrders();
@@ -101,8 +100,32 @@ export default function OrdersPage() {
   };
 
   const handleRefresh = () => {
-    fetchOrders();
-    toast.success('Orders refreshed');
+    if (isAuthenticated) {
+      fetchOrders();
+      toast.success('Orders refreshed');
+    } else if (guestEmail || guestOrderNumber) {
+      handleGuestLookup();
+    }
+  };
+
+  const handleGuestLookup = async () => {
+    if (!guestEmail && !guestOrderNumber) {
+      setGuestLookupError('Please enter either your email or order number');
+      return;
+    }
+
+    setGuestLookupError('');
+    setShowGuestForm(false);
+    
+    try {
+      await fetchOrders({
+        ...(guestEmail ? { email: guestEmail } : {}),
+        ...(guestOrderNumber ? { orderNumber: guestOrderNumber } : {}),
+      } as any);
+      toast.success('Orders loaded');
+    } catch (error) {
+      setGuestLookupError(error instanceof Error ? error.message : 'Failed to load orders');
+    }
   };
 
   const handleDownloadInvoice = async (orderId: string) => {
@@ -222,14 +245,76 @@ export default function OrdersPage() {
     return true;
   });
 
-  if (!isAuthenticated) {
+  // Guest order lookup form
+  if (!isAuthenticated && !showGuestForm && orders.length === 0 && !isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Please log in to view your orders</h1>
-          <Link href="/login" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
-            Go to Login
-          </Link>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <BackButton href="/" variant="with-label" />
+          <div className="max-w-md mx-auto mt-12">
+            <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-8">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">View Your Orders</h1>
+              <p className="text-gray-600 mb-6">
+                Enter your email address or order number to view your order history
+              </p>
+              
+              {guestLookupError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {guestLookupError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="your.email@example.com"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">OR</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Order Number
+                  </label>
+                  <input
+                    type="text"
+                    value={guestOrderNumber}
+                    onChange={(e) => setGuestOrderNumber(e.target.value)}
+                    placeholder="e.g., ORD-1234567890-ABC123"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <button
+                  onClick={handleGuestLookup}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+                >
+                  View Orders
+                </button>
+
+                <div className="text-center">
+                  <Link href="/login" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                    Have an account? Log in instead
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -513,19 +598,19 @@ export default function OrdersPage() {
 
                         {/* Actions */}
                         <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                          <Link
+                            href={`/orders/${order._id}`}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
+                          >
+                            <Eye className="h-5 w-5" />
+                            <span>View Details</span>
+                          </Link>
                           <button 
                             onClick={() => handleDownloadInvoice(order._id)}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors font-semibold text-gray-700"
                           >
                             <Download className="h-5 w-5" />
-                            <span>Download Invoice</span>
-                          </button>
-                          <button 
-                            onClick={() => handleTrackOrder(order._id)}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
-                          >
-                            <Eye className="h-5 w-5" />
-                            <span>Track Order</span>
+                            <span>Invoice</span>
                           </button>
                         </div>
                       </div>

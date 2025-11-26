@@ -6,7 +6,7 @@ interface PaymentStore {
   isLoading: boolean;
   error: string | null;
   clientSecret: string | null;
-  createPaymentIntent: (orderId: string) => Promise<string>;
+  createPaymentIntent: (orderId: string, paymentMethodId?: string) => Promise<string>;
   clearError: () => void;
 }
 
@@ -15,23 +15,26 @@ export const usePaymentStore = create<PaymentStore>((set, get) => ({
   error: null,
   clientSecret: null,
 
-  createPaymentIntent: async (orderId: string) => {
+  createPaymentIntent: async (orderId: string, paymentMethodId?: string) => {
     set({ isLoading: true, error: null });
     
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token');
+      
+      // Build headers - include token if available (for authenticated users)
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      console.log('[PaymentStore] Creating payment intent for order:', orderId);
+      console.log('[PaymentStore] Creating payment intent for order:', orderId, token ? '(authenticated)' : '(guest)', paymentMethodId ? 'with saved payment method' : '');
       const response = await fetch(`/api/payments/create-payment-intent`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ orderId }),
+        headers,
+        body: JSON.stringify({ orderId, paymentMethodId }),
       });
 
       const data = await response.json();

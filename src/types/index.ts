@@ -121,6 +121,7 @@ export interface SignupCredentials {
   password: string;
   confirmPassword: string;
   phone?: string;
+  referralCode?: string;
 }
 
 export interface AuthState {

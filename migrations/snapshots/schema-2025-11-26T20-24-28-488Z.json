@@ -1,0 +1,2181 @@
+{
+  "AbandonedCartAnalytics": {
+    "fields": {
+      "date": {
+        "type": "Date",
+        "required": true
+      },
+      "totalAbandonedCarts": {
+        "type": "Number",
+        "default": "0"
+      },
+      "totalCartValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "averageCartValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "uniqueUsers": {
+        "type": "Number",
+        "default": "0"
+      },
+      "recoveryRate": {
+        "type": "Number",
+        "default": "0"
+      },
+      "recoveredCarts": {
+        "type": "Number",
+        "default": "0"
+      },
+      "recoveredValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "timeToAbandonment": {
+        "type": "Number",
+        "default": "0"
+      },
+      "median": {
+        "type": "Number",
+        "default": "0"
+      },
+      "emailSentCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "emailOpenRate": {
+        "type": "Number",
+        "default": "0"
+      },
+      "emailClickRate": {
+        "type": "Number",
+        "default": "0"
+      },
+      "emailConversionRate": {
+        "type": "Number",
+        "default": "0"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "AnalyticsEvent": {
+    "fields": {
+      "type": {
+        "type": "String",
+        "required": true
+      },
+      "userId": {
+        "type": "String"
+      },
+      "sessionId": {
+        "type": "String"
+      },
+      "productId": {
+        "type": "String"
+      },
+      "orderId": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String",
+        "default": "'USD'"
+      },
+      "metadata": {
+        "type": "Schema.Types.Mixed"
+      }
+    },
+    "options": {},
+    "indexes": []
+  },
+  "AuditLog": {
+    "fields": {
+      "userId": {
+        "type": "String",
+        "required": true
+      },
+      "action": {
+        "type": "String",
+        "required": true
+      },
+      "resourceType": {
+        "type": "String",
+        "required": true
+      },
+      "resourceId": {
+        "type": "String"
+      },
+      "metadata": {
+        "type": "Schema.Types.Mixed"
+      },
+      "ip": {
+        "type": "String"
+      },
+      "userAgent": {
+        "type": "String"
+      }
+    },
+    "options": {},
+    "indexes": []
+  },
+  "Blog": {
+    "fields": {
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "slug": {
+        "type": "String",
+        "unique": true
+      },
+      "description": {
+        "type": "String"
+      },
+      "contentHtml": {
+        "type": "String",
+        "required": true
+      },
+      "coverImage": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "draft",
+          "published",
+          "archived"
+        ]
+      },
+      "publishAt": {
+        "type": "Date",
+        "default": "null"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "isDeleted": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "deletedAt": {
+        "type": "Date",
+        "default": "null"
+      },
+      "versionAt": {
+        "type": "Date",
+        "default": "() => new Date()"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "CartAbandonment": {
+    "fields": {
+      "userId": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "sessionId": {
+        "type": "String"
+      },
+      "subtotal": {
+        "type": "Number",
+        "required": true
+      },
+      "total": {
+        "type": "Number",
+        "required": true
+      },
+      "lastActivityAt": {
+        "type": "Date",
+        "default": "Date.now"
+      },
+      "emailSent": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "recovered": {
+        "type": "Boolean",
+        "default": "false"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "ChatMessage": {
+    "fields": {
+      "conversationId": {
+        "type": "String",
+        "required": true
+      },
+      "senderId": {
+        "type": "String",
+        "required": false
+      },
+      "senderName": {
+        "type": "String",
+        "required": true
+      },
+      "senderEmail": {
+        "type": "String",
+        "required": false
+      },
+      "senderType": {
+        "type": "String",
+        "required": true,
+        "default": "'customer'",
+        "enum": [
+          "customer",
+          "admin",
+          "bot"
+        ]
+      },
+      "message": {
+        "type": "String",
+        "required": true
+      },
+      "isRead": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "readAt": {
+        "type": "Date"
+      },
+      "metadata": {
+        "type": "Schema.Types.Mixed"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "CustomerAnalytics": {
+    "fields": {
+      "userId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "totalOrders": {
+        "type": "Number",
+        "default": "0"
+      },
+      "totalSpent": {
+        "type": "Number",
+        "default": "0"
+      },
+      "averageOrderValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "cartAbandonmentRate": {
+        "type": "Number",
+        "default": "0"
+      },
+      "returnRate": {
+        "type": "Number",
+        "default": "0"
+      },
+      "lifetimeValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "customerSegment": {
+        "type": "String",
+        "default": "'new'",
+        "enum": [
+          "new",
+          "regular",
+          "vip",
+          "at-risk"
+        ]
+      },
+      "lastActivityDate": {
+        "type": "Date",
+        "default": "Date.now"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EmailPromoDiscount": {
+    "fields": {
+      "token": {
+        "type": "String",
+        "required": true
+      },
+      "email": {
+        "type": "String",
+        "required": true
+      },
+      "productId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "discountPercent": {
+        "type": "Number",
+        "required": true
+      },
+      "trackingId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "emailSentAt": {
+        "type": "Date",
+        "required": true
+      },
+      "expiresAt": {
+        "type": "Date",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'active'",
+        "enum": [
+          "active",
+          "expired"
+        ]
+      },
+      "usageCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "maxUsageCount": {
+        "type": "Number",
+        "required": true,
+        "default": "1"
+      },
+      "userId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "usedAt": {
+        "type": "Date",
+        "required": true,
+        "default": "Date.now"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EmailSubscriber": {
+    "fields": {
+      "email": {
+        "type": "String",
+        "unique": true
+      },
+      "firstName": {
+        "type": "String"
+      },
+      "lastName": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String",
+        "default": "'csv'",
+        "enum": [
+          "csv",
+          "website",
+          "manual",
+          "import",
+          "api"
+        ]
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "lastVisited": {
+        "type": "Date"
+      },
+      "visitCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "lastEmailSent": {
+        "type": "Date"
+      },
+      "emailSentCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "converted": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "conversionDate": {
+        "type": "Date"
+      },
+      "metadata": {
+        "type": "Map"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EmailTracking": {
+    "fields": {
+      "email": {
+        "type": "String",
+        "required": true
+      },
+      "subscriberId": {
+        "type": "Schema.Types.ObjectId"
+      },
+      "emailType": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "welcome",
+          "return",
+          "urgent",
+          "promotional",
+          "newsletter"
+        ]
+      },
+      "emailSentAt": {
+        "type": "Date",
+        "required": true
+      },
+      "opened": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "openCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "clicked": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "clickCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "linkType": {
+        "type": "String",
+        "enum": [
+          "product",
+          "category",
+          "home",
+          "checkout",
+          "other"
+        ]
+      },
+      "visited": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "visitCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "pageType": {
+        "type": "String",
+        "enum": [
+          "home",
+          "product",
+          "category",
+          "cart",
+          "checkout",
+          "other"
+        ]
+      },
+      "converted": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "metadata": {
+        "type": "Schema.Types.Mixed"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EtsyListing": {
+    "fields": {
+      "etsyListingId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "shopId": {
+        "type": "String",
+        "required": true
+      },
+      "productId": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "description": {
+        "type": "String",
+        "required": true
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "currency": {
+        "type": "String",
+        "default": "'USD'"
+      },
+      "state": {
+        "type": "String",
+        "default": "'draft'",
+        "enum": [
+          "active",
+          "inactive",
+          "draft"
+        ]
+      },
+      "url": {
+        "type": "String",
+        "required": true
+      },
+      "rank": {
+        "type": "Number",
+        "required": true
+      },
+      "listingImageId": {
+        "type": "String",
+        "required": true
+      },
+      "propertyId": {
+        "type": "String",
+        "required": true
+      },
+      "valueId": {
+        "type": "String",
+        "required": true
+      },
+      "name": {
+        "type": "String",
+        "required": true
+      },
+      "value": {
+        "type": "String",
+        "required": true
+      },
+      "inventory": {
+        "type": "Number",
+        "default": "0"
+      },
+      "sku": {
+        "type": "String"
+      },
+      "seoTitle": {
+        "type": "String"
+      },
+      "seoDescription": {
+        "type": "String"
+      },
+      "lastSyncedAt": {
+        "type": "Date",
+        "default": "Date.now"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EtsyOrder": {
+    "fields": {
+      "etsyOrderId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "shopId": {
+        "type": "String",
+        "required": true
+      },
+      "orderId": {
+        "type": "String"
+      },
+      "receiptId": {
+        "type": "String",
+        "required": true
+      },
+      "buyerUserId": {
+        "type": "String",
+        "required": true
+      },
+      "buyerEmail": {
+        "type": "String",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'open'",
+        "enum": [
+          "open",
+          "completed",
+          "cancelled"
+        ]
+      },
+      "paymentStatus": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "paid",
+          "refunded"
+        ]
+      },
+      "shippingStatus": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "shipped",
+          "delivered"
+        ]
+      },
+      "total": {
+        "type": "Number",
+        "required": true
+      },
+      "currency": {
+        "type": "String",
+        "default": "'USD'"
+      },
+      "shippingCost": {
+        "type": "Number",
+        "default": "0"
+      },
+      "taxCost": {
+        "type": "Number",
+        "default": "0"
+      },
+      "listingId": {
+        "type": "String",
+        "required": true
+      },
+      "productId": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "quantity": {
+        "type": "Number",
+        "required": true
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "property": {
+        "type": "String",
+        "required": true
+      },
+      "value": {
+        "type": "String",
+        "required": true
+      },
+      "shippingAddress": {
+        "type": "String",
+        "required": true
+      },
+      "address1": {
+        "type": "String",
+        "required": true
+      },
+      "address2": {
+        "type": "String"
+      },
+      "city": {
+        "type": "String",
+        "required": true
+      },
+      "state": {
+        "type": "String",
+        "required": true
+      },
+      "zip": {
+        "type": "String",
+        "required": true
+      },
+      "country": {
+        "type": "String",
+        "required": true
+      },
+      "phone": {
+        "type": "String"
+      },
+      "messageFromBuyer": {
+        "type": "String"
+      },
+      "messageFromSeller": {
+        "type": "String"
+      },
+      "lastSyncedAt": {
+        "type": "Date",
+        "default": "Date.now"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "EtsyShop": {
+    "fields": {
+      "shopId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "shopName": {
+        "type": "String",
+        "required": true
+      },
+      "accessToken": {
+        "type": "String",
+        "required": true
+      },
+      "refreshToken": {
+        "type": "String"
+      },
+      "tokenExpiresAt": {
+        "type": "Date"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "syncSettings": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "autoSyncOrders": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "autoSyncInventory": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "syncInterval": {
+        "type": "Number",
+        "default": "60"
+      },
+      "lastSyncAt": {
+        "type": "Date"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "KeywordResearch": {
+    "fields": {
+      "searchId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "country": {
+        "type": "String",
+        "required": true
+      },
+      "language": {
+        "type": "String",
+        "required": true
+      },
+      "searchMetadata": {
+        "type": "String",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "required": true
+      },
+      "createdAt": {
+        "type": "String",
+        "required": true
+      },
+      "processedAt": {
+        "type": "String",
+        "required": true
+      },
+      "totalTimeTaken": {
+        "type": "Number",
+        "required": true
+      },
+      "googleTrendsUrl": {
+        "type": "String",
+        "required": true
+      },
+      "searchParameters": {
+        "type": "String",
+        "required": true
+      },
+      "q": {
+        "type": "String",
+        "required": true
+      },
+      "hl": {
+        "type": "String",
+        "required": true
+      },
+      "geo": {
+        "type": "String",
+        "required": true
+      },
+      "date": {
+        "type": "String",
+        "required": true
+      },
+      "tz": {
+        "type": "String",
+        "required": true
+      },
+      "dataType": {
+        "type": "String",
+        "required": true
+      },
+      "interestOverTime": {
+        "type": "String",
+        "required": true
+      },
+      "timestamp": {
+        "type": "String",
+        "required": true
+      },
+      "query": {
+        "type": "String",
+        "required": true
+      },
+      "value": {
+        "type": "String",
+        "required": true
+      },
+      "extractedValue": {
+        "type": "Number",
+        "required": true
+      },
+      "partialData": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "topic": {
+        "type": "String",
+        "required": true
+      },
+      "summary": {
+        "type": "Number",
+        "required": true
+      },
+      "peakInterest": {
+        "type": "Number",
+        "required": true
+      },
+      "peakDate": {
+        "type": "String",
+        "required": true
+      },
+      "currentInterest": {
+        "type": "Number",
+        "required": true
+      },
+      "trendDirection": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "up",
+          "down",
+          "stable"
+        ]
+      },
+      "totalDataPoints": {
+        "type": "Number",
+        "required": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "KnowledgeBase": {
+    "fields": {
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "slug": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "content": {
+        "type": "String",
+        "required": true
+      },
+      "excerpt": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String",
+        "required": true,
+        "default": "'other'",
+        "enum": [
+          "getting_started",
+          "orders",
+          "shipping",
+          "returns",
+          "payments",
+          "account",
+          "troubleshooting",
+          "other"
+        ]
+      },
+      "authorId": {
+        "type": "String",
+        "required": false
+      },
+      "views": {
+        "type": "Number",
+        "default": "0"
+      },
+      "helpfulCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "isPublished": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "isFeatured": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "order": {
+        "type": "Number",
+        "default": "0"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Migration": {
+    "fields": {
+      "version": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "name": {
+        "type": "String",
+        "required": true
+      },
+      "description": {
+        "type": "String",
+        "required": true
+      },
+      "appliedAt": {
+        "type": "Date",
+        "default": "Date.now"
+      },
+      "executedBy": {
+        "type": "String",
+        "required": true
+      },
+      "executionTime": {
+        "type": "Number",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "error": {
+        "type": "String"
+      },
+      "rollbackVersion": {
+        "type": "String"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Order": {
+    "fields": {
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "name": {
+        "type": "String",
+        "required": true
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "quantity": {
+        "type": "Number",
+        "required": true
+      },
+      "image": {
+        "type": "String",
+        "required": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "OrderCounter": {
+    "fields": {
+      "date": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "counter": {
+        "type": "Number",
+        "required": true,
+        "default": "0"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "PreOrder": {
+    "fields": {
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "productName": {
+        "type": "String",
+        "required": true
+      },
+      "productImage": {
+        "type": "String",
+        "required": true
+      },
+      "userId": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "Number",
+        "required": true,
+        "default": "1"
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "expectedReleaseDate": {
+        "type": "Date",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "confirmed",
+          "released",
+          "cancelled"
+        ]
+      },
+      "paymentStatus": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "paid",
+          "refunded"
+        ]
+      },
+      "orderId": {
+        "type": "String"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "PriceAlert": {
+    "fields": {
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "productName": {
+        "type": "String",
+        "required": true
+      },
+      "productImage": {
+        "type": "String",
+        "required": true
+      },
+      "userId": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "targetPrice": {
+        "type": "Number"
+      },
+      "currentPrice": {
+        "type": "Number",
+        "required": true
+      },
+      "notified": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "ProcessedImage": {
+    "fields": {
+      "productId": {
+        "type": "String"
+      },
+      "productTitle": {
+        "type": "String",
+        "required": true
+      },
+      "sourceImageUrl": {
+        "type": "String",
+        "required": true
+      },
+      "cloudinaryUrl": {
+        "type": "String",
+        "required": true
+      },
+      "geminiModel": {
+        "type": "String",
+        "default": "'gemini-banana'"
+      },
+      "geminiPrompt": {
+        "type": "String",
+        "default": "''"
+      },
+      "status": {
+        "type": "String",
+        "default": "'success'",
+        "enum": [
+          "success",
+          "failed"
+        ]
+      },
+      "errorMessage": {
+        "type": "String"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Product": {
+    "fields": {
+      "name": {
+        "type": "String"
+      },
+      "description": {
+        "type": "String"
+      },
+      "descriptionHtml": {
+        "type": "String",
+        "required": false
+      },
+      "price": {
+        "type": "Number"
+      },
+      "originalPrice": {
+        "type": "Number"
+      },
+      "image": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String",
+        "default": "'Accessories'",
+        "enum": [
+          "Men",
+          "Women",
+          "Office & Travel",
+          "Accessories",
+          "Gifting"
+        ]
+      },
+      "brand": {
+        "type": "String",
+        "required": false
+      },
+      "rating": {
+        "type": "Number",
+        "default": "0"
+      },
+      "reviewCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "inStock": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "stockCount": {
+        "type": "Number",
+        "required": false,
+        "default": "0"
+      },
+      "expectedReleaseDate": {
+        "type": "Date",
+        "required": false
+      },
+      "specifications": {
+        "type": "Map"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "etsyExported": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "etsyExportedAt": {
+        "type": "Date",
+        "default": "null"
+      },
+      "sourceUrl": {
+        "type": "String"
+      },
+      "productType": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String",
+        "default": "'draft'",
+        "enum": [
+          "draft",
+          "published",
+          "archived"
+        ]
+      },
+      "publishAt": {
+        "type": "Date",
+        "default": "null"
+      },
+      "title": {
+        "type": "String"
+      },
+      "sku": {
+        "type": "String"
+      },
+      "available": {
+        "type": "Boolean"
+      },
+      "inventory": {
+        "type": "Number",
+        "required": false
+      },
+      "policyReview": {
+        "type": "Date",
+        "default": "null"
+      },
+      "score": {
+        "type": "Number"
+      },
+      "complianceRate": {
+        "type": "Number"
+      },
+      "summary": {
+        "type": "Number"
+      },
+      "criticalIssues": {
+        "type": "Number"
+      },
+      "warnings": {
+        "type": "Number"
+      },
+      "recommendations": {
+        "type": "Number"
+      },
+      "isCompliant": {
+        "type": "Boolean"
+      },
+      "aiReview": {
+        "type": "Schema.Types.Mixed"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "ProductBundle": {
+    "fields": {
+      "name": {
+        "type": "String"
+      },
+      "description": {
+        "type": "String"
+      },
+      "bundlePrice": {
+        "type": "Number"
+      },
+      "originalTotalPrice": {
+        "type": "Number",
+        "required": true
+      },
+      "discountPercent": {
+        "type": "Number",
+        "default": "0"
+      },
+      "category": {
+        "type": "String",
+        "enum": [
+          "Men",
+          "Women",
+          "Office & Travel",
+          "Accessories",
+          "Gifting"
+        ]
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "stockCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "inStock": {
+        "type": "Boolean",
+        "default": "true"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "ProductQA": {
+    "fields": {
+      "questionId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "userId": {
+        "type": "String"
+      },
+      "userName": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "answer": {
+        "type": "String"
+      },
+      "helpfulCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "isAdminAnswer": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "ProductVersion": {
+    "fields": {
+      "productId": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "created",
+          "updated",
+          "unchanged"
+        ]
+      },
+      "externalId": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String",
+        "required": true
+      },
+      "before": {
+        "type": "Schema.Types.Mixed"
+      },
+      "after": {
+        "type": "Schema.Types.Mixed"
+      },
+      "fetchedAt": {
+        "type": "Date",
+        "required": true
+      }
+    },
+    "options": {},
+    "indexes": []
+  },
+  "PurchaseAnalytics": {
+    "fields": {
+      "date": {
+        "type": "Date",
+        "required": true
+      },
+      "totalRevenue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "totalOrders": {
+        "type": "Number",
+        "default": "0"
+      },
+      "averageOrderValue": {
+        "type": "Number",
+        "default": "0"
+      },
+      "totalItemsSold": {
+        "type": "Number",
+        "default": "0"
+      },
+      "uniqueCustomers": {
+        "type": "Number",
+        "default": "0"
+      },
+      "newCustomers": {
+        "type": "Number",
+        "default": "0"
+      },
+      "returningCustomers": {
+        "type": "Number",
+        "default": "0"
+      },
+      "conversionRate": {
+        "type": "Number",
+        "default": "0"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Referral": {
+    "fields": {
+      "referrerId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "refereeId": {
+        "type": "Schema.Types.ObjectId",
+        "required": true
+      },
+      "referralCode": {
+        "type": "String",
+        "required": true
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "completed",
+          "rewarded"
+        ]
+      },
+      "referrerRewardType": {
+        "type": "String",
+        "default": "'discount'",
+        "enum": [
+          "discount",
+          "credit",
+          "points"
+        ]
+      },
+      "referrerRewardValue": {
+        "type": "Number",
+        "required": true,
+        "default": "20"
+      },
+      "refereeRewardType": {
+        "type": "String",
+        "default": "'discount'",
+        "enum": [
+          "discount",
+          "credit",
+          "points"
+        ]
+      },
+      "refereeRewardValue": {
+        "type": "Number",
+        "required": true,
+        "default": "20"
+      },
+      "referrerRewardGranted": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "refereeRewardGranted": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "refereeFirstOrderId": {
+        "type": "Schema.Types.ObjectId"
+      },
+      "refereeFirstOrderAmount": {
+        "type": "Number"
+      },
+      "referrerRewardGrantedAt": {
+        "type": "Date"
+      },
+      "refereeRewardGrantedAt": {
+        "type": "Date"
+      },
+      "expiresAt": {
+        "type": "Date"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Review": {
+    "fields": {
+      "productId": {
+        "type": "String"
+      },
+      "userId": {
+        "type": "String"
+      },
+      "userName": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "rating": {
+        "type": "Number"
+      },
+      "title": {
+        "type": "String"
+      },
+      "comment": {
+        "type": "String"
+      },
+      "verifiedPurchase": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "helpfulCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "status": {
+        "type": "String",
+        "default": "'pending'",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "adminResponse": {
+        "type": "String"
+      },
+      "respondedBy": {
+        "type": "String"
+      },
+      "respondedAt": {
+        "type": "Date"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Role": {
+    "fields": {
+      "name": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "description": {
+        "type": "String",
+        "required": true
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "SavedPaymentMethod": {
+    "fields": {
+      "userId": {
+        "type": "String",
+        "required": true
+      },
+      "paymentMethodId": {
+        "type": "String",
+        "required": true,
+        "unique": true
+      },
+      "type": {
+        "type": "String",
+        "default": "'card'",
+        "enum": [
+          "card"
+        ]
+      },
+      "card": {
+        "type": "String",
+        "required": true
+      },
+      "last4": {
+        "type": "String",
+        "required": true
+      },
+      "expMonth": {
+        "type": "Number",
+        "required": true
+      },
+      "expYear": {
+        "type": "Number",
+        "required": true
+      },
+      "billingDetails": {},
+      "isDefault": {
+        "type": "Boolean",
+        "default": "false"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Scraped": {
+    "fields": {
+      "url": {
+        "type": "String",
+        "required": true
+      },
+      "title": {
+        "type": "String"
+      },
+      "html": {
+        "type": "String"
+      },
+      "meta": {
+        "type": "Schema.Types.Mixed"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "SearchEvent": {
+    "fields": {
+      "userId": {
+        "type": "String"
+      },
+      "sessionId": {
+        "type": "String"
+      },
+      "query": {
+        "type": "String",
+        "required": true
+      },
+      "resultsCount": {
+        "type": "Number",
+        "required": true
+      }
+    },
+    "options": {},
+    "indexes": []
+  },
+  "SeoKeyword": {
+    "fields": {
+      "query": {
+        "type": "String",
+        "required": true
+      },
+      "keyword": {
+        "type": "String",
+        "required": true
+      },
+      "searchVolume": {
+        "type": "Number"
+      },
+      "competition": {
+        "type": "String",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "difficulty": {
+        "type": "Number"
+      },
+      "source": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "serpapi"
+        ]
+      }
+    },
+    "options": {},
+    "indexes": []
+  },
+  "SeoProduct": {
+    "fields": {
+      "query": {
+        "type": "String",
+        "required": true
+      },
+      "source": {
+        "type": "String",
+        "required": true
+      },
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "price": {
+        "type": "Number"
+      },
+      "originalPrice": {
+        "type": "Number"
+      },
+      "currency": {
+        "type": "String"
+      },
+      "rating": {
+        "type": "Number"
+      },
+      "reviews": {
+        "type": "Number"
+      },
+      "thumbnail": {
+        "type": "String"
+      },
+      "productId": {
+        "type": "String"
+      },
+      "productApiUrl": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      },
+      "extractedAt": {
+        "type": "Date",
+        "default": "Date.now"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "SeoQuery": {
+    "fields": {
+      "query": {
+        "type": "String",
+        "required": true
+      },
+      "type": {
+        "type": "String",
+        "required": true,
+        "enum": [
+          "keywords",
+          "products"
+        ]
+      },
+      "resultsCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "metadata": {
+        "type": "Schema.Types.Mixed"
+      },
+      "rawResponse": {
+        "type": "Schema.Types.Mixed"
+      },
+      "createdBy": {
+        "type": "String"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "SourcedProduct": {
+    "fields": {
+      "title": {
+        "type": "String",
+        "required": true
+      },
+      "sourceUrl": {
+        "type": "String",
+        "required": true
+      },
+      "categoryGroup": {
+        "type": "String",
+        "required": true
+      },
+      "brand": {
+        "type": "String"
+      },
+      "price": {
+        "type": "Number"
+      },
+      "description": {
+        "type": "String"
+      },
+      "specs": {
+        "type": "Map"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "StockNotification": {
+    "fields": {
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "productName": {
+        "type": "String",
+        "required": true
+      },
+      "productImage": {
+        "type": "String",
+        "required": true
+      },
+      "userId": {
+        "type": "String"
+      },
+      "userEmail": {
+        "type": "String"
+      },
+      "notified": {
+        "type": "Boolean",
+        "default": "false"
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "Subscription": {
+    "fields": {
+      "userId": {
+        "type": "String",
+        "required": true
+      },
+      "productId": {
+        "type": "String",
+        "required": true
+      },
+      "productName": {
+        "type": "String",
+        "required": true
+      },
+      "productImage": {
+        "type": "String",
+        "required": true
+      },
+      "quantity": {
+        "type": "Number",
+        "required": true,
+        "default": "1"
+      },
+      "price": {
+        "type": "Number",
+        "required": true
+      },
+      "frequency": {
+        "type": "String",
+        "required": true,
+        "default": "'monthly'",
+        "enum": [
+          "weekly",
+          "biweekly",
+          "monthly",
+          "quarterly",
+          "yearly"
+        ]
+      },
+      "status": {
+        "type": "String",
+        "default": "'active'",
+        "enum": [
+          "active",
+          "paused",
+          "cancelled",
+          "expired"
+        ]
+      },
+      "nextDeliveryDate": {
+        "type": "Date",
+        "required": true
+      },
+      "startDate": {
+        "type": "Date",
+        "required": true,
+        "default": "Date.now"
+      },
+      "deliveryCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "totalDeliveries": {
+        "type": "Number"
+      },
+      "shippingAddress": {
+        "type": "AddressSchema",
+        "required": true
+      },
+      "paymentMethod": {
+        "type": "String",
+        "required": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "SupportTicket": {
+    "fields": {
+      "senderId": {
+        "type": "String",
+        "required": false
+      },
+      "senderName": {
+        "type": "String",
+        "required": true
+      },
+      "senderEmail": {
+        "type": "String",
+        "required": false
+      },
+      "senderType": {
+        "type": "String",
+        "required": true,
+        "default": "'customer'",
+        "enum": [
+          "customer",
+          "admin",
+          "system"
+        ]
+      },
+      "message": {
+        "type": "String",
+        "required": true
+      },
+      "filename": {
+        "type": "String",
+        "required": true
+      },
+      "url": {
+        "type": "String",
+        "required": true
+      },
+      "mimeType": {
+        "type": "String",
+        "required": true
+      },
+      "size": {
+        "type": "Number",
+        "required": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  },
+  "User": {
+    "fields": {
+      "name": {
+        "type": "String"
+      },
+      "email": {
+        "type": "String",
+        "unique": true
+      },
+      "password": {
+        "type": "String"
+      },
+      "phone": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      },
+      "lastName": {
+        "type": "String"
+      },
+      "address1": {
+        "type": "String"
+      },
+      "address2": {
+        "type": "String"
+      },
+      "city": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      },
+      "zipCode": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String",
+        "default": "'United States'"
+      },
+      "role": {
+        "type": "String",
+        "required": true
+      },
+      "isEmailVerified": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "settings": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "smsNotifications": {
+        "type": "Boolean",
+        "default": "false"
+      },
+      "lastLoginAt": {
+        "type": "Date"
+      },
+      "loginCount": {
+        "type": "Number",
+        "default": "0"
+      },
+      "isActive": {
+        "type": "Boolean",
+        "default": "true"
+      },
+      "lastLogin": {
+        "type": "Date"
+      },
+      "loginAttempts": {
+        "type": "Number",
+        "default": "0"
+      },
+      "lockUntil": {
+        "type": "Date"
+      },
+      "resetPasswordToken": {
+        "type": "String"
+      },
+      "resetPasswordExpires": {
+        "type": "Date"
+      },
+      "referralCode": {
+        "type": "String",
+        "unique": true
+      }
+    },
+    "options": {
+      "timestamps": true
+    },
+    "indexes": []
+  }
+}

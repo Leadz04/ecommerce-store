@@ -34,6 +34,7 @@ export interface IUser extends Document {
   lockUntil?: Date;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
+  referralCode?: string; // Unique referral code for this user
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -123,6 +124,14 @@ const UserSchema = new Schema<IUser>({
   resetPasswordExpires: {
     type: Date,
     select: false
+  },
+  referralCode: {
+    type: String,
+    unique: true,
+    sparse: true, // Allow null values but enforce uniqueness when present
+    uppercase: true,
+    trim: true,
+    index: true
   }
 }, {
   timestamps: true

@@ -6,14 +6,21 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical, GitCompare } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { useComparisonStore } from '@/store/comparisonStore';
+import { useRecentlyViewedStore } from '@/store/recentlyViewedStore';
 import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import BackButton from '@/components/BackButton';
+import ProductRecommendations from '@/components/ProductRecommendations';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import SalesCounter from '@/components/SalesCounter';
+import SocialShareButtons from '@/components/SocialShareButtons';
+import ProductQA from '@/components/ProductQA';
 import toast from 'react-hot-toast';
 import type { EmailPromoDetails } from '@/types';
 
@@ -192,6 +199,8 @@ export default function ProductPage() {
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
   const { toggleWishlist, isInWishlist } = useWishlistStore();
+  const { addProduct: addToComparison, isInComparison, getComparisonCount } = useComparisonStore();
+  const { addProduct: addToRecentlyViewed } = useRecentlyViewedStore();
   const { user } = useAuthStore();
   
   const isSuperAdmin = user?.role?.name === 'SUPER_ADMIN';
@@ -717,17 +726,21 @@ export default function ProductPage() {
     }
   };
 
-  // Log product view
+  // Log product view and track recently viewed
   useEffect(() => {
-    if (!productId) return;
+    if (!productId || !currentProduct) return;
     try {
+      // Analytics tracking
       fetch('/api/analytics/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'product_view', productId })
       });
+      
+      // Track recently viewed
+      addToRecentlyViewed(currentProduct);
     } catch {}
-  }, [productId]);
+  }, [productId, currentProduct, addToRecentlyViewed]);
 
   // Fetch related products only when current product is loaded and only fetch a limited set
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
@@ -1387,6 +1400,22 @@ export default function ProductPage() {
               {promoError && (
                 <p className="text-sm text-red-600 font-medium">{promoError}</p>
               )}
+              {/* Sales Counter - Shows items sold in last 24 hours */}
+              {!isEditMode && productId && (
+                <SalesCounter productId={productId} />
+              )}
+            </div>
+          )}
+
+          {/* Social Share Buttons */}
+          {!isEditMode && (
+            <div className="mt-4">
+              <SocialShareButtons
+                productName={product.name}
+                productUrl={`/products/${productId}`}
+                productImage={product.image}
+                productDescription={product.description}
+              />
             </div>
           )}
 
@@ -1764,8 +1793,36 @@ export default function ProductPage() {
                 }
               }}
               className="p-3 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
+              aria-label="Add to wishlist"
             >
               <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 '}`} />
+            </button>
+            <button
+              onClick={() => {
+                const productId = product._id as any;
+                const inComparison = isInComparison(productId);
+                
+                if (inComparison) {
+                  toast.info('Product already in comparison');
+                  return;
+                }
+                
+                if (getComparisonCount() >= 4) {
+                  toast.error('Maximum 4 products can be compared at once');
+                  return;
+                }
+                
+                addToComparison(product);
+                toast.success('Added to comparison');
+              }}
+              className={`p-3 border-2 rounded-lg transition-colors ${
+                isInComparison(product._id as any)
+                  ? 'border-blue-500 bg-blue-50 text-blue-600'
+                  : 'border-gray-300 hover:bg-gray-50 text-gray-600'
+              }`}
+              aria-label="Add to comparison"
+            >
+              <GitCompare className="h-6 w-6" />
             </button>
           </div>
 
@@ -2411,6 +2468,30 @@ export default function ProductPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Product Recommendations */}
+      {currentProduct && (
+        <>
+          <ProductRecommendations 
+            productId={productId} 
+            product={currentProduct}
+            type="you_may_like"
+          />
+          <ProductRecommendations 
+            productId={productId} 
+            product={currentProduct}
+            type="frequently_bought"
+          />
+        </>
+      )}
+
+      {/* Recently Viewed */}
+      <RecentlyViewed currentProductId={productId} />
+
+      {/* Product Questions & Answers */}
+      {currentProduct && (
+        <ProductQA productId={productId} />
       )}
 
       {/* Related Products */}

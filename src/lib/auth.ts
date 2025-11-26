@@ -50,6 +50,27 @@ export async function verifyToken(request: NextRequest): Promise<AuthUser> {
   };
 }
 
+// Helper function to verify JWT token (optional - returns null if no token)
+export async function verifyTokenOptional(request: NextRequest): Promise<AuthUser | null> {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '');
+  
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    return {
+      userId: decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+      permissions: decoded.permissions || []
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Middleware to check if user has specific permission
 export function requirePermission(permission: string) {
   return async (request: NextRequest): Promise<AuthUser> => {

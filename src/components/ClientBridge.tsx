@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import ClientWrapper from '@/components/ClientWrapper';
+import LiveChatWidget from '@/components/LiveChatWidget';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -16,7 +17,12 @@ export default function ClientBridge({ children }: { children: React.ReactNode }
     }
   }, [fetchWishlist, isAuthenticated]);
 
-  return <ClientWrapper>{children}</ClientWrapper>;
+  return (
+    <ClientWrapper>
+      {children}
+      <LiveChatWidget />
+    </ClientWrapper>
+  );
 }
 
 

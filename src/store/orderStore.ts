@@ -46,6 +46,7 @@ interface OrderStore {
     paymentIntentId?: string;
   }) => Promise<Order>;
   updateOrder: (id: string, updates: Partial<Order>) => Promise<void>;
+  cancelOrder: (id: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -66,10 +67,6 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
     
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token');
-      }
-
       const searchParams = new URLSearchParams();
       searchParams.set('page', (params.page || 1).toString());
       searchParams.set('limit', (params.limit || 10).toString());
@@ -86,11 +83,21 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         searchParams.set('dateRange', params.dateRange);
       }
 
+      // For guest orders, add email or orderNumber
+      if (!token && (params as any).email) {
+        searchParams.set('email', (params as any).email);
+      } else if (!token && (params as any).orderNumber) {
+        searchParams.set('orderNumber', (params as any).orderNumber);
+      }
+
       console.log('[OrderStore] Fetching orders:', searchParams.toString());
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`/api/orders?${searchParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
       });
 
       const data = await response.json();
@@ -155,17 +162,20 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
     
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token');
+      
+      // Build headers - include token if available (for authenticated users)
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      console.log('[OrderStore] Creating order');
+      console.log('[OrderStore] Creating order', token ? '(authenticated)' : '(guest)');
       const response = await fetch(`/api/orders`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify(orderData),
       });
 
@@ -235,6 +245,50 @@ export const useOrderStore = create<OrderStore>((set, get) => ({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to update order'
       });
+    }
+  },
+
+  cancelOrder: async (id: string) => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      console.log('[OrderStore] Cancelling order:', id);
+      const response = await fetch(`/api/orders/${id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cancel order');
+      }
+
+      // Update the order in the store
+      set((state) => ({
+        orders: state.orders.map(order => 
+          order._id === id ? { ...order, status: 'cancelled' } : order
+        ),
+        currentOrder: state.currentOrder?._id === id 
+          ? { ...state.currentOrder, status: 'cancelled' } 
+          : state.currentOrder,
+        isLoading: false,
+        error: null
+      }));
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to cancel order'
+      });
+      throw error;
     }
   },
 

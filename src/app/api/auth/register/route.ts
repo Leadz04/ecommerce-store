@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import Role from '@/models/Role';
+import Referral from '@/models/Referral';
 import jwt from 'jsonwebtoken';
 import { sendEmail, generateWelcomeEmailHTML, ADMIN_EMAIL } from '@/lib/email';
 
@@ -12,8 +13,8 @@ export async function POST(request: NextRequest) {
     await connectDB();
     console.log('[API /auth/register] Database connected');
     
-    const { name, email, password, phone } = await request.json();
-    console.log('[API /auth/register] Attempting registration for email:', email);
+    const { name, email, password, phone, referralCode } = await request.json();
+    console.log('[API /auth/register] Attempting registration for email:', email, 'referralCode:', referralCode);
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -71,6 +72,41 @@ export async function POST(request: NextRequest) {
     console.log('[API /auth/register] Saving new user...');
     await user.save();
     console.log('✅ [API /auth/register] User saved successfully');
+
+    // Handle referral code if provided
+    let referralRecord = null;
+    if (referralCode) {
+      try {
+        const normalizedCode = referralCode.trim().toUpperCase();
+        const referrer = await User.findOne({ referralCode: normalizedCode });
+        
+        if (referrer && referrer._id.toString() !== user._id.toString()) {
+          // Create referral record
+          referralRecord = new Referral({
+            referrerId: referrer._id,
+            refereeId: user._id,
+            referralCode: normalizedCode,
+            status: 'pending',
+            referrerRewardType: 'discount',
+            referrerRewardValue: 20, // $20 off
+            refereeRewardType: 'discount',
+            refereeRewardValue: 20, // $20 off
+            referrerRewardGranted: false,
+            refereeRewardGranted: false
+          });
+          await referralRecord.save();
+          console.log('✅ [API /auth/register] Referral record created');
+          
+          // Grant referee discount immediately (they get $20 off on first purchase)
+          // This will be handled when they make their first order
+        } else {
+          console.log('⚠️ [API /auth/register] Invalid referral code or self-referral');
+        }
+      } catch (refError) {
+        console.error('❌ [API /auth/register] Error processing referral:', refError);
+        // Don't fail registration if referral processing fails
+      }
+    }
 
     // Send welcome email to customer
     try {

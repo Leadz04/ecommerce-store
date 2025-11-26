@@ -27,7 +27,8 @@ export interface IAddress {
 
 export interface IOrder extends Document {
   _id: string;
-  userId: string;
+  userId?: string; // Optional for guest checkout
+  guestEmail?: string; // Email for guest orders
   orderNumber: string;
   items: IOrderItem[];
   subtotal: number;
@@ -42,6 +43,8 @@ export interface IOrder extends Document {
   paymentIntentId?: string;
   trackingNumber?: string;
   notes?: string;
+  deliveryInstructions?: string;
+  estimatedDeliveryDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -126,8 +129,15 @@ const AddressSchema = new Schema<IAddress>({
 const OrderSchema = new Schema<IOrder>({
   userId: {
     type: String,
-    required: true,
+    required: false, // Optional for guest checkout
     index: true
+  },
+  guestEmail: {
+    type: String,
+    required: false,
+    index: true,
+    lowercase: true,
+    trim: true
   },
   orderNumber: {
     type: String,
@@ -179,7 +189,9 @@ const OrderSchema = new Schema<IOrder>({
   },
   paymentIntentId: String,
   trackingNumber: String,
-  notes: String
+  notes: String,
+  deliveryInstructions: String,
+  estimatedDeliveryDate: Date
 }, {
   timestamps: true
 });
@@ -194,6 +206,7 @@ OrderSchema.pre('save', function(next) {
 
 // Index for efficient queries
 OrderSchema.index({ userId: 1, createdAt: -1 });
+OrderSchema.index({ guestEmail: 1, createdAt: -1 }); // For guest order lookup
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ paymentStatus: 1 });
 

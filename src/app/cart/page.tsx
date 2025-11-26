@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, Trash2, Edit, Plus, Minus } from 'lucide-react';
+import { ShoppingCart, Trash2, Edit, Plus, Minus, Truck } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import BackButton from '@/components/BackButton';
 import { useStockValidation } from '@/hooks/useStockValidation';
+import { calculateEstimatedDeliveryDate, formatDeliveryDate, getDeliveryDateRange } from '@/lib/delivery-date';
 import toast from 'react-hot-toast';
 
 export default function CartPage() {
@@ -18,6 +19,67 @@ export default function CartPage() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Track cart abandonment
+  useEffect(() => {
+    if (!isMounted || items.length === 0) return;
+
+    const trackAbandonment = async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        // Get user email from auth store if available
+        const { useAuthStore } = await import('@/store/authStore');
+        const authState = useAuthStore.getState();
+        const userEmail = authState.user?.email;
+
+        // Generate session ID if not authenticated
+        let sessionId = typeof window !== 'undefined' ? sessionStorage.getItem('sessionId') : null;
+        if (!sessionId && typeof window !== 'undefined') {
+          sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          sessionStorage.setItem('sessionId', sessionId);
+        }
+
+        const cartItems = items.map(item => ({
+          productId: (item.product._id || item.product.id) as string,
+          productName: item.product.name,
+          quantity: item.quantity,
+          price: item.product.emailPromo?.discountedPrice || item.product.price,
+          image: item.product.image,
+          size: item.size,
+          color: item.color,
+        }));
+
+        const subtotal = getTotalPrice();
+        const shipping = subtotal > 100 ? 0 : 9.99;
+        const tax = subtotal * 0.08;
+        const total = subtotal + shipping + tax;
+
+        await fetch('/api/cart/abandonment', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items: cartItems,
+            subtotal,
+            total,
+            userEmail,
+            sessionId,
+          }),
+        });
+      } catch (error) {
+        // Silently fail - don't interrupt user experience
+        console.error('Error tracking cart abandonment:', error);
+      }
+    };
+
+    // Track after a short delay to avoid tracking on every render
+    const timeoutId = setTimeout(trackAbandonment, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [items, isMounted, getTotalPrice]);
 
   useEffect(() => {
     const adjustments = enforceStockLimits();
@@ -266,6 +328,29 @@ export default function CartPage() {
                     <div className="border-t border-gray-200 pt-4 flex justify-between">
                       <span className="text-lg font-bold text-gray-900">Total</span>
                       <span className="text-lg font-bold text-gray-900">${total.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Estimated Delivery Date */}
+                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <Truck className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Estimated Delivery</p>
+                        <p className="text-sm text-gray-700">
+                          {(() => {
+                            const deliveryRange = getDeliveryDateRange({
+                              shippingMethod: 'standard',
+                              processingDays: 1,
+                              businessDaysOnly: true,
+                            });
+                            return deliveryRange.formatted;
+                          })()}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Standard shipping • Business days only
+                        </p>
+                      </div>
                     </div>
                   </div>
 
