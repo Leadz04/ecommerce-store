@@ -3,6 +3,13 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { verifyToken } from '@/lib/auth';
 
+// Ensure this route runs on the Node.js runtime (needed for child_process and CJS require)
+export const runtime = 'nodejs';
+
+// Ensure Vercel's bundler includes @google/genai in this function's bundle
+// so the spawned script can require it at runtime.
+import '@google/genai';
+
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyToken(request);
