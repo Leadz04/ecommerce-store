@@ -7,6 +7,7 @@ require('dotenv').config({ path: '.env.local' });
 // Connect to MongoDB
 const connectDB = async () => {
   try {
+    // Note: Mongoose connection options might be required depending on your setup.
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB');
   } catch (error) {
@@ -180,7 +181,7 @@ async function optimizeTitle(product) {
     if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash-lite'; // <-- CHANGED HERE
+      const model = 'gemini-2.5-flash-lite'; // Current Model
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -244,7 +245,7 @@ async function optimizeTags(product) {
     if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash-lite'; // <-- CHANGED HERE
+      const model = 'gemini-2.5-flash-lite'; // Current Model
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -491,13 +492,15 @@ async function optimizeProducts() {
   } catch (error) {
     console.error('❌ Error during optimization:', error);
   } finally {
+    // This will now execute after optimizeProducts() finishes all work
     await mongoose.connection.close();
     console.log('\n🔌 Database connection closed');
   }
 }
 
 // Run the optimization
-connectDB().then(() => {
-  optimizeProducts();
+connectDB().then(async () => {
+  // ⚡ FIX: Await the async optimization function to prevent early script exit and connection closure.
+  await optimizeProducts();
 });
     
