@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+Const mongoose = require('mongoose');
 // Note: If @google/genai is ES module only and require fails, use dynamic import:
 // const { GoogleGenAI } = await import('@google/genai');
 const { GoogleGenAI } = require('@google/genai');
@@ -180,7 +180,7 @@ async function optimizeTitle(product) {
     if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-pro';
+      const model = 'gemini-2.5-flash-lite'; // <-- CHANGED HERE
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -244,7 +244,7 @@ async function optimizeTags(product) {
     if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-pro';
+      const model = 'gemini-2.5-flash-lite'; // <-- CHANGED HERE
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -500,3 +500,4 @@ async function optimizeProducts() {
 connectDB().then(() => {
   optimizeProducts();
 });
+    
