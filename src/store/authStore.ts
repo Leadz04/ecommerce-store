@@ -38,11 +38,13 @@ export const useAuthStore = create<AuthStore>()(
           const data = await response.json();
 
           if (!response.ok) {
-            // Only log error in development mode
+            const errorMessage = data.error || 'Login failed';
+            // Use console.warn for expected authentication errors (not console.error)
             if (process.env.NODE_ENV === 'development') {
-              console.error('[AuthStore] Login failed:', data.error);
+              console.warn('[AuthStore] Login failed:', errorMessage);
             }
-            throw new Error(data.error || 'Login failed');
+            // Throw error for UI to handle
+            throw new Error(errorMessage);
           }
 
           console.log('[AuthStore] Login successful for:', data.user.email);

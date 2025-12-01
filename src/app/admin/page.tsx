@@ -57,7 +57,12 @@ import {
   ChevronLeft,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  MessageSquare,
+  MessageCircle,
+  Send,
+  User,
+  X
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -75,7 +80,7 @@ import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
-const allowedTabs = ['users', 'roles', 'products', 'policy-review', 'orders', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking'] as const;
+const allowedTabs = ['users', 'roles', 'products', 'policy-review', 'orders', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking', 'support', 'chat'] as const;
 type TabKey = typeof allowedTabs[number];
 type SidebarTab = {
   id: TabKey;
@@ -274,7 +279,7 @@ export default function AdminDashboard() {
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking' | 'support'>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState('');
@@ -610,6 +615,33 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Support Tickets state
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportSearchTerm, setSupportSearchTerm] = useState('');
+  const [supportStatusFilter, setSupportStatusFilter] = useState('all');
+  const [supportCategoryFilter, setSupportCategoryFilter] = useState('all');
+  const [supportPriorityFilter, setSupportPriorityFilter] = useState('all');
+  const [supportAssignedFilter, setSupportAssignedFilter] = useState('all');
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [viewingTicket, setViewingTicket] = useState<any | null>(null);
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [updatingTicket, setUpdatingTicket] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  
+  // Chat management state
+  const [chatConversations, setChatConversations] = useState<any[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatStatusFilter, setChatStatusFilter] = useState('all');
+  const [chatAssignedFilter, setChatAssignedFilter] = useState('all');
+  const [chatSearchTerm, setChatSearchTerm] = useState('');
+  const [viewingConversation, setViewingConversation] = useState<any | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatMessage, setChatMessage] = useState('');
+  const [sendingChatMessage, setSendingChatMessage] = useState(false);
+  
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
@@ -622,7 +654,7 @@ export default function AdminDashboard() {
   const [selectedIsActive, setSelectedIsActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [productSortBy, setProductSortBy] = useState<string>('createdAt');
   const [productSortOrder, setProductSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | null>(null);
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -1226,6 +1258,8 @@ export default function AdminDashboard() {
     { id: 'products', label: 'Products', icon: Package },
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    { id: 'support', label: 'Support Tickets', icon: MessageSquare },
+    { id: 'chat', label: 'Live Chat', icon: MessageCircle, description: 'Manage customer chat conversations' },
     {
       id: 'marketing',
       label: 'Growth & Insights',
@@ -1377,6 +1411,49 @@ export default function AdminDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated]);
+
+  // Fetch support tickets when support tab is active
+  useEffect(() => {
+    if (activeTab === 'support' && isAuthenticated) {
+      fetchSupportTickets();
+      fetchAdminUsers();
+    }
+    if (activeTab === 'chat' && isAuthenticated) {
+      fetchChatConversations();
+      fetchAdminUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated, supportStatusFilter, supportCategoryFilter, supportPriorityFilter, supportAssignedFilter, chatStatusFilter, chatAssignedFilter]);
+
+  // Auto-refresh messages when viewing a conversation
+  useEffect(() => {
+    if (!viewingConversation) return;
+
+    const interval = setInterval(() => {
+      const refreshMessages = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`/api/admin/chat/conversations/${viewingConversation.conversationId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setChatMessages(data.messages || []);
+            setViewingConversation(data.conversation);
+            // Also refresh conversation list to update unread counts
+            fetchChatConversations();
+          }
+        } catch (error) {
+          console.error('Error refreshing messages:', error);
+        }
+      };
+      refreshMessages();
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [viewingConversation]);
 
 
   useEffect(() => {
@@ -2048,6 +2125,284 @@ export default function AdminDashboard() {
       toast.error('Failed to fetch orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch support tickets
+  const fetchSupportTickets = async () => {
+    try {
+      setSupportLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (supportStatusFilter !== 'all') params.set('status', supportStatusFilter);
+      if (supportCategoryFilter !== 'all') params.set('category', supportCategoryFilter);
+      if (supportPriorityFilter !== 'all') params.set('priority', supportPriorityFilter);
+      if (supportAssignedFilter !== 'all') params.set('assignedTo', supportAssignedFilter);
+      if (supportSearchTerm) params.set('search', supportSearchTerm);
+
+      const response = await fetch(`/api/support/tickets?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch support tickets');
+      }
+
+      const data = await response.json();
+      setSupportTickets(data.tickets || []);
+    } catch (error) {
+      console.error('Error fetching support tickets:', error);
+      toast.error('Failed to fetch support tickets');
+    } finally {
+      setSupportLoading(false);
+    }
+  };
+
+  // Fetch admin users for assignment
+  const fetchAdminUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Filter users with admin permissions
+        const admins = (data.users || []).filter((u: any) => 
+          u.role?.name === 'SUPER_ADMIN' || 
+          u.permissions?.some((p: string) => p.includes('ORDER_VIEW_ALL'))
+        );
+        setAdminUsers(admins);
+      }
+    } catch (error) {
+      console.error('Error fetching admin users:', error);
+    }
+  };
+
+  // Update ticket (status, priority, assignment)
+  const handleUpdateTicket = async (ticketId: string, updates: any) => {
+    try {
+      setUpdatingTicket(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/support/tickets/${ticketId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update ticket');
+      }
+
+      toast.success('Ticket updated successfully');
+      fetchSupportTickets();
+      if (viewingTicket && viewingTicket._id === ticketId) {
+        const data = await response.json();
+        setViewingTicket(data.ticket);
+      }
+    } catch (error) {
+      console.error('Error updating ticket:', error);
+      toast.error('Failed to update ticket');
+    } finally {
+      setUpdatingTicket(false);
+    }
+  };
+
+  // Send message as admin
+  const handleSendTicketMessage = async (ticketId: string) => {
+    if (!ticketMessage.trim()) {
+      toast.error('Message cannot be empty');
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/support/tickets/${ticketId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: ticketMessage }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      toast.success('Message sent successfully');
+      setTicketMessage('');
+      fetchSupportTickets();
+      if (viewingTicket && viewingTicket._id === ticketId) {
+        const data = await response.json();
+        setViewingTicket(data.ticket);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Fetch ticket details
+  const handleViewTicket = async (ticket: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/support/tickets/${ticket._id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setViewingTicket(data.ticket);
+      } else {
+        throw new Error('Failed to fetch ticket details');
+      }
+    } catch (error) {
+      console.error('Error fetching ticket:', error);
+      toast.error('Failed to load ticket details');
+    }
+  };
+
+  // Chat management functions
+  const fetchChatConversations = async () => {
+    try {
+      setChatLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (chatStatusFilter !== 'all') params.set('status', chatStatusFilter);
+      if (chatAssignedFilter !== 'all') params.set('assignedTo', chatAssignedFilter);
+      if (chatSearchTerm) params.set('searchTerm', chatSearchTerm);
+
+      const response = await fetch(`/api/admin/chat/conversations?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch chat conversations');
+      }
+
+      const data = await response.json();
+      setChatConversations(data.conversations || []);
+    } catch (error) {
+      console.error('Error fetching chat conversations:', error);
+      toast.error('Failed to fetch chat conversations');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleViewConversation = async (conversation: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/chat/conversations/${conversation.conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setViewingConversation(data.conversation);
+        setChatMessages(data.messages || []);
+        updateQuery({ conversationId: conversation.conversationId });
+      } else {
+        throw new Error('Failed to fetch conversation details');
+      }
+    } catch (error) {
+      console.error('Error fetching conversation:', error);
+      toast.error('Failed to load conversation details');
+    }
+  };
+
+  const handleSendChatMessage = async (conversationId: string) => {
+    if (!chatMessage.trim()) {
+      toast.error('Message cannot be empty');
+      return;
+    }
+
+    try {
+      setSendingChatMessage(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: chatMessage,
+          conversationId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const data = await response.json();
+      setChatMessage('');
+      // Refresh messages to get the latest
+      if (viewingConversation) {
+        const refreshResponse = await fetch(`/api/admin/chat/conversations/${conversationId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setChatMessages(refreshData.messages || []);
+        }
+      }
+      fetchChatConversations();
+      toast.success('Message sent successfully');
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      toast.error('Failed to send message');
+    } finally {
+      setSendingChatMessage(false);
+    }
+  };
+
+  const handleUpdateConversation = async (conversationId: string, updates: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/chat/conversations/${conversationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update conversation');
+      }
+
+      toast.success('Conversation updated successfully');
+      fetchChatConversations();
+      if (viewingConversation && viewingConversation.conversationId === conversationId) {
+        const data = await response.json();
+        setViewingConversation(data.conversation);
+      }
+    } catch (error) {
+      console.error('Error updating conversation:', error);
+      toast.error('Failed to update conversation');
     }
   };
 
@@ -8326,6 +8681,287 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+              {/* Support Tickets Tab */}
+              {activeTab === 'support' && (
+                <div className="space-y-6">
+                  {/* Statistics Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-600">Total Tickets</p>
+                          <p className="text-2xl font-bold text-blue-900 mt-1">{supportTickets.length}</p>
+                        </div>
+                        <MessageSquare className="h-8 w-8 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-yellow-600">Open</p>
+                          <p className="text-2xl font-bold text-yellow-900 mt-1">
+                            {supportTickets.filter(t => t.status === 'open').length}
+                          </p>
+                        </div>
+                        <AlertCircle className="h-8 w-8 text-yellow-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-orange-600">In Progress</p>
+                          <p className="text-2xl font-bold text-orange-900 mt-1">
+                            {supportTickets.filter(t => t.status === 'in_progress').length}
+                          </p>
+                        </div>
+                        <Clock className="h-8 w-8 text-orange-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-600">Urgent</p>
+                          <p className="text-2xl font-bold text-red-900 mt-1">
+                            {supportTickets.filter(t => t.priority === 'urgent').length}
+                          </p>
+                        </div>
+                        <AlertTriangle className="h-8 w-8 text-red-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Content */}
+                  <div className="bg-white rounded-lg shadow-sm border">
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">Support Tickets</h2>
+                          <p className="text-sm text-gray-600 mt-1">Manage and respond to customer support requests</p>
+                        </div>
+                        <button
+                          onClick={fetchSupportTickets}
+                          className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+
+                      {/* Search and Filters */}
+                      <div className="space-y-4">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                          <input
+                            type="text"
+                            placeholder="Search by ticket number, subject, or message content..."
+                            value={supportSearchTerm}
+                            onChange={(e) => setSupportSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && fetchSupportTickets()}
+                            className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder:text-gray-400"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <SelectField
+                            options={[
+                              { value: 'all', label: 'All Statuses' },
+                              { value: 'open', label: 'Open' },
+                              { value: 'in_progress', label: 'In Progress' },
+                              { value: 'waiting_customer', label: 'Waiting Customer' },
+                              { value: 'resolved', label: 'Resolved' },
+                              { value: 'closed', label: 'Closed' },
+                            ]}
+                            value={supportStatusFilter}
+                            isOpen={openSelect === 'supportStatus'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'supportStatus' : null)}
+                            onSelect={(value) => setSupportStatusFilter(value)}
+                            placeholder="All Statuses"
+                            className="w-full"
+                          />
+                          <SelectField
+                            options={[
+                              { value: 'all', label: 'All Categories' },
+                              { value: 'order', label: 'Order' },
+                              { value: 'product', label: 'Product' },
+                              { value: 'payment', label: 'Payment' },
+                              { value: 'shipping', label: 'Shipping' },
+                              { value: 'technical', label: 'Technical' },
+                              { value: 'other', label: 'Other' },
+                            ]}
+                            value={supportCategoryFilter}
+                            isOpen={openSelect === 'supportCategory'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'supportCategory' : null)}
+                            onSelect={(value) => setSupportCategoryFilter(value)}
+                            placeholder="All Categories"
+                            className="w-full"
+                          />
+                          <SelectField
+                            options={[
+                              { value: 'all', label: 'All Priorities' },
+                              { value: 'low', label: 'Low' },
+                              { value: 'medium', label: 'Medium' },
+                              { value: 'high', label: 'High' },
+                              { value: 'urgent', label: 'Urgent' },
+                            ]}
+                            value={supportPriorityFilter}
+                            isOpen={openSelect === 'supportPriority'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'supportPriority' : null)}
+                            onSelect={(value) => setSupportPriorityFilter(value)}
+                            placeholder="All Priorities"
+                            className="w-full"
+                          />
+                          <button
+                            onClick={fetchSupportTickets}
+                            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                          >
+                            Apply Filters
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      {supportLoading ? (
+                        <TableSkeleton rows={8} columns={8} />
+                      ) : supportTickets.length === 0 ? (
+                        <div className="p-16 text-center">
+                          <MessageSquare className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2">No tickets found</h3>
+                          <p className="text-gray-600">No support tickets match your current filters.</p>
+                        </div>
+                      ) : (
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                            <tr>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Ticket</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Subject</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Priority</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Assigned</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
+                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {supportTickets.map((ticket) => (
+                              <tr 
+                                key={ticket._id} 
+                                className="hover:bg-blue-50/50 cursor-pointer transition-colors border-l-4 border-transparent hover:border-blue-500"
+                                onClick={() => handleViewTicket(ticket)}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4 text-gray-400" />
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">{ticket.ticketNumber}</div>
+                                      <div className="text-xs text-gray-500">{ticket.messages?.length || 0} message{ticket.messages?.length !== 1 ? 's' : ''}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-semibold">
+                                      {(ticket.guestEmail || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-900">{ticket.guestEmail || 'Guest User'}</div>
+                                      {ticket.userId ? (
+                                        <div className="text-xs text-blue-600 flex items-center gap-1">
+                                          <User className="h-3 w-3" />
+                                          Registered
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-gray-500">Guest</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm font-medium text-gray-900 max-w-xs truncate" title={ticket.subject}>
+                                    {ticket.subject}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 capitalize border border-blue-200">
+                                    {ticket.category}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                                    ticket.priority === 'urgent' ? 'bg-red-100 text-red-800 border border-red-200' :
+                                    ticket.priority === 'high' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
+                                    ticket.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                                    'bg-gray-100 text-gray-800 border border-gray-200'
+                                  }`}>
+                                    {ticket.priority === 'urgent' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                                    {ticket.priority.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <select
+                                    value={ticket.status}
+                                    onChange={(e) => handleUpdateTicket(ticket._id, { status: e.target.value })}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 focus:ring-2 focus:ring-blue-500 cursor-pointer transition-all ${
+                                      ticket.status === 'open' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
+                                      ticket.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' :
+                                      ticket.status === 'waiting_customer' ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' :
+                                      ticket.status === 'resolved' ? 'bg-green-100 text-green-800 hover:bg-green-200' :
+                                      'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="waiting_customer">Waiting Customer</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <select
+                                    value={ticket.assignedTo || 'unassigned'}
+                                    onChange={(e) => handleUpdateTicket(ticket._id, { assignedTo: e.target.value === 'unassigned' ? null : e.target.value })}
+                                    className="text-xs px-3 py-1.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="unassigned">Unassigned</option>
+                                    {adminUsers.map(admin => (
+                                      <option key={admin._id} value={admin._id}>{admin.name || admin.email}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 font-medium">
+                                    {new Date(ticket.createdAt).toLocaleDateString()}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewTicket(ticket);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    title="View ticket details"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Orders Tab */}
               {activeTab === 'orders' && (
                 <div className="bg-white rounded-lg shadow-sm border">
@@ -8579,6 +9215,693 @@ export default function AdminDashboard() {
                 onDeleteOrder={handleDeleteOrder}
                 onDownloadInvoice={handleDownloadInvoice}
               />
+
+              {/* Support Ticket Detail Modal */}
+              {viewingTicket && (
+                <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={() => setViewingTicket(null)}></div>
+                    <div className="relative inline-block align-bottom bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full border-0">
+                      {/* Enhanced Header with Better Colors */}
+                      <div className="relative bg-gradient-to-br from-indigo-600 via-blue-600 to-purple-600 px-8 py-6 overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
+                        <div className="relative flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-lg">
+                                <MessageSquare className="h-7 w-7 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-2xl font-bold text-white mb-1">{viewingTicket.ticketNumber}</h3>
+                                <p className="text-base text-blue-50 font-medium">{viewingTicket.subject}</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-4">
+                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
+                                viewingTicket.status === 'open' ? 'bg-blue-500 text-white border-2 border-blue-400' :
+                                viewingTicket.status === 'in_progress' ? 'bg-amber-500 text-white border-2 border-amber-400' :
+                                viewingTicket.status === 'waiting_customer' ? 'bg-orange-500 text-white border-2 border-orange-400' :
+                                viewingTicket.status === 'resolved' ? 'bg-emerald-500 text-white border-2 border-emerald-400' :
+                                'bg-slate-500 text-white border-2 border-slate-400'
+                              }`}>
+                                {viewingTicket.status === 'open' && <AlertCircle className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.status === 'in_progress' && <Clock className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.status === 'waiting_customer' && <Clock className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.status === 'resolved' && <CheckCircle className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.status === 'closed' && <XCircle className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.status.replace('_', ' ').toUpperCase()}
+                              </span>
+                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
+                                viewingTicket.priority === 'urgent' ? 'bg-red-600 text-white border-2 border-red-400 animate-pulse' :
+                                viewingTicket.priority === 'high' ? 'bg-orange-500 text-white border-2 border-orange-400' :
+                                viewingTicket.priority === 'medium' ? 'bg-yellow-500 text-white border-2 border-yellow-400' :
+                                'bg-slate-400 text-white border-2 border-slate-300'
+                              }`}>
+                                {viewingTicket.priority === 'urgent' && <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.priority === 'high' && <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />}
+                                {viewingTicket.priority.toUpperCase()}
+                              </span>
+                              <span className="inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold bg-white/25 text-white capitalize backdrop-blur-sm border border-white/30">
+                                {viewingTicket.category}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setViewingTicket(null)}
+                            className="ml-4 text-white/90 hover:text-white transition-all p-2.5 hover:bg-white/20 rounded-xl backdrop-blur-sm"
+                          >
+                            <X className="h-6 w-6" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-gray-50 to-white">
+                        {/* Enhanced Customer Info & Quick Actions */}
+                        <div className="px-8 py-6">
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            {/* Customer Card */}
+                            <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-md border-2 border-gray-100">
+                              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Customer Information</label>
+                              <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-purple-500 flex items-center justify-center text-white text-xl font-bold shadow-lg border-4 border-white">
+                                  {(viewingTicket.guestEmail || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-base font-bold text-gray-900 mb-1">{viewingTicket.guestEmail || 'Guest User'}</p>
+                                  {viewingTicket.userId ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                                        <User className="h-3 w-3 mr-1.5" />
+                                        Registered User
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                                      Guest User
+                                    </span>
+                                  )}
+                                  {viewingTicket.createdAt && (
+                                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Created {new Date(viewingTicket.createdAt).toLocaleDateString()} at {new Date(viewingTicket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quick Actions Card */}
+                            <div className="bg-white rounded-xl p-5 shadow-md border-2 border-gray-100">
+                              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Quick Actions</label>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Status</label>
+                                  <SelectField
+                                    options={[
+                                      { value: 'open', label: 'Open' },
+                                      { value: 'in_progress', label: 'In Progress' },
+                                      { value: 'waiting_customer', label: 'Waiting Customer' },
+                                      { value: 'resolved', label: 'Resolved' },
+                                      { value: 'closed', label: 'Closed' },
+                                    ]}
+                                    value={viewingTicket.status}
+                                    isOpen={openSelect === 'ticketStatus'}
+                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketStatus' : null)}
+                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { status: value })}
+                                    placeholder="Select status"
+                                    className="w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Priority</label>
+                                  <SelectField
+                                    options={[
+                                      { value: 'low', label: 'Low' },
+                                      { value: 'medium', label: 'Medium' },
+                                      { value: 'high', label: 'High' },
+                                      { value: 'urgent', label: 'Urgent' },
+                                    ]}
+                                    value={viewingTicket.priority}
+                                    isOpen={openSelect === 'ticketPriority'}
+                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketPriority' : null)}
+                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { priority: value })}
+                                    placeholder="Select priority"
+                                    className="w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Assign To</label>
+                                  <SelectField
+                                    options={[
+                                      { value: 'unassigned', label: 'Unassigned' },
+                                      ...adminUsers.map(admin => ({ 
+                                        value: admin._id, 
+                                        label: admin.name || admin.email 
+                                      })),
+                                    ]}
+                                    value={viewingTicket.assignedTo || 'unassigned'}
+                                    isOpen={openSelect === 'ticketAssigned'}
+                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketAssigned' : null)}
+                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { assignedTo: value === 'unassigned' ? null : value })}
+                                    placeholder="Select admin"
+                                    className="w-full"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Enhanced Messages Section */}
+                          <div className="bg-white rounded-xl p-6 shadow-md border-2 border-gray-100 mb-6">
+                            <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-gray-100">
+                              <h4 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                                  <MessageSquare className="h-5 w-5 text-white" />
+                                </div>
+                                Conversation Thread
+                              </h4>
+                              <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
+                                {viewingTicket.messages?.length || 0} message{viewingTicket.messages?.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="space-y-5 max-h-[450px] overflow-y-auto pr-3 custom-scrollbar">
+                              {viewingTicket.messages?.map((msg: any, idx: number) => (
+                                <div
+                                  key={msg._id}
+                                  className={`flex gap-4 ${msg.senderType === 'admin' ? 'flex-row-reverse' : ''}`}
+                                >
+                                  <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border-2 ${
+                                    msg.senderType === 'admin' 
+                                      ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-blue-400' 
+                                      : 'bg-gradient-to-br from-gray-400 to-gray-500 border-gray-300'
+                                  }`}>
+                                    {msg.senderType === 'admin' ? (
+                                      <Shield className="h-6 w-6 text-white" />
+                                    ) : (
+                                      <User className="h-6 w-6 text-white" />
+                                    )}
+                                  </div>
+                                  <div className={`flex-1 ${msg.senderType === 'admin' ? 'text-right' : ''}`}>
+                                    <div className={`inline-block max-w-[80%] ${
+                                      msg.senderType === 'admin' ? 'text-right' : 'text-left'
+                                    }`}>
+                                      <div className={`flex items-center gap-2 mb-2 ${msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                                        <span className="text-sm font-bold text-gray-800">{msg.senderName}</span>
+                                        {msg.senderType === 'admin' && (
+                                          <span className="text-xs px-2.5 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-bold shadow-sm">
+                                            ADMIN
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-gray-400 font-medium">
+                                          {new Date(msg.createdAt).toLocaleDateString()} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      <div className={`p-4 rounded-2xl shadow-md ${
+                                        msg.senderType === 'admin'
+                                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200'
+                                          : 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200'
+                                      }`}>
+                                        <p className={`text-sm whitespace-pre-wrap leading-relaxed ${
+                                          msg.senderType === 'admin' ? 'text-gray-800' : 'text-gray-700'
+                                        }`}>{msg.message}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Enhanced Reply Form */}
+                          {viewingTicket.status !== 'closed' && (
+                            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200 shadow-lg">
+                              <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                                  <Send className="h-4 w-4 text-white" />
+                                </div>
+                                Reply as Admin
+                              </label>
+                              <textarea
+                                value={ticketMessage}
+                                onChange={(e) => setTicketMessage(e.target.value)}
+                                rows={6}
+                                className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y mb-4 bg-white shadow-sm transition-all text-sm text-gray-900 placeholder:text-gray-400"
+                                placeholder="Type your response to the customer..."
+                                maxLength={5000}
+                              />
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-600 font-semibold">
+                                  {ticketMessage.length}/5000 characters
+                                </p>
+                                <button
+                                  onClick={() => handleSendTicketMessage(viewingTicket._id)}
+                                  disabled={sendingMessage || !ticketMessage.trim()}
+                                  className="px-8 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 disabled:transform-none"
+                                >
+                                  {sendingMessage ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      <span>Sending...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="h-5 w-5" />
+                                      <span>Send Reply</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {viewingTicket.status === 'closed' && (
+                            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-8 border-2 border-gray-200 text-center shadow-md">
+                              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                                <XCircle className="h-8 w-8 text-gray-500" />
+                              </div>
+                              <p className="text-base font-bold text-gray-700 mb-2">This ticket is closed</p>
+                              <p className="text-sm text-gray-600">Reopen the ticket to send a reply to the customer.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Management */}
+              {activeTab === 'chat' && (
+                <div className="space-y-6">
+                  {/* Statistics Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-600">Total Conversations</p>
+                          <p className="text-2xl font-bold text-blue-900 mt-1">
+                            {chatConversations.length}
+                          </p>
+                        </div>
+                        <MessageCircle className="h-8 w-8 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-green-600">Active</p>
+                          <p className="text-2xl font-bold text-green-900 mt-1">
+                            {chatConversations.filter(c => c.status === 'active').length}
+                          </p>
+                        </div>
+                        <CheckCircle className="h-8 w-8 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-orange-600">Waiting</p>
+                          <p className="text-2xl font-bold text-orange-900 mt-1">
+                            {chatConversations.filter(c => c.status === 'waiting').length}
+                          </p>
+                        </div>
+                        <Clock className="h-8 w-8 text-orange-500" />
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-600">Unread Messages</p>
+                          <p className="text-2xl font-bold text-red-900 mt-1">
+                            {chatConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+                          </p>
+                        </div>
+                        <AlertCircle className="h-8 w-8 text-red-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Content */}
+                  <div className="bg-white rounded-lg shadow-sm border">
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">Live Chat Conversations</h2>
+                          <p className="text-sm text-gray-600 mt-1">Manage and respond to customer chat conversations</p>
+                        </div>
+                        <button
+                          onClick={fetchChatConversations}
+                          className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+
+                      {/* Search and Filters */}
+                      <div className="space-y-4">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                          <input
+                            type="text"
+                            placeholder="Search by conversation ID or email..."
+                            value={chatSearchTerm}
+                            onChange={(e) => setChatSearchTerm(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && fetchChatConversations()}
+                            className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder:text-gray-400"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <SelectField
+                            options={[
+                              { value: 'all', label: 'All Statuses' },
+                              { value: 'active', label: 'Active' },
+                              { value: 'waiting', label: 'Waiting' },
+                              { value: 'closed', label: 'Closed' },
+                            ]}
+                            value={chatStatusFilter}
+                            isOpen={openSelect === 'chatStatus'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'chatStatus' : null)}
+                            onSelect={(value) => setChatStatusFilter(value)}
+                            placeholder="All Statuses"
+                            className="w-full"
+                          />
+                          <SelectField
+                            options={[
+                              { value: 'all', label: 'All Assignments' },
+                              { value: 'unassigned', label: 'Unassigned' },
+                              ...adminUsers.map(admin => ({
+                                value: admin._id,
+                                label: admin.name || admin.email
+                              })),
+                            ]}
+                            value={chatAssignedFilter}
+                            isOpen={openSelect === 'chatAssigned'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'chatAssigned' : null)}
+                            onSelect={(value) => setChatAssignedFilter(value)}
+                            placeholder="All Assignments"
+                            className="w-full"
+                          />
+                          <button
+                            onClick={fetchChatConversations}
+                            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                          >
+                            Apply Filters
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Conversations Table */}
+                    <div className="overflow-x-auto">
+                      {chatLoading ? (
+                        <TableSkeleton />
+                      ) : chatConversations.length === 0 ? (
+                        <div className="text-center py-12">
+                          <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-600">No conversations found</p>
+                        </div>
+                      ) : (
+                        <table className="w-full">
+                          <thead className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+                            <tr>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Customer</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Last Message</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Assigned To</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Unread</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {chatConversations.map((conv) => (
+                              <tr
+                                key={conv._id}
+                                onClick={() => handleViewConversation(conv)}
+                                className="hover:bg-blue-50 cursor-pointer transition-colors border-l-4 border-transparent hover:border-blue-500"
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
+                                      {(conv.guestEmail || conv.userId || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-900">{conv.guestEmail || 'User'}</p>
+                                      <p className="text-xs text-gray-500">{conv.conversationId}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  {conv.lastMessage ? (
+                                    <div>
+                                      <p className="text-sm text-gray-900 truncate max-w-xs">{conv.lastMessage.message}</p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {new Date(conv.lastMessageAt).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">No messages</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                    conv.status === 'active' ? 'bg-green-100 text-green-800' :
+                                    conv.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {conv.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {conv.assignedTo ? (
+                                    adminUsers.find(u => u._id === conv.assignedTo)?.name || 'Unknown'
+                                  ) : (
+                                    <span className="text-gray-400">Unassigned</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {conv.unreadCount > 0 ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                                      {conv.unreadCount}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewConversation(conv);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-900"
+                                    title="View conversation"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Conversation Detail Modal */}
+              {viewingConversation && (
+                <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={() => {
+                      setViewingConversation(null);
+                      updateQuery({ conversationId: undefined });
+                    }}></div>
+                    <div className="relative inline-block align-bottom bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full border-0">
+                      {/* Header */}
+                      <div className="relative bg-gradient-to-br from-indigo-600 via-blue-600 to-purple-600 px-8 py-6 overflow-hidden">
+                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
+                        <div className="relative flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-lg">
+                                <MessageCircle className="h-7 w-7 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-2xl font-bold text-white mb-1">Chat Conversation</h3>
+                                <p className="text-base text-blue-50 font-medium">
+                                  {viewingConversation.userInfo?.name || viewingConversation.guestEmail || 'User'}
+                                </p>
+                                {(viewingConversation.userInfo?.email || viewingConversation.guestEmail) && (
+                                  <p className="text-sm text-blue-100 mt-1">
+                                    {viewingConversation.userInfo?.email || viewingConversation.guestEmail}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-4">
+                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
+                                viewingConversation.status === 'active' ? 'bg-green-500 text-white border-2 border-green-400' :
+                                viewingConversation.status === 'waiting' ? 'bg-yellow-500 text-white border-2 border-yellow-400' :
+                                'bg-gray-500 text-white border-2 border-gray-400'
+                              }`}>
+                                {viewingConversation.status.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setViewingConversation(null);
+                              updateQuery({ conversationId: undefined });
+                            }}
+                            className="ml-4 text-white/90 hover:text-white transition-all p-2.5 hover:bg-white/20 rounded-xl backdrop-blur-sm"
+                          >
+                            <X className="h-6 w-6" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-gray-50 to-white">
+                        <div className="px-8 py-6">
+                          {/* Customer Info Card */}
+                          <div className="bg-white rounded-xl p-5 shadow-md border-2 border-gray-100 mb-6">
+                            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Customer Information</label>
+                            <div className="flex items-center gap-4">
+                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-purple-500 flex items-center justify-center text-white text-xl font-bold shadow-lg border-4 border-white">
+                                {(viewingConversation.userInfo?.name || viewingConversation.guestEmail || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-base font-bold text-gray-900 mb-1">
+                                  {viewingConversation.userInfo?.name || 'Guest User'}
+                                </p>
+                                <p className="text-sm text-gray-600 mb-1">
+                                  {viewingConversation.userInfo?.email || viewingConversation.guestEmail || 'No email'}
+                                </p>
+                                {viewingConversation.userInfo?.phone && (
+                                  <p className="text-sm text-gray-600">{viewingConversation.userInfo.phone}</p>
+                                )}
+                                {viewingConversation.userId ? (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 mt-2">
+                                    <User className="h-3 w-3 mr-1.5" />
+                                    Registered User
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 mt-2">
+                                    Guest User
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Messages */}
+                          <div className="bg-white rounded-xl p-6 shadow-md border-2 border-gray-100 mb-6">
+                            <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-gray-100">
+                              <h4 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                                  <MessageCircle className="h-5 w-5 text-white" />
+                                </div>
+                                Messages
+                              </h4>
+                              <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
+                                {chatMessages.length} message{chatMessages.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="space-y-5 max-h-[450px] overflow-y-auto pr-3">
+                              {chatMessages.map((msg: any) => (
+                                <div
+                                  key={msg._id}
+                                  className={`flex gap-4 ${msg.senderType === 'admin' ? 'flex-row-reverse' : ''}`}
+                                >
+                                  <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border-2 ${
+                                    msg.senderType === 'admin' 
+                                      ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-blue-400' 
+                                      : 'bg-gradient-to-br from-gray-400 to-gray-500 border-gray-300'
+                                  }`}>
+                                    {msg.senderType === 'admin' ? (
+                                      <Shield className="h-6 w-6 text-white" />
+                                    ) : (
+                                      <User className="h-6 w-6 text-white" />
+                                    )}
+                                  </div>
+                                  <div className={`flex-1 ${msg.senderType === 'admin' ? 'text-right' : ''}`}>
+                                    <div className={`inline-block max-w-[80%] ${
+                                      msg.senderType === 'admin' ? 'text-right' : 'text-left'
+                                    }`}>
+                                      <div className={`flex items-center gap-2 mb-2 ${msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                                        <span className="text-sm font-bold text-gray-800">{msg.senderName}</span>
+                                        {msg.senderType === 'admin' && (
+                                          <span className="text-xs px-2.5 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-bold shadow-sm">
+                                            ADMIN
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-gray-400 font-medium">
+                                          {new Date(msg.createdAt).toLocaleDateString()} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      <div className={`p-4 rounded-2xl shadow-md ${
+                                        msg.senderType === 'admin'
+                                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200'
+                                          : 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200'
+                                      }`}>
+                                        <p className={`text-sm whitespace-pre-wrap leading-relaxed ${
+                                          msg.senderType === 'admin' ? 'text-gray-800' : 'text-gray-700'
+                                        }`}>{msg.message}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Reply Form */}
+                          {viewingConversation.status !== 'closed' && (
+                            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200 shadow-lg">
+                              <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                                  <Send className="h-4 w-4 text-white" />
+                                </div>
+                                Reply as Admin
+                              </label>
+                              <textarea
+                                value={chatMessage}
+                                onChange={(e) => setChatMessage(e.target.value)}
+                                rows={6}
+                                className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y mb-4 bg-white shadow-sm transition-all text-sm text-gray-900 placeholder:text-gray-400"
+                                placeholder="Type your response to the customer..."
+                                maxLength={2000}
+                              />
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-600 font-semibold">
+                                  {chatMessage.length}/2000 characters
+                                </p>
+                                <button
+                                  onClick={() => handleSendChatMessage(viewingConversation.conversationId)}
+                                  disabled={sendingChatMessage || !chatMessage.trim()}
+                                  className="px-8 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 disabled:transform-none"
+                                >
+                                  {sendingChatMessage ? (
+                                    <>
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      <span>Sending...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="h-5 w-5" />
+                                      <span>Send Reply</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Product Email Marketing Modal */}
               {showEmailMarketing && (

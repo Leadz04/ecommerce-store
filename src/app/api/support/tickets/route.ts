@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import SupportTicket from '@/models/SupportTicket';
-import { verifyTokenOptional } from '@/lib/auth';
+import { verifyTokenOptional, requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 import { Types } from 'mongoose';
 
-// GET /api/support/tickets - Get user's support tickets
+// GET /api/support/tickets - Get user's support tickets (or all tickets if admin)
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -14,25 +15,51 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const category = searchParams.get('category');
+    const priority = searchParams.get('priority');
+    const assignedTo = searchParams.get('assignedTo');
+    const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
+    // Check if user is admin
+    let isAdmin = false;
+    if (userId) {
+      try {
+        await requirePermission(PERMISSIONS.ORDER_VIEW_ALL)(request);
+        isAdmin = true;
+      } catch {
+        // Not admin
+      }
+    }
+
     // Build query
     const query: any = {};
     
-    if (userId) {
-      query.userId = userId;
-    } else {
-      // For guest users, require email
-      const guestEmail = searchParams.get('guestEmail');
-      if (!guestEmail) {
-        return NextResponse.json(
-          { error: 'Authentication or guest email required' },
-          { status: 401 }
-        );
+    if (isAdmin) {
+      // Admin can see all tickets, optionally filter by assignedTo
+      if (assignedTo && assignedTo !== 'all') {
+        if (assignedTo === 'unassigned') {
+          query.assignedTo = { $exists: false };
+        } else {
+          query.assignedTo = assignedTo;
+        }
       }
-      query.guestEmail = guestEmail.toLowerCase();
+    } else {
+      // Regular users can only see their own tickets
+      if (userId) {
+        query.userId = userId;
+      } else {
+        // For guest users, require email
+        const guestEmail = searchParams.get('guestEmail');
+        if (!guestEmail) {
+          return NextResponse.json(
+            { error: 'Authentication or guest email required' },
+            { status: 401 }
+          );
+        }
+        query.guestEmail = guestEmail.toLowerCase();
+      }
     }
 
     if (status && status !== 'all') {
@@ -41,6 +68,19 @@ export async function GET(request: NextRequest) {
 
     if (category && category !== 'all') {
       query.category = category;
+    }
+
+    if (priority && priority !== 'all') {
+      query.priority = priority;
+    }
+
+    // Search functionality (for admin)
+    if (search && search.trim()) {
+      query.$or = [
+        { ticketNumber: { $regex: search, $options: 'i' } },
+        { subject: { $regex: search, $options: 'i' } },
+        { 'messages.message': { $regex: search, $options: 'i' } },
+      ];
     }
 
     const tickets = await SupportTicket.find(query)
@@ -59,6 +99,7 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      isAdmin,
     });
   } catch (error) {
     console.error('Error fetching support tickets:', error);

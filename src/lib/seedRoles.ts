@@ -108,6 +108,36 @@ export async function seedRoles() {
       if (usersWithoutRoles.length > 0) {
         console.log(`✅ Updated ${usersWithoutRoles.length} users with CUSTOMER role`);
       }
+
+      // Create demo user (john@example.com) if it doesn't exist
+      const existingDemoUser = await User.findOne({ email: 'john@example.com' });
+      if (!existingDemoUser) {
+        const demoUser = new User({
+          name: 'John Doe',
+          email: 'john@example.com',
+          password: 'password123', // This will be hashed by the pre-save hook
+          role: customerRole._id,
+          permissions: ROLE_PERMISSIONS.CUSTOMER,
+          isEmailVerified: true,
+          isActive: true,
+          settings: {
+            emailNotifications: true,
+            smsNotifications: false,
+            theme: 'system',
+            language: 'en'
+          }
+        });
+
+        await demoUser.save();
+        console.log('✅ Demo user created (john@example.com / password123)');
+      } else {
+        // Ensure demo user has CUSTOMER role
+        existingDemoUser.role = customerRole._id;
+        existingDemoUser.permissions = ROLE_PERMISSIONS.CUSTOMER;
+        existingDemoUser.isActive = true;
+        await existingDemoUser.save();
+        console.log('✅ Demo user updated with CUSTOMER role');
+      }
     }
 
     console.log('🎉 Roles and permissions seeding completed!');

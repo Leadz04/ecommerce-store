@@ -30,16 +30,51 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Verify authorization
-    if (userId && finalConversationId !== userId) {
-      // Check if admin
+    // Verify authorization - allow users to access their own conversations
+    // Convert both to strings for comparison to handle ObjectId vs string mismatches
+    if (userId && String(finalConversationId) !== String(userId)) {
+      // Check if admin (admins can access any conversation)
       try {
         await requirePermission(PERMISSIONS.ORDER_VIEW_ALL)(request);
       } catch {
         return NextResponse.json(
-          { error: 'Unauthorized' },
+          { error: 'Unauthorized: You can only access your own conversations' },
           { status: 403 }
         );
+      }
+    }
+
+    // For authenticated users, ensure conversation exists in database
+    if (userId && String(finalConversationId) === String(userId)) {
+      let conversation = await ChatConversation.findOne({ conversationId: finalConversationId });
+      
+      if (!conversation) {
+        // Get user info for conversation creation
+        const { User } = await import('@/models');
+        const user = await User.findById(userId).select('email').lean();
+        
+        // Create conversation for logged-in user if it doesn't exist
+        conversation = await ChatConversation.create({
+          conversationId: finalConversationId,
+          userId: userId,
+          guestEmail: user?.email?.toLowerCase(), // Store email for admin reference
+          status: 'active',
+          lastMessageAt: new Date(),
+          messageCount: 0,
+        });
+        console.log(`✅ Created chat conversation for user: ${userId}`);
+      } else {
+        // Update conversation status to active if it was closed
+        if (conversation.status === 'closed') {
+          conversation.status = 'active';
+          await conversation.save();
+        }
+        
+        // Ensure userId is set (in case conversation was created as guest first)
+        if (!conversation.userId && userId) {
+          conversation.userId = userId;
+          await conversation.save();
+        }
       }
     }
 

@@ -18,6 +18,7 @@ export default function AdminToolsPage() {
   const [cleanSpecsDryRun, setCleanSpecsDryRun] = useState(true);
   const [cleanSpecsLimit, setCleanSpecsLimit] = useState(1000);
   const [cleanSpecsResult, setCleanSpecsResult] = useState<any>(null);
+  const [removeBrandResult, setRemoveBrandResult] = useState<any>(null);
   const [optimizeGeminiLoading, setOptimizeGeminiLoading] = useState(false);
   const [optimizeGeminiLogs, setOptimizeGeminiLogs] = useState<string[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -225,6 +226,36 @@ export default function AdminToolsPage() {
       toast.error(e instanceof Error ? e.message : 'Clean specs failed');
       setLoading(null);
       setProgress(prev => ({ ...prev, 'Clean Specs': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleRemoveBrandName = async () => {
+    try {
+      setLoading('Remove Brand Name');
+      setRemoveBrandResult(null);
+      setProgress(prev => ({ ...prev, 'Remove Brand Name': { current: 0, total: 0, status: 'Starting...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/remove-brand-name', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Remove brand name failed');
+
+      setRemoveBrandResult(data);
+      setProgress(prev => ({ ...prev, 'Remove Brand Name': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+
+      const summary = data.summary || {};
+      toast.success(data.message || `Successfully removed "Everstylecrafts" from ${summary.updatedProducts || 0} products`);
+    } catch (e) {
+      console.error('Error removing brand name:', e);
+      toast.error(e instanceof Error ? e.message : 'Remove brand name failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Remove Brand Name': { current: 0, total: 0, status: '' } }));
     }
   };
 
@@ -607,6 +638,88 @@ export default function AdminToolsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Remove Brand Name Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-red-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Remove Brand Name from Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Remove <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">Everstylecrafts</code> from product titles and tags across all products in the database.
+          </p>
+          
+          <button
+            onClick={handleRemoveBrandName}
+            disabled={loading === 'Remove Brand Name'}
+            className="w-full px-4 py-3 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Remove Brand Name' ? 'Removing…' : 'Remove Brand Name from All Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Remove Brand Name' && progress['Remove Brand Name'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Remove Brand Name'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-red-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Remove Brand Name'].total > 0 
+                      ? `${(progress['Remove Brand Name'].current / progress['Remove Brand Name'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {removeBrandResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products:</span>
+                  <span className="font-medium">{removeBrandResult.summary?.totalProducts || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Updated:</span>
+                  <span className="font-medium text-blue-600">{removeBrandResult.summary?.updatedProducts || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Names Updated:</span>
+                  <span className="font-medium text-green-600">{removeBrandResult.summary?.namesUpdated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tags Updated:</span>
+                  <span className="font-medium text-purple-600">{removeBrandResult.summary?.tagsUpdated || 0}</span>
+                </div>
+                {removeBrandResult.updatedProducts && removeBrandResult.updatedProducts.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-2">Sample of updated products (first 10):</p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {removeBrandResult.updatedProducts.slice(0, 10).map((product: any, idx: number) => (
+                        <div key={idx} className="text-xs bg-white p-2 rounded border border-gray-200">
+                          <p className="font-medium text-gray-900">{product.productName}</p>
+                          {product.changes && product.changes.length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {product.changes.slice(0, 2).map((change: string, changeIdx: number) => (
+                                <p key={changeIdx} className="text-gray-600 text-xs">{change}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

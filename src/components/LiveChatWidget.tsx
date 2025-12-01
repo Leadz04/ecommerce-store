@@ -25,22 +25,87 @@ export default function LiveChatWidget() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const conversationIdRef = useRef<string | null>(null); // Track conversationId for polling
+  const isOpenRef = useRef<boolean>(false); // Track isOpen state for polling
+
+  // Update refs whenever state changes
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   useEffect(() => {
-    if (isOpen && !conversationId) {
-      // Initialize conversation ID
-      const id = isAuthenticated && user ? user.userId : `guest_${Date.now()}`;
-      setConversationId(id);
-      fetchMessages(id);
-      startPolling(id);
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Initialize conversation ID based on authentication status
+      let id: string | null = null;
+      
+      if (isAuthenticated && user) {
+        // For authenticated users, always use their user ID
+        id = user.id || user._id || null;
+        if (!id) {
+          console.warn('[LiveChatWidget] User is authenticated but has no ID');
+        } else {
+          // Clear any guest conversation ID from localStorage when user logs in
+          if (localStorage.getItem('chatConversationId')) {
+            localStorage.removeItem('chatConversationId');
+          }
+          
+          // Initialize/create conversation for logged-in user
+          // This will be done by the API when fetching messages
+          console.log('[LiveChatWidget] Initializing chat for authenticated user:', id);
+        }
+      } else {
+        // For guests, use localStorage to persist conversation ID
+        const storedId = localStorage.getItem('chatConversationId');
+        if (storedId) {
+          id = storedId;
+        } else {
+          // Generate new guest ID based on email if available, otherwise timestamp
+          id = user?.email ? `guest_${user.email.toLowerCase()}` : `guest_${Date.now()}`;
+          localStorage.setItem('chatConversationId', id);
+        }
+      }
+      
+      // Update conversationId if it changed (e.g., user just logged in)
+      if (id && id !== conversationId) {
+        setConversationId(id);
+      }
+      
+      // Fetch messages immediately when chat opens
+      // For authenticated users, this will also create the conversation if needed
+      if (id) {
+        fetchMessages(id);
+      }
+    } else {
+      // Stop polling when chat is closed
+      stopPolling();
     }
 
+    // Cleanup function - stop polling when component unmounts or chat closes
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      stopPolling();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isAuthenticated, user]);
+
+  // Start/restart polling when conversationId changes and chat is open
+  useEffect(() => {
+    if (isOpen && conversationId) {
+      stopPolling(); // Stop any existing polling
+      startPolling(); // Start new polling with current conversationId
+      
+      // Also fetch messages immediately
+      fetchMessages(conversationId);
+      
+      return () => {
+        stopPolling();
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, isOpen]);
 
   useEffect(() => {
     if (isOpen && messages.length > 0) {
@@ -48,39 +113,103 @@ export default function LiveChatWidget() {
     }
   }, [messages, isOpen]);
 
+  // Reset conversation when authentication state changes
+  useEffect(() => {
+    if (!isAuthenticated && conversationId && !conversationId.startsWith('guest_')) {
+      // User logged out - clear conversation
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [isAuthenticated, conversationId]);
+
   const fetchMessages = async (convId: string) => {
     setIsLoading(true);
     try {
+      // Always get token - it should be available if user is logged in
       const token = localStorage.getItem('token');
       const headers: HeadersInit = {};
+      
+      // Always include token if available (for authenticated users)
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
       const params = new URLSearchParams({ conversationId: convId });
-      if (!isAuthenticated && user?.email) {
+      
+      // For authenticated users, ensure we're using their ID
+      if (isAuthenticated && user && (user.id || user._id)) {
+        const userId = user.id || user._id;
+        // If conversationId doesn't match user ID, use user ID instead
+        if (convId !== userId) {
+          params.set('conversationId', userId);
+        }
+      } else if (!isAuthenticated && user?.email) {
+        // For guests, include email
         params.set('guestEmail', user.email);
       }
 
       const response = await fetch(`/api/chat?${params.toString()}`, { headers });
+      
+      if (!response.ok) {
+        // If 403 and user is authenticated, they might be trying to access wrong conversation
+        if (response.status === 403 && isAuthenticated) {
+          console.warn('[LiveChatWidget] Unauthorized access to conversation. Resetting conversation ID.');
+          // Reset to user's ID
+          if (user && (user.id || user._id)) {
+            const userId = user.id || user._id;
+            setConversationId(userId);
+            return; // Will retry with correct ID on next poll
+          }
+        }
+        const data = await response.json().catch(() => ({}));
+        console.error('[LiveChatWidget] Failed to fetch messages:', data.error || 'Unknown error');
+        return;
+      }
+      
       const data = await response.json();
-      if (response.ok) {
+      if (data.messages) {
         setMessages(data.messages || []);
       }
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error('[LiveChatWidget] Error fetching messages:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const startPolling = (convId: string) => {
+  // Helper functions for polling
+  const stopPolling = () => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const startPolling = () => {
+    // Clear any existing polling first
+    stopPolling();
+
+    // Only start polling if chat is open and we have a conversationId
+    if (!isOpenRef.current || !conversationIdRef.current) {
+      return;
     }
 
-    pollIntervalRef.current = setInterval(() => {
-      fetchMessages(convId);
+    pollIntervalRef.current = setInterval(async () => {
+      // Always use the ref values to get the latest state
+      const currentConvId = conversationIdRef.current;
+      const chatIsOpen = isOpenRef.current;
+      
+      if (currentConvId && chatIsOpen) {
+        try {
+          await fetchMessages(currentConvId);
+        } catch (error) {
+          console.error('[LiveChatWidget] Error in polling:', error);
+          // Don't stop polling on error, just log it
+        }
+      } else {
+        // Stop polling if conversationId is gone or chat is closed
+        stopPolling();
+      }
     }, 3000); // Poll every 3 seconds
   };
 
@@ -90,21 +219,45 @@ export default function LiveChatWidget() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !conversationId) return;
+    
+    // Ensure we have a valid conversationId
+    let convId = conversationId;
+    if (!convId) {
+      if (isAuthenticated && user && (user.id || user._id)) {
+        convId = user.id || user._id;
+        setConversationId(convId);
+      } else {
+        toast.error('Unable to start conversation. Please refresh the page.');
+        return;
+      }
+    }
+
+    if (!newMessage.trim() || !convId) return;
 
     setIsSending(true);
     try {
+      // Always get token - it should be available if user is logged in
       const token = localStorage.getItem('token');
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
+      // Always include token if available (for authenticated users)
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      // For authenticated users, ensure we use their user ID
+      if (isAuthenticated && user && (user.id || user._id)) {
+        const userId = user.id || user._id;
+        if (convId !== userId) {
+          convId = userId;
+          setConversationId(convId);
+        }
+      }
+
       const payload: any = {
         message: newMessage,
-        conversationId,
+        conversationId: convId,
       };
 
       if (!isAuthenticated && user?.email) {
@@ -120,6 +273,13 @@ export default function LiveChatWidget() {
 
       const data = await response.json();
       if (!response.ok) {
+        // Handle 403 errors - might need to reset conversationId
+        if (response.status === 403 && isAuthenticated && user && (user.id || user._id)) {
+          const userId = user.id || user._id;
+          setConversationId(userId);
+          toast.error('Conversation reset. Please try sending again.');
+          return;
+        }
         throw new Error(data.error || 'Failed to send message');
       }
 
@@ -127,8 +287,8 @@ export default function LiveChatWidget() {
       setMessages((prev) => [...prev, data.message]);
       scrollToBottom();
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      console.error('[LiveChatWidget] Error sending message:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send message');
     } finally {
       setIsSending(false);
     }
@@ -189,7 +349,7 @@ export default function LiveChatWidget() {
               messages.map((msg) => (
                 <div
                   key={msg._id}
-                  className={`flex ${msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
                 >
                   <div
                     className={`max-w-[80%] p-3 rounded-lg ${
@@ -198,7 +358,9 @@ export default function LiveChatWidget() {
                         : 'bg-white text-gray-900 border border-gray-200'
                     }`}
                   >
-                    <p className="text-xs font-semibold mb-1 opacity-80">{msg.senderName}</p>
+                    <p className="text-xs font-semibold mb-1 opacity-80">
+                      {msg.senderType === 'admin' ? 'Support Team' : msg.senderName}
+                    </p>
                     <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                     <p className="text-xs opacity-70 mt-1">
                       {new Date(msg.createdAt).toLocaleTimeString()}
@@ -218,7 +380,7 @@ export default function LiveChatWidget() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-400"
                 disabled={isSending}
                 maxLength={2000}
               />
