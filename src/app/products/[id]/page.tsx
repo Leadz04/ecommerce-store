@@ -6,11 +6,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical, GitCompare } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
-import { useComparisonStore } from '@/store/comparisonStore';
 import { useRecentlyViewedStore } from '@/store/recentlyViewedStore';
 import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
@@ -21,6 +20,8 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import SalesCounter from '@/components/SalesCounter';
 import SocialShareButtons from '@/components/SocialShareButtons';
 import ProductQA from '@/components/ProductQA';
+import ProductFAQ from '@/components/ProductFAQ';
+import { requestDeduplicator } from '@/lib/requestDeduplication';
 import toast from 'react-hot-toast';
 import type { EmailPromoDetails } from '@/types';
 
@@ -199,7 +200,6 @@ export default function ProductPage() {
   const { addItem } = useCartStore();
   const { currentProduct, isLoading, error, fetchProduct, fetchProducts, products } = useProductStore();
   const { toggleWishlist, isInWishlist } = useWishlistStore();
-  const { addProduct: addToComparison, isInComparison, getComparisonCount } = useComparisonStore();
   const { addProduct: addToRecentlyViewed } = useRecentlyViewedStore();
   const { user } = useAuthStore();
   
@@ -730,12 +730,18 @@ export default function ProductPage() {
   useEffect(() => {
     if (!productId || !currentProduct) return;
     try {
-      // Analytics tracking
-      fetch('/api/analytics/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'product_view', productId })
-      });
+      // Analytics tracking - use deduplication to prevent duplicate calls
+      requestDeduplicator.deduplicate(
+        `analytics-product-view-${productId}`,
+        async () => {
+          const res = await fetch('/api/analytics/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'product_view', productId })
+          });
+          return res.clone();
+        }
+      ).catch(() => {}); // Silently fail analytics
       
       // Track recently viewed
       addToRecentlyViewed(currentProduct);
@@ -1797,36 +1803,9 @@ export default function ProductPage() {
             >
               <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 '}`} />
             </button>
-            <button
-              onClick={() => {
-                const productId = product._id as any;
-                const inComparison = isInComparison(productId);
-                
-                if (inComparison) {
-                  toast.info('Product already in comparison');
-                  return;
-                }
-                
-                if (getComparisonCount() >= 4) {
-                  toast.error('Maximum 4 products can be compared at once');
-                  return;
-                }
-                
-                addToComparison(product);
-                toast.success('Added to comparison');
-              }}
-              className={`p-3 border-2 rounded-lg transition-colors ${
-                isInComparison(product._id as any)
-                  ? 'border-blue-500 bg-blue-50 text-blue-600'
-                  : 'border-gray-300 hover:bg-gray-50 text-gray-600'
-              }`}
-              aria-label="Add to comparison"
-            >
-              <GitCompare className="h-6 w-6" />
-            </button>
           </div>
 
-          {/* Features */}
+          {/* Trust Badges - High Priority: Build confidence near CTA */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-gray-200 ">
             <div className="flex items-center space-x-2">
               <Truck className="h-5 w-5 text-blue-600 " />
@@ -1844,7 +1823,7 @@ export default function ProductPage() {
         </div>
       </div>
 
-      {/* Product Specifications */}
+      {/* Product Specifications - Technical details for informed decisions */}
       {(!cleanSpecs || Object.keys(cleanSpecs).length === 0) && isSuperAdmin && (
         <div className="mt-24 mb-16">
           <div className="text-center mb-6 sm:mb-8 px-4">
@@ -2486,16 +2465,25 @@ export default function ProductPage() {
         </>
       )}
 
-      {/* Recently Viewed */}
-      <RecentlyViewed currentProductId={productId} />
+      {/* Product FAQ Section (SerpAPI) - High Priority: Answer common questions early */}
+      {currentProduct && (
+        <ProductFAQ 
+          productName={currentProduct.name}
+          productDescription={currentProduct.description}
+          productId={productId}
+          initialFAQs={currentProduct.generatedFAQs}
+          initialRelatedSearches={currentProduct.relatedSearches}
+          initialPeopleAlsoSearchFor={currentProduct.peopleAlsoSearchFor}
+        />
+      )}
 
-      {/* Product Questions & Answers */}
+      {/* Product Questions & Answers - After FAQs for deeper engagement */}
       {currentProduct && (
         <ProductQA productId={productId} />
       )}
 
-      {/* Related Products */}
-                  <div className="mt-16">
+      {/* Related Products - Cross-sell opportunity */}
+      <div className="mt-16">
               <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
                 Related <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Products</span>
               </h2>
@@ -2555,8 +2543,8 @@ export default function ProductPage() {
              </div>
       </div>
 
-      {/* Product Tags Section */}
-      {currentProduct.tags && currentProduct.tags.length > 0 && (
+      {/* Product Tags Section - Super Admin Only */}
+      {isSuperAdmin && currentProduct.tags && currentProduct.tags.length > 0 && (
         <div className="mt-16 mb-12">
           <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
             <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-lg p-4 sm:p-6 shadow-sm border border-indigo-100">

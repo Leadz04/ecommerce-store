@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -68,6 +68,7 @@ export default function CheckoutPage() {
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<any[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   const [useSavedPayment, setUseSavedPayment] = useState(false);
+  const hasInitializedPaymentRef = useRef(false);
 
   // Pre-fill user data if authenticated (guest checkout allowed)
   useEffect(() => {
@@ -228,13 +229,18 @@ export default function CheckoutPage() {
           }
         };
 
-        await fetch('/api/email/order-confirmation', {
+        const emailResponse = await fetch('/api/email/order-confirmation', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(emailData),
         });
+        
+        if (!emailResponse.ok) {
+          const errorData = await emailResponse.json().catch(() => ({ error: 'Failed to send email' }));
+          console.error('Email API error:', errorData);
+        }
       } catch (emailError) {
         console.error('Failed to send order confirmation email:', emailError);
         // Don't fail the order if email fails
@@ -253,7 +259,7 @@ export default function CheckoutPage() {
     toast.error(error);
   };
 
-  const handleCreatePaymentIntent = async () => {
+  const handleCreatePaymentIntent = useCallback(async () => {
     try {
       let orderToUse = createdOrder;
 
@@ -386,9 +392,47 @@ export default function CheckoutPage() {
       
     } catch (error) {
       console.error('Payment intent creation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to initialize payment. Please try again.');
+
+      const message =
+        error instanceof Error ? error.message : 'Failed to initialize payment. Please try again.';
+
+      if (message.toLowerCase().includes('insufficient stock')) {
+        // Friendlier message for customers, instead of a raw technical error
+        toast.error(
+          'One or more items in your cart are out of stock. Please update your cart and try again.'
+        );
+      } else {
+        toast.error(message);
+      }
     }
-  };
+  }, [
+    createdOrder,
+    items,
+    subtotal,
+    discount,
+    shipping,
+    tax,
+    formData,
+    promoCode,
+    isAuthenticated,
+    createOrder,
+    createPaymentIntent,
+    useSavedPayment,
+    selectedPaymentMethod
+  ]);
+
+  // Automatically create order + payment intent when entering the payment step
+  // so the customer goes straight to card details without an extra "Initialize" click.
+  useEffect(() => {
+    if (
+      currentStep === 'payment' &&
+      !clientSecret &&
+      !hasInitializedPaymentRef.current
+    ) {
+      hasInitializedPaymentRef.current = true;
+      handleCreatePaymentIntent();
+    }
+  }, [currentStep, clientSecret, handleCreatePaymentIntent]);
 
   // Guest checkout is now allowed, so we don't need to check authentication
 
@@ -878,29 +922,12 @@ export default function CheckoutPage() {
                 {!clientSecret ? (
                   <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">
                     <h2 className="text-xl font-semibold text-slate-900 mb-4">Payment Information</h2>
-                    {useSavedPayment && selectedPaymentMethod ? (
-                      <div className="mb-6">
-                        <p className="text-slate-600 mb-4">Using saved payment method. Click below to proceed.</p>
-                        <button
-                          onClick={handleCreatePaymentIntent}
-                          disabled={isPaymentLoading}
-                          className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                        >
-                          {isPaymentLoading ? 'Processing...' : 'Pay with Saved Card'}
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-slate-600 mb-6">Click the button below to initialize secure payment processing.</p>
-                        <button
-                          onClick={handleCreatePaymentIntent}
-                          disabled={isPaymentLoading}
-                          className="w-full bg-blue-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                        >
-                          {isPaymentLoading ? 'Initializing...' : 'Initialize Payment'}
-                        </button>
-                      </>
-                    )}
+                    <p className="text-slate-600 mb-2">
+                      Preparing secure payment form...
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      This usually takes only a moment. If it does not load, please refresh the page.
+                    </p>
                   </div>
                 ) : !useSavedPayment ? (
                   <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-6">

@@ -15,35 +15,7 @@ This manual provides step-by-step testing instructions for all recently implemen
 
 ## 🛍️ Product Features
 
-### 1. Product Comparison Tool
-
-**Location:** `/compare` or product cards
-
-**Test Steps:**
-1. Navigate to the products page (`/products`)
-2. Click the "Compare" button on any product card
-3. Add up to 4 products to comparison
-4. Navigate to `/compare` to view the comparison table
-5. Verify all product details are displayed side-by-side:
-   - Product name, image, price
-   - Description, specifications
-   - Rating and reviews
-   - Stock status
-6. Test removing products from comparison
-7. Test adding more than 4 products (should show limit message)
-
-**Expected Results:**
-- Products are added to comparison list
-- Comparison page shows side-by-side view
-- Maximum 4 products can be compared
-- All product details are accurately displayed
-
-**API Endpoints to Test:**
-- `GET /api/products?ids=id1,id2,id3` - Get products for comparison
-
----
-
-### 2. Recently Viewed Products
+### 1. Recently Viewed Products
 
 **Location:** Product pages, user profile
 
@@ -66,7 +38,7 @@ This manual provides step-by-step testing instructions for all recently implemen
 
 ---
 
-### 3. Product Recommendations
+### 2. Product Recommendations
 
 **Location:** Product detail pages, homepage
 
@@ -96,7 +68,7 @@ This manual provides step-by-step testing instructions for all recently implemen
 
 ---
 
-### 4. Social Share Buttons
+### 3. Social Share Buttons
 
 **Location:** Product detail pages
 
@@ -120,7 +92,7 @@ This manual provides step-by-step testing instructions for all recently implemen
 
 ---
 
-### 5. "X sold in last 24 hours" Counter
+### 4. "X sold in last 24 hours" Counter
 
 **Location:** Product detail pages
 
@@ -141,7 +113,7 @@ This manual provides step-by-step testing instructions for all recently implemen
 
 ---
 
-### 6. Product Questions & Answers
+### 5. Product Questions & Answers
 
 **Location:** Product detail pages
 
@@ -959,7 +931,6 @@ Notes:
    - Order Cancellation
 
 2. **Important Features** (Test Second):
-   - Product Comparison
    - Recently Viewed
    - Recommendations
    - Support Tickets

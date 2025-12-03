@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Sparkles, TrendingUp } from 'lucide-react';
 import { Product } from '@/types';
 import ProductCard from './ProductCard';
 import { ProductCardSkeleton } from './LoadingSkeleton';
+import { requestDeduplicator } from '@/lib/requestDeduplication';
 
 interface ProductRecommendationsProps {
   productId: string;
@@ -19,26 +20,66 @@ export default function ProductRecommendations({
 }: ProductRecommendationsProps) {
   const [recommendations, setRecommendations] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasFetchedRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  const lastKeyRef = useRef<string>('');
 
   useEffect(() => {
+    // Create a unique key for this fetch
+    const fetchKey = `${productId}-${type}`;
+    
+    // Skip if already fetched for this key or currently fetching
+    if (fetchKey === lastKeyRef.current && hasFetchedRef.current) {
+      return;
+    }
+
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    if (!productId) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Reset refs if productId or type changed
+    if (lastKeyRef.current && lastKeyRef.current !== fetchKey) {
+      hasFetchedRef.current = false;
+    }
+
     const fetchRecommendations = async () => {
+      // Double-check before starting
+      if (isFetchingRef.current || (fetchKey === lastKeyRef.current && hasFetchedRef.current)) {
+        return;
+      }
+
+      isFetchingRef.current = true;
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/products/${productId}/recommendations?type=${type}`);
+        // Use request deduplication to prevent duplicate calls
+        // Clone response to allow multiple reads of the body
+        const response = await requestDeduplicator.deduplicate(
+          `recommendations-${productId}-${type}`,
+          async () => {
+            const res = await fetch(`/api/products/${productId}/recommendations?type=${type}`);
+            return res.clone(); // Clone to allow multiple reads
+          }
+        );
         if (response.ok) {
           const data = await response.json();
           setRecommendations(data.products || []);
+          hasFetchedRef.current = true;
+          lastKeyRef.current = fetchKey;
         }
       } catch (error) {
         console.error('Failed to fetch recommendations:', error);
       } finally {
         setIsLoading(false);
+        isFetchingRef.current = false;
       }
     };
 
-    if (productId) {
-      fetchRecommendations();
-    }
+    fetchRecommendations();
   }, [productId, type]);
 
   if (isLoading) {

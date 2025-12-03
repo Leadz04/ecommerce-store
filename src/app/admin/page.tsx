@@ -279,7 +279,7 @@ export default function AdminDashboard() {
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking' | 'support'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking' | 'support' | 'related-questions'>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState('');
@@ -300,6 +300,11 @@ export default function AdminDashboard() {
   const seoLoadedOnceRef = useRef(false);
   const [seoAudit, setSeoAudit] = useState<any>(null);
   const [seoHistory, setSeoHistory] = useState<any[]>([]);
+  
+  // Related Questions state
+  const [relatedQuestionsQuery, setRelatedQuestionsQuery] = useState('');
+  const [relatedQuestions, setRelatedQuestions] = useState<Array<{ question: string; snippet?: string; title?: string; link?: string; nextPageToken?: string }>>([]);
+  const [relatedQuestionsLoading, setRelatedQuestionsLoading] = useState(false);
 
   // Product modal state
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
@@ -491,6 +496,48 @@ export default function AdminDashboard() {
       toast.error('Error loading products');
     } finally {
       setSeoLoading(prev => ({ ...prev, products: false }));
+    }
+  };
+
+  const searchRelatedQuestions = async () => {
+    if (!relatedQuestionsQuery.trim()) return;
+    setRelatedQuestionsLoading(true);
+    try {
+      const response = await fetch(`/api/seo/related-questions?q=${encodeURIComponent(relatedQuestionsQuery)}`);
+      const data = await response.json();
+      if (data.success) {
+        setRelatedQuestions(data.questions || []);
+        toast.success(`Found ${data.questions?.length || 0} related questions`);
+      } else {
+        toast.error('Failed to fetch related questions');
+        setRelatedQuestions([]);
+      }
+    } catch (error) {
+      console.error('Related questions search error:', error);
+      toast.error('Error fetching related questions');
+      setRelatedQuestions([]);
+    } finally {
+      setRelatedQuestionsLoading(false);
+    }
+  };
+
+  const loadMoreRelatedQuestions = async (nextPageToken: string) => {
+    if (!nextPageToken) return;
+    setRelatedQuestionsLoading(true);
+    try {
+      const response = await fetch(`/api/seo/related-questions?next_page_token=${encodeURIComponent(nextPageToken)}`);
+      const data = await response.json();
+      if (data.success) {
+        setRelatedQuestions(prev => [...prev, ...(data.questions || [])]);
+        toast.success(`Loaded ${data.questions?.length || 0} more questions`);
+      } else {
+        toast.error('Failed to load more questions');
+      }
+    } catch (error) {
+      console.error('Load more questions error:', error);
+      toast.error('Error loading more questions');
+    } finally {
+      setRelatedQuestionsLoading(false);
     }
   };
 
@@ -1273,6 +1320,7 @@ export default function AdminDashboard() {
         { id: 'etsy', label: 'Etsy Integration', icon: ShoppingCart },
         { id: 'seo', label: 'SEO Research', icon: Search },
         { id: 'seo-raw', label: 'SEO Raw Data', icon: Type },
+        { id: 'related-questions', label: 'Related Questions', icon: HelpCircle },
       ],
     },
     { id: 'email-tracking', label: 'Email Tracking', icon: Mail },
@@ -6889,6 +6937,158 @@ export default function AdminDashboard() {
                       <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Related Questions Tab */}
+              {(activeTab as any) === 'related-questions' && (
+                <div className="space-y-8">
+                  <div className="bg-white rounded-lg shadow-sm border border-blue-100">
+                    <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-xl font-semibold text-blue-900">Google Related Questions</h2>
+                          <p className="text-blue-700/80 mt-1 text-sm">Get questions people ask about your search term using Google's "People also ask" feature.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="md:col-span-2 space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-blue-800 mb-2">Search Term</label>
+                            <div className="flex space-x-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. handmade jewelry, sustainable fashion, vintage furniture"
+                                value={relatedQuestionsQuery}
+                                onChange={(e) => setRelatedQuestionsQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    searchRelatedQuestions();
+                                  }
+                                }}
+                                className="flex-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                              <button
+                                onClick={searchRelatedQuestions}
+                                disabled={relatedQuestionsLoading || !relatedQuestionsQuery.trim()}
+                                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {relatedQuestionsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h3 className="font-medium text-blue-900 mb-3">Related Questions</h3>
+                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                              {relatedQuestions.length > 0 ? (
+                                relatedQuestions.map((q, idx) => (
+                                  <div key={idx} className="p-4 rounded-lg border border-blue-100 bg-white shadow-sm">
+                                    <div className="flex items-start gap-3">
+                                      <div className="flex-shrink-0 mt-1">
+                                        <HelpCircle className="h-5 w-5 text-blue-600" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h4 className="font-semibold text-blue-900 mb-2">{q.question}</h4>
+                                        {q.snippet && (
+                                          <p className="text-sm text-gray-700 mb-2 line-clamp-3">{q.snippet}</p>
+                                        )}
+                                        {q.link && (
+                                          <div className="flex items-center gap-2 mt-2">
+                                            <a
+                                              href={q.link}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                              View Source
+                                            </a>
+                                          </div>
+                                        )}
+                                        {q.nextPageToken && (
+                                          <button
+                                            onClick={() => loadMoreRelatedQuestions(q.nextPageToken!)}
+                                            disabled={relatedQuestionsLoading}
+                                            className="mt-2 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
+                                          >
+                                            {relatedQuestionsLoading ? 'Loading...' : 'Load More Questions'}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-blue-700 text-center py-8">
+                                  {relatedQuestionsLoading ? (
+                                    <div className="flex items-center justify-center gap-2">
+                                      <Loader2 className="h-5 w-5 animate-spin" />
+                                      <span>Loading questions...</span>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <HelpCircle className="h-12 w-12 mx-auto mb-4 text-blue-400" />
+                                      <p>Enter a search term and click search to see related questions.</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {relatedQuestions.length > 0 && (
+                              <div className="mt-4 flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    const csvContent = relatedQuestions.map((q) => 
+                                      `"${q.question}","${q.snippet || ''}","${q.link || ''}"`
+                                    ).join('\n');
+                                    const blob = new Blob([`question,snippet,link\n${csvContent}`], { type: 'text/csv' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `related_questions_${relatedQuestionsQuery.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                    toast.success('Exported questions to CSV');
+                                  }}
+                                  className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                                >
+                                  Export CSV
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRelatedQuestions([]);
+                                    setRelatedQuestionsQuery('');
+                                    toast.success('Cleared results');
+                                  }}
+                                  className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                                >
+                                  Clear Results
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Usage Tips */}
+                        <div className="p-4 bg-white border border-blue-200 rounded-lg">
+                          <h3 className="font-semibold text-blue-900 mb-2">How to use Related Questions</h3>
+                          <ul className="list-disc pl-5 text-sm space-y-2 text-blue-800">
+                            <li><b>Content Ideas:</b> Use questions to create FAQ sections, blog posts, or product descriptions.</li>
+                            <li><b>SEO Optimization:</b> These are real questions people search for - perfect for targeting long-tail keywords.</li>
+                            <li><b>Product Research:</b> Understand what customers want to know about your products.</li>
+                            <li><b>Load More:</b> Click "Load More Questions" on any question to get additional related questions.</li>
+                            <li><b>Export:</b> Save questions to CSV for content planning and keyword research.</li>
+                          </ul>
+                          <div className="mt-4 text-xs text-blue-700">
+                            <p><b>Note:</b> Requires SERPAPI_KEY in environment variables. Uses Google's "People also ask" feature.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

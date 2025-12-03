@@ -135,64 +135,162 @@ export function generateContactEmailHTML(data: ContactFormData): string {
 
 export function generateOrderConfirmationHTML(data: OrderEmailData): string {
   const itemsHTML = data.items.map(item => `
-    <tr style="border-bottom: 1px solid #e5e7eb;">
-      <td style="padding: 12px; color: #374151;">${item.name}</td>
-      <td style="padding: 12px; text-align: center; color: #374151;">${item.quantity}</td>
-      <td style="padding: 12px; text-align: right; color: #374151;">$${item.price.toFixed(2)}</td>
+    <tr>
+      <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
+        <div style="color: #111827; font-size: 14px; font-weight: 600; line-height: 1.4;">${item.name}</div>
+      </td>
+      <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center; vertical-align: top; width: 60px;">
+        <div style="color: #374151; font-size: 14px; font-weight: 500;">${item.quantity}</div>
+      </td>
+      <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: right; vertical-align: top; width: 100px;">
+        <div style="color: #111827; font-size: 14px; font-weight: 700;">$${item.price.toFixed(2)}</div>
+      </td>
     </tr>
   `).join('');
 
+  const subtotal = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const tax = data.orderTotal - subtotal;
+
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #333; border-bottom: 2px solid #10b981; padding-bottom: 10px;">
-        Order Confirmation - #${data.orderNumber}
-      </h2>
-      
-      <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
-        <h3 style="color: #065f46; margin-top: 0;">Thank you for your order!</h3>
-        <p style="color: #047857; margin: 0;">Your order has been received and is being processed.</p>
-      </div>
-      
-      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="color: #1e40af; margin-top: 0;">Order Details</h3>
-        <p><strong>Order Number:</strong> #${data.orderNumber}</p>
-        <p><strong>Customer:</strong> ${data.customerName}</p>
-        <p><strong>Email:</strong> ${data.customerEmail}</p>
-        <p><strong>Total Amount:</strong> $${data.orderTotal.toFixed(2)}</p>
-      </div>
-      
-      <div style="background: #ffffff; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 20px 0;">
-        <h3 style="color: #1e40af; margin-top: 0;">Order Items</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="background: #f8fafc;">
-              <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600;">Item</th>
-              <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600;">Qty</th>
-              <th style="padding: 12px; text-align: right; color: #374151; font-weight: 600;">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHTML}
-          </tbody>
-        </table>
-      </div>
-      
-      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="color: #1e40af; margin-top: 0;">Shipping Address</h3>
-        <p style="color: #374151; line-height: 1.6;">
-          ${data.shippingAddress.firstName} ${data.shippingAddress.lastName}<br>
-          ${data.shippingAddress.address1}<br>
-          ${data.shippingAddress.city}, ${data.shippingAddress.state} ${data.shippingAddress.zipCode}<br>
-          ${data.shippingAddress.country}
-        </p>
-      </div>
-      
-      <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
-        <p style="margin: 0; color: #1e40af; font-size: 14px;">
-          <strong>Next Steps:</strong> You will receive a shipping confirmation email once your order is dispatched.
-        </p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Order Confirmation - #${data.orderNumber}</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f3f4f6;">
+        <tr>
+          <td align="center" style="padding: 30px 20px;">
+            <!-- Main Container -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+              
+              <!-- Compact Header -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 50%, #8b5cf6 100%); padding: 30px 30px 20px; text-align: center;">
+                  <div style="background-color: rgba(255, 255, 255, 0.25); width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 12px; display: inline-block; line-height: 60px; font-size: 32px;">
+                    ✓
+                  </div>
+                  <h1 style="margin: 0 0 6px; color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">
+                    Order Confirmed!
+                  </h1>
+                  <p style="margin: 0; color: rgba(255, 255, 255, 0.95); font-size: 14px; font-weight: 500;">
+                    Order #${data.orderNumber} • Thank you for your purchase
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Compact Success Message -->
+              <tr>
+                <td style="padding: 16px 30px;">
+                  <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-left: 3px solid #10b981; border-radius: 8px; padding: 12px 16px;">
+                    <p style="margin: 0; color: #065f46; font-size: 13px; font-weight: 600; line-height: 1.5;">
+                      🎉 Your order is being processed. Shipping confirmation with tracking will be sent once dispatched.
+                    </p>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Order Items Section -->
+              <tr>
+                <td style="padding: 20px 30px;">
+                  <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px;">
+                    <div style="color: #111827; font-size: 14px; font-weight: 700; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">Order Items</div>
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="padding: 6px 0; text-align: left; color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e5e7eb;">Item</th>
+                          <th style="padding: 6px 0; text-align: center; color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e5e7eb; width: 50px;">Qty</th>
+                          <th style="padding: 6px 0; text-align: right; color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e5e7eb; width: 80px;">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${itemsHTML}
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Compact Order Details & Shipping -->
+              <tr>
+                <td style="padding: 0 30px 20px;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td style="width: 50%; padding-right: 10px; vertical-align: top;">
+                        <div style="background-color: #f9fafb; border-radius: 8px; padding: 14px;">
+                          <div style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Order Details</div>
+                          <div style="color: #111827; font-size: 13px; font-weight: 600; margin-bottom: 4px;">${data.customerName}</div>
+                          <div style="color: #6b7280; font-size: 12px;">${data.customerEmail}</div>
+                        </div>
+                      </td>
+                      <td style="width: 50%; padding-left: 10px; vertical-align: top;">
+                        <div style="background-color: #f9fafb; border-radius: 8px; padding: 14px;">
+                          <div style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Shipping To</div>
+                          <div style="color: #111827; font-size: 12px; font-weight: 600; line-height: 1.4;">
+                            ${data.shippingAddress.firstName} ${data.shippingAddress.lastName}<br>
+                            <span style="font-weight: 400; color: #6b7280; font-size: 11px;">${data.shippingAddress.address1}</span><br>
+                            <span style="font-weight: 400; color: #6b7280; font-size: 11px;">${data.shippingAddress.city}, ${data.shippingAddress.state} ${data.shippingAddress.zipCode}</span><br>
+                            <span style="font-weight: 400; color: #6b7280; font-size: 11px;">${data.shippingAddress.country}</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Total Amount Section -->
+              <tr>
+                <td style="padding: 0 30px 20px;">
+                  <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; padding: 18px 20px; text-align: right;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      ${tax > 0 ? `
+                      <tr>
+                        <td style="padding: 4px 0; color: rgba(255, 255, 255, 0.9); font-size: 13px; font-weight: 500;">Subtotal</td>
+                        <td style="padding: 4px 0; text-align: right; color: rgba(255, 255, 255, 0.9); font-size: 13px; font-weight: 500;">$${subtotal.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 4px 0; color: rgba(255, 255, 255, 0.9); font-size: 13px; font-weight: 500;">Tax</td>
+                        <td style="padding: 4px 0; text-align: right; color: rgba(255, 255, 255, 0.9); font-size: 13px; font-weight: 500;">$${tax.toFixed(2)}</td>
+                      </tr>
+                      ` : ''}
+                      <tr>
+                        <td style="padding: 8px 0 0; color: #ffffff; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Total</td>
+                        <td style="padding: 8px 0 0; text-align: right; color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">$${data.orderTotal.toFixed(2)}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Compact Next Steps -->
+              <tr>
+                <td style="padding: 0 30px 20px;">
+                  <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 3px solid #3b82f6; border-radius: 8px; padding: 12px 16px;">
+                    <p style="margin: 0; color: #1e40af; font-size: 12px; font-weight: 600; line-height: 1.5;">
+                      📦 <strong>Next:</strong> Shipping confirmation with tracking (3-5 business days delivery)
+                    </p>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Compact Footer -->
+              <tr>
+                <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                    Questions? Reply to this email or contact support.
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
   `;
 }
 

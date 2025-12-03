@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { Product } from '@/types';
+import { requestDeduplicator } from '@/lib/requestDeduplication';
 
 const normalizeProductStock = (product: Product | null): Product | null => {
   if (!product) return product;
@@ -68,7 +69,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
   error: null,
   pagination: {
     page: 1,
-    limit: 12,
+    limit: 20,
     total: 0,
     pages: 0
   },
@@ -101,7 +102,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       if (params.search || filters.search) {
         searchParams.set('search', params.search || filters.search);
       }
-      
+
       if (params.sortBy || filters.sortBy !== 'name') {
         searchParams.set('sortBy', params.sortBy || filters.sortBy);
       }
@@ -135,10 +136,30 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         searchParams.set('collection', effectiveCollection);
       }
 
+      // Create a unique key for deduplication (after all params are set)
+      const dedupeKey = `products-${searchParams.toString()}`;
+
       console.log('[ProductStore] Fetching products:', searchParams.toString());
-      const response = await fetch(`/api/products?${searchParams.toString()}`);
+      
+      // Use request deduplication to prevent duplicate calls
+      const response = await requestDeduplicator.deduplicate(
+        dedupeKey,
+        async () => {
+          const res = await fetch(`/api/products?${searchParams.toString()}`);
+          return res.clone(); // Clone to allow multiple reads
+        }
+      );
       
       console.log('[ProductStore] Response status:', response.status);
+      
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('[ProductStore] Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -166,11 +187,35 @@ export const useProductStore = create<ProductStore>((set, get) => ({
   },
 
   fetchProduct: async (id: string) => {
+    // Skip if already fetching the same product
+    const state = get();
+    if (state.isLoading && state.currentProduct?._id === id) {
+      console.log('[ProductStore] Already fetching product:', id);
+      return;
+    }
+
     set({ isLoading: true, error: null, currentProduct: null });
     
     try {
       console.log('[ProductStore] Fetching product:', id);
-      const response = await fetch(`/api/products/${id}`);
+      
+      // Use request deduplication to prevent duplicate calls
+      const response = await requestDeduplicator.deduplicate(
+        `product-${id}`,
+        async () => {
+          const res = await fetch(`/api/products/${id}`);
+          return res.clone(); // Clone to allow multiple reads
+        }
+      );
+      
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('[ProductStore] Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {

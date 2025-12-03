@@ -20,6 +20,19 @@ export interface IProduct extends Document {
   tags: string[];
   specifications: Record<string, string>;
   faqs?: string[];
+  generatedFAQs?: Array<{
+    question: string;
+    answer: string;
+    source: 'gemini' | 'serpapi';
+    generatedAt: Date;
+    model?: string;
+  }>;
+  relatedSearches?: string[];
+  peopleAlsoSearchFor?: Array<{
+    text: string;
+    link?: string;
+    highlightedWords?: string[];
+  }>;
   isActive: boolean;
   sourceUrl?: string;
   productType?: string;
@@ -137,6 +150,22 @@ const ProductSchema = new Schema<IProduct>({
   faqs: [{
     type: String,
     trim: true
+  }],
+  generatedFAQs: [{
+    question: { type: String, required: true, trim: true },
+    answer: { type: String, required: true, trim: true },
+    source: { type: String, enum: ['gemini', 'serpapi'], required: true },
+    generatedAt: { type: Date, default: Date.now },
+    model: { type: String }
+  }],
+  relatedSearches: [{
+    type: String,
+    trim: true
+  }],
+  peopleAlsoSearchFor: [{
+    text: { type: String, required: true },
+    link: { type: String },
+    highlightedWords: [{ type: String }]
   }],
   isActive: {
     type: Boolean,

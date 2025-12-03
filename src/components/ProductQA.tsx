@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, HelpCircle, ThumbsUp, Send, User, Shield, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
+import { requestDeduplicator } from '@/lib/requestDeduplication';
 
 interface Answer {
   _id: string;
@@ -37,6 +38,11 @@ export default function ProductQA({ productId }: ProductQAProps) {
   const { user, isAuthenticated } = useAuthStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log('[ProductQA] Component mounted for product:', productId);
+  }, [productId]);
   const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<string | null>(null);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
@@ -45,18 +51,56 @@ export default function ProductQA({ productId }: ProductQAProps) {
   const [guestInfo, setGuestInfo] = useState({ name: '', email: '' });
   const [helpfulQuestions, setHelpfulQuestions] = useState<Set<string>>(new Set());
   const [helpfulAnswers, setHelpfulAnswers] = useState<Set<string>>(new Set());
+  const hasFetchedRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  const lastProductIdRef = useRef<string>('');
 
   useEffect(() => {
+    // Skip if already fetched for this product or currently fetching
+    if (productId === lastProductIdRef.current && hasFetchedRef.current) {
+      return;
+    }
+
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    if (!productId) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Reset refs if productId changed
+    if (lastProductIdRef.current && lastProductIdRef.current !== productId) {
+      hasFetchedRef.current = false;
+    }
+
+    lastProductIdRef.current = productId;
     fetchQuestions();
   }, [productId]);
 
   const fetchQuestions = async () => {
+    // Double-check before starting
+    if (isFetchingRef.current || (productId === lastProductIdRef.current && hasFetchedRef.current)) {
+      return; // Already fetching or already fetched
+    }
+
+    isFetchingRef.current = true;
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/products/${productId}/questions?status=approved`);
+      // Use request deduplication to prevent duplicate calls
+      // Clone response to allow multiple reads of the body
+      const response = await requestDeduplicator.deduplicate(
+        `questions-${productId}`,
+        async () => {
+          const res = await fetch(`/api/products/${productId}/questions?status=approved`);
+          return res.clone(); // Clone to allow multiple reads
+        }
+      );
       const data = await response.json();
       if (response.ok) {
         setQuestions(data.questions || []);
+        hasFetchedRef.current = true;
       } else {
         toast.error(data.error || 'Failed to load questions');
       }
@@ -65,6 +109,7 @@ export default function ProductQA({ productId }: ProductQAProps) {
       toast.error('Failed to load questions');
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   };
 

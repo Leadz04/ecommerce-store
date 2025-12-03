@@ -11,6 +11,9 @@ import { ProductCardSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
 
+// Default limit for products per page
+const DEFAULT_PRODUCTS_LIMIT = 20;
+
 export default function ProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,6 +31,11 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
+  
+  // Get the current limit from URL or use default
+  const getCurrentLimit = () => {
+    return parseInt(searchParams.get('limit') || String(DEFAULT_PRODUCTS_LIMIT));
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -63,9 +71,11 @@ export default function ProductsPage() {
     const category = searchParams.get('category') || 'all';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
+    // Always use default limit for products listing page, or read from URL if specified
+    const limit = getCurrentLimit();
     
     // Only fetch if params actually changed or on first mount
-    const paramsKey = `${search}-${category}-${sortBy}-${page}`;
+    const paramsKey = `${search}-${category}-${sortBy}-${page}-${limit}`;
     if (hasInitialized.current && paramsKey === hasInitialized.current) {
       return;
     }
@@ -84,7 +94,8 @@ export default function ProductsPage() {
       search, 
       category: category === 'all' ? undefined : category, 
       sortBy, 
-      page 
+      page,
+      limit 
     });
   }, [searchParams, setFilters, fetchProducts]);
 
@@ -110,7 +121,7 @@ export default function ProductsPage() {
       if (searchInput !== filters.search) {
         setFilters({ search: searchInput });
         updateURL({ search: searchInput, page: '1' });
-        fetchProducts({ search: searchInput, page: 1 });
+        fetchProducts({ search: searchInput, page: 1, limit: getCurrentLimit() });
       }
     }, 300);
     return () => clearTimeout(timeoutId);
@@ -119,13 +130,13 @@ export default function ProductsPage() {
   const handleCategoryChange = (category: string) => {
     setFilters({ category });
     updateURL({ category, page: '1' });
-    fetchProducts({ category: category === 'all' ? undefined : category, page: 1 });
+    fetchProducts({ category: category === 'all' ? undefined : category, page: 1, limit: getCurrentLimit() });
   };
 
   const handleSortChange = (sortBy: string) => {
     setFilters({ sortBy });
     updateURL({ sortBy, page: '1' });
-    fetchProducts({ sortBy, page: 1 });
+    fetchProducts({ sortBy, page: 1, limit: getCurrentLimit() });
   };
 
   const handlePriceRangeChange = (priceRange: [number, number]) => {
@@ -134,27 +145,28 @@ export default function ProductsPage() {
     fetchProducts({ 
       minPrice: priceRange[0], 
       maxPrice: priceRange[1], 
-      page: 1 
+      page: 1,
+      limit: getCurrentLimit()
     });
   };
 
   const handlePageChange = (page: number) => {
     updateURL({ page: page.toString() });
-    fetchProducts({ page });
+    fetchProducts({ page, limit: getCurrentLimit() });
   };
 
   const clearSearch = () => {
     setSearchInput('');
     setFilters({ search: '' });
     updateURL({ search: '', page: '1' });
-    fetchProducts({ search: '', page: 1 });
+    fetchProducts({ search: '', page: 1, limit: getCurrentLimit() });
   };
 
   const clearAllFilters = () => {
     setSearchInput('');
     setFilters({ search: '', category: 'all', priceRange: [0, 1000], inStock: null });
     updateURL({});
-    fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1 });
+    fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1, limit: getCurrentLimit() });
   };
 
   const handleClearAllFiltersClick = () => {
@@ -217,11 +229,11 @@ export default function ProductsPage() {
           <input
             type="checkbox"
             checked={filters.inStock === true}
-            onChange={(e) => {
+              onChange={(e) => {
               const nextInStock = e.target.checked ? true : null;
               setFilters({ inStock: nextInStock });
               updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
-              fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1 });
+              fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1, limit: getCurrentLimit() });
             }}
             className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
           />
@@ -470,7 +482,7 @@ export default function ProductsPage() {
                 <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                   <p className="text-red-500 text-lg">{error}</p>
                   <button 
-                    onClick={() => fetchProducts()}
+                    onClick={() => fetchProducts({ limit: getCurrentLimit() })}
                     className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Try Again

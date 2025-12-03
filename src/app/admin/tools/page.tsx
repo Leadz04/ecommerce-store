@@ -21,7 +21,12 @@ export default function AdminToolsPage() {
   const [removeBrandResult, setRemoveBrandResult] = useState<any>(null);
   const [optimizeGeminiLoading, setOptimizeGeminiLoading] = useState(false);
   const [optimizeGeminiLogs, setOptimizeGeminiLogs] = useState<string[]>([]);
+  const [generateFAQsLoading, setGenerateFAQsLoading] = useState(false);
+  const [generateFAQsLogs, setGenerateFAQsLogs] = useState<string[]>([]);
+  const [etsyProductsResult, setEtsyProductsResult] = useState<any>(null);
+  const [includeAllRelevant, setIncludeAllRelevant] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const faqsLogsEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs to bottom when new logs are added
   useEffect(() => {
@@ -29,6 +34,12 @@ export default function AdminToolsPage() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [optimizeGeminiLogs]);
+
+  useEffect(() => {
+    if (faqsLogsEndRef.current) {
+      faqsLogsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [generateFAQsLogs]);
 
   const pollProgress = (operationId: string, label: string) => {
     console.log(`Starting progress polling for ${label} with operationId: ${operationId}`);
@@ -259,6 +270,74 @@ export default function AdminToolsPage() {
     }
   };
 
+  const handleGetEtsyProducts = async () => {
+    try {
+      setLoading('Get Etsy Products');
+      setEtsyProductsResult(null);
+      setProgress(prev => ({ ...prev, 'Get Etsy Products': { current: 0, total: 0, status: 'Searching database...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/get-etsy-products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          includeAllRelevant: includeAllRelevant
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Get Etsy products failed');
+      }
+
+      // Check if response is CSV
+      const contentType = res.headers.get('content-type');
+      if (contentType?.includes('text/csv')) {
+        // Download CSV file
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = res.headers.get('content-disposition');
+        let filename = 'etsy-products.csv';
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        setProgress(prev => ({ ...prev, 'Get Etsy Products': { current: 100, total: 100, status: 'Complete' } }));
+        setLoading(null);
+        toast.success('Etsy CSV file downloaded successfully!');
+      } else {
+        // Fallback to JSON response (for error messages)
+        const data = await res.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setEtsyProductsResult(data);
+        setProgress(prev => ({ ...prev, 'Get Etsy Products': { current: 100, total: 100, status: 'Complete' } }));
+        setLoading(null);
+        toast.success(`Found ${data.totalUniqueProducts || 0} matching products from ${data.matchedNames || 0} product names`);
+      }
+    } catch (e) {
+      console.error('Error getting Etsy products:', e);
+      toast.error(e instanceof Error ? e.message : 'Get Etsy products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Get Etsy Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     const fetchScripts = async () => {
@@ -354,6 +433,63 @@ export default function AdminToolsPage() {
       console.error('Error running optimize script:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to run optimization');
       setOptimizeGeminiLoading(false);
+    }
+  };
+
+  const handleGenerateFAQs = async () => {
+    try {
+      setGenerateFAQsLoading(true);
+      setGenerateFAQsLogs([]);
+      
+      const res = await authorizedFetch('/api/admin/products/generate-faqs', {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to start FAQ generation');
+      }
+
+      // Read the stream
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'complete') {
+                setGenerateFAQsLoading(false);
+                if (data.exitCode === 0) {
+                  toast.success('FAQ generation completed successfully');
+                } else {
+                  toast.error(`FAQ generation completed with exit code ${data.exitCode}`);
+                }
+                break;
+              } else if (data.type === 'log' || data.type === 'error') {
+                setGenerateFAQsLogs(prev => [...prev, data.message]);
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error running FAQ generation script:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to run FAQ generation');
+      setGenerateFAQsLoading(false);
     }
   };
 
@@ -510,6 +646,49 @@ export default function AdminToolsPage() {
                   </div>
                 ))}
                 <div ref={logsEndRef} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Generate FAQs with SerpAPI and Gemini Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Generate FAQs for Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Generate high-quality FAQs and Q&A for leather products using SerpAPI to find related questions and Gemini to create comprehensive answers. Only processes leather products (jackets and other leather items). Excludes: t-shirts, chappals, belts, bags, wallets, pants. Uses product title, description, and tags to generate SEO-optimized FAQs that can appear in Google's "People Also Ask" panels. Script will stop automatically if 3 consecutive products fail with all API keys.
+          </p>
+          
+          <button
+            onClick={handleGenerateFAQs}
+            disabled={generateFAQsLoading || loading !== null}
+            className="w-full px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {generateFAQsLoading ? 'Generating FAQs…' : 'Start FAQ Generation'}
+          </button>
+
+          {/* Logs Display */}
+          {generateFAQsLogs.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-gray-900">Logs</h4>
+                <button
+                  onClick={() => setGenerateFAQsLogs([])}
+                  className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+              <div className="bg-gray-900 text-gray-100 text-xs rounded-md p-4 overflow-auto max-h-96 font-mono">
+                {generateFAQsLogs.map((log, idx) => (
+                  <div key={idx} className="whitespace-pre-wrap break-words">
+                    {log}
+                  </div>
+                ))}
+                <div ref={faqsLogsEndRef} />
               </div>
             </div>
           )}
@@ -712,6 +891,114 @@ export default function AdminToolsPage() {
                               ))}
                             </div>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Get Etsy Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-teal-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Get Etsy Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Search the database for products matching the 200 Etsy-optimized jacket, coat, and suit listings. This includes Vintage Distressed, Handmade Suede, Aviator & Shearling, Wool & Trench Coats, Pop Culture Replicas, Suits, Varsity Jackets, and more. The results will be exported as a CSV file ready for Etsy import.
+          </p>
+          
+          <div className="flex items-center gap-3 mb-4">
+            <input
+              type="checkbox"
+              id="includeAllRelevant"
+              checked={includeAllRelevant}
+              onChange={(e) => setIncludeAllRelevant(e.target.checked)}
+              disabled={loading === 'Get Etsy Products'}
+              className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+            />
+            <label htmlFor="includeAllRelevant" className="text-sm text-gray-700 cursor-pointer">
+              Include all relevant jacket/coat/suit products (even if name doesn't match exactly)
+            </label>
+          </div>
+          
+          <button
+            onClick={handleGetEtsyProducts}
+            disabled={loading === 'Get Etsy Products'}
+            className="w-full px-4 py-3 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Get Etsy Products' ? 'Searching…' : 'Get Etsy Products from Database'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Get Etsy Products' && progress['Get Etsy Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Get Etsy Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-teal-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Get Etsy Products'].total > 0 
+                      ? `${(progress['Get Etsy Products'].current / progress['Get Etsy Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {etsyProductsResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Product Names Searched:</span>
+                  <span className="font-medium">{etsyProductsResult.totalSearched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Matched Product Names:</span>
+                  <span className="font-medium text-green-600">{etsyProductsResult.matchedNames || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Unmatched Product Names:</span>
+                  <span className="font-medium text-orange-600">{etsyProductsResult.unmatchedNames || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Unique Products Found:</span>
+                  <span className="font-medium text-blue-600">{etsyProductsResult.totalUniqueProducts || 0}</span>
+                </div>
+                {etsyProductsResult.products && etsyProductsResult.products.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-2">Sample of found products (first 10):</p>
+                    <div className="space-y-1 max-h-60 overflow-y-auto">
+                      {etsyProductsResult.products.slice(0, 10).map((product: any, idx: number) => (
+                        <div key={idx} className="text-xs bg-white p-2 rounded border border-gray-200">
+                          <p className="font-medium text-gray-900">{product.name}</p>
+                          <p className="text-gray-600 text-xs mt-1">
+                            Category: {product.category || 'N/A'} | 
+                            Price: ${product.price || 'N/A'} | 
+                            {product.searchedFor && (
+                              <span className="text-teal-600"> Matched: {product.searchedFor.substring(0, 50)}...</span>
+                            )}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {etsyProductsResult.unmatchedProductNames && etsyProductsResult.unmatchedProductNames.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-2">Sample of unmatched product names (first 10):</p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {etsyProductsResult.unmatchedProductNames.slice(0, 10).map((name: string, idx: number) => (
+                        <div key={idx} className="text-xs bg-white p-2 rounded border border-gray-200">
+                          <p className="text-gray-600">{name}</p>
                         </div>
                       ))}
                     </div>

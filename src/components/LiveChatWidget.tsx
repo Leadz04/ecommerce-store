@@ -113,6 +113,21 @@ export default function LiveChatWidget() {
     }
   }, [messages, isOpen]);
 
+  // Prevent body scroll on mobile when chat is open
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (isOpen && !isMinimized && window.innerWidth < 640) {
+      // Store original overflow value
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen, isMinimized]);
+
   // Reset conversation when authentication state changes
   useEffect(() => {
     if (!isAuthenticated && conversationId && !conversationId.startsWith('guest_')) {
@@ -298,38 +313,63 @@ export default function LiveChatWidget() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition-colors z-50"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full p-3 sm:p-4 shadow-xl hover:shadow-2xl hover:scale-110 transition-all duration-300 z-50 group"
         aria-label="Open chat"
       >
-        <MessageCircle className="h-6 w-6" />
+        <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 group-hover:rotate-12 transition-transform duration-300" />
+        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        </span>
       </button>
     );
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 flex flex-col ${
-      isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'
-    } transition-all`}>
+    <>
+      {/* Backdrop for mobile */}
+      {isOpen && !isMinimized && (
+        <div 
+          className="fixed inset-0 bg-black/30 sm:hidden z-40 animate-in fade-in duration-300"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      
+      <div className={`fixed bottom-0 right-0 sm:bottom-6 sm:right-6 bg-white rounded-t-2xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 flex flex-col ${
+        isMinimized 
+          ? 'w-full sm:w-80 h-16' 
+          : 'w-full h-[calc(100vh-1rem)] sm:w-[420px] sm:h-[600px] sm:max-h-[85vh]'
+      } transition-all duration-300 ease-in-out`}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-t-lg flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5" />
-          <span className="font-semibold">Live Chat Support</span>
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-3 sm:p-4 rounded-t-2xl sm:rounded-t-lg flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="relative">
+            <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="absolute top-0 right-0 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-sm sm:text-base">Live Chat Support</span>
+            <span className="text-xs text-white/80 hidden sm:inline">We're here to help</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <button
             onClick={() => setIsMinimized(!isMinimized)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors active:scale-95"
             aria-label={isMinimized ? 'Maximize' : 'Minimize'}
           >
-            {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+            {isMinimized ? <Maximize2 className="h-4 w-4 sm:h-5 sm:w-5" /> : <Minimize2 className="h-4 w-4 sm:h-5 sm:w-5" />}
           </button>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors active:scale-95"
             aria-label="Close"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
       </div>
@@ -337,65 +377,96 @@ export default function LiveChatWidget() {
       {!isMinimized && (
         <>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gradient-to-b from-gray-50 to-gray-100 scroll-smooth">
             {isLoading && messages.length === 0 ? (
-              <div className="text-center text-gray-500">Loading messages...</div>
+              <div className="flex flex-col items-center justify-center h-full space-y-3">
+                <div className="relative">
+                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                </div>
+                <p className="text-sm text-gray-500">Loading messages...</p>
+              </div>
             ) : messages.length === 0 ? (
-              <div className="text-center text-gray-500">
-                <p className="mb-2">Start a conversation with our support team!</p>
-                <p className="text-sm">We typically respond within a few minutes.</p>
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <div className="bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full p-4 mb-4">
+                  <MessageCircle className="h-8 w-8 sm:h-10 sm:w-10 text-blue-600" />
+                </div>
+                <p className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                  Start a conversation with our support team!
+                </p>
+                <p className="text-sm text-gray-600 max-w-xs">
+                  We typically respond within a few minutes. Ask us anything!
+                </p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg._id}
-                  className={`flex ${msg.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
-                >
+              messages.map((msg) => {
+                const isAdmin = msg.senderType === 'admin';
+                const isCustomer = msg.senderType === 'customer';
+                return (
                   <div
-                    className={`max-w-[80%] p-3 rounded-lg ${
-                      msg.senderType === 'admin'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-900 border border-gray-200'
-                    }`}
+                    key={msg._id}
+                    className={`flex ${isAdmin ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                   >
-                    <p className="text-xs font-semibold mb-1 opacity-80">
-                      {msg.senderType === 'admin' ? 'Support Team' : msg.senderName}
-                    </p>
-                    <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {new Date(msg.createdAt).toLocaleTimeString()}
-                    </p>
+                    <div
+                      className={`max-w-[85%] sm:max-w-[75%] rounded-2xl shadow-sm ${
+                        isAdmin
+                          ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tl-sm'
+                          : 'bg-white text-gray-900 border border-gray-200 rounded-tr-sm'
+                      }`}
+                    >
+                      <div className="p-3 sm:p-4">
+                        <p className={`text-xs font-semibold mb-1.5 ${isAdmin ? 'text-white/90' : 'text-gray-600'}`}>
+                          {isAdmin ? 'Support Team' : msg.senderName}
+                        </p>
+                        <p className={`text-sm sm:text-base leading-relaxed whitespace-pre-wrap break-words ${isAdmin ? 'text-white' : 'text-gray-900'}`}>
+                          {msg.message}
+                        </p>
+                        <p className={`text-xs mt-2 ${isAdmin ? 'text-white/70' : 'text-gray-500'}`}>
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-white">
-            <div className="flex gap-2">
+          <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t border-gray-200 bg-white rounded-b-2xl sm:rounded-b-lg">
+            <div className="flex gap-2 sm:gap-3">
               <input
                 type="text"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-400"
+                className="flex-1 px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 text-sm sm:text-base bg-gray-50 focus:bg-white transition-colors"
                 disabled={isSending}
                 maxLength={2000}
               />
               <button
                 type="submit"
                 disabled={isSending || !newMessage.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-lg hover:shadow-xl flex items-center justify-center min-w-[48px] sm:min-w-[56px]"
+                aria-label="Send message"
               >
-                <Send className="h-5 w-5" />
+                {isSending ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
               </button>
             </div>
+            {newMessage.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2 text-right">
+                {newMessage.length}/2000
+              </p>
+            )}
           </form>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

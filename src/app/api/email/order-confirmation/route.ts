@@ -3,7 +3,15 @@ import { sendEmail, generateOrderConfirmationHTML, generateOrderConfirmationText
 
 export async function POST(request: NextRequest) {
   try {
-    const data: OrderEmailData = await request.json();
+    let data: OrderEmailData;
+    try {
+      data = await request.json();
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
     
     // Validate required fields
     if (!data.orderNumber || !data.customerName || !data.customerEmail || !data.items || !data.shippingAddress) {
@@ -23,16 +31,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate email content
-    const emailHTML = generateOrderConfirmationHTML(data);
-    const emailText = generateOrderConfirmationText(data);
+    let emailHTML: string;
+    let emailText: string;
+    try {
+      emailHTML = generateOrderConfirmationHTML(data);
+      emailText = generateOrderConfirmationText(data);
+    } catch (templateError) {
+      console.error('Error generating email template:', templateError);
+      return NextResponse.json(
+        { error: 'Failed to generate email template' },
+        { status: 500 }
+      );
+    }
     
     // Send confirmation email to customer
-    const customerEmailSent = await sendEmail({
-      to: data.customerEmail,
-      subject: `Order Confirmation - #${data.orderNumber}`,
-      html: emailHTML,
-      text: emailText
-    });
+    let customerEmailSent: boolean;
+    try {
+      customerEmailSent = await sendEmail({
+        to: data.customerEmail,
+        subject: `Order Confirmation - #${data.orderNumber}`,
+        html: emailHTML,
+        text: emailText
+      });
+    } catch (emailError) {
+      console.error('Error sending email:', emailError);
+      return NextResponse.json(
+        { error: 'Failed to send customer confirmation email' },
+        { status: 500 }
+      );
+    }
 
     if (!customerEmailSent) {
       return NextResponse.json(
@@ -102,12 +129,17 @@ export async function POST(request: NextRequest) {
       </div>
     `;
 
-    await sendEmail({
-      to: 'testleadz04@gmail.com',
-      subject: `New Order #${data.orderNumber} - ${data.customerName}`,
-      html: adminEmailHTML,
-      text: `New Order Received!\n\nOrder #${data.orderNumber}\nCustomer: ${data.customerName} (${data.customerEmail})\nTotal: $${data.orderTotal.toFixed(2)}\nItems: ${data.items.length}\n\nAction Required: Process this order and update the customer with shipping information.`
-    });
+    try {
+      await sendEmail({
+        to: 'testleadz04@gmail.com',
+        subject: `New Order #${data.orderNumber} - ${data.customerName}`,
+        html: adminEmailHTML,
+        text: `New Order Received!\n\nOrder #${data.orderNumber}\nCustomer: ${data.customerName} (${data.customerEmail})\nTotal: $${data.orderTotal.toFixed(2)}\nItems: ${data.items.length}\n\nAction Required: Process this order and update the customer with shipping information.`
+      });
+    } catch (adminEmailError) {
+      console.error('Error sending admin email:', adminEmailError);
+      // Don't fail the whole request if admin email fails
+    }
 
     return NextResponse.json(
       { message: 'Order confirmation emails sent successfully' },
@@ -116,8 +148,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Order confirmation email error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
