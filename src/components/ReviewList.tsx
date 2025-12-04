@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Star, ThumbsUp, CheckCircle, Flag, MoreVertical } from 'lucide-react';
+import { Star, ThumbsUp, CheckCircle, Flag, MoreVertical, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 import ReviewForm from './ReviewForm';
@@ -29,6 +31,7 @@ interface ReviewListProps {
 }
 
 export default function ReviewList({ productId }: ReviewListProps) {
+  const router = useRouter();
   const { user } = useAuthStore();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -38,6 +41,7 @@ export default function ReviewList({ productId }: ReviewListProps) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [helpfulVotes, setHelpfulVotes] = useState<Record<string, boolean>>({});
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -136,112 +140,49 @@ export default function ReviewList({ productId }: ReviewListProps) {
   };
 
   return (
-    <div className="mt-20 mb-12 space-y-12">
-      {/* Section Header */}
-      <div className="text-center mb-12 px-4">
-        <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-          Customer <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">Reviews</span>
+    <div className="mt-8 mb-8">
+      {/* Header with Write A Review Button */}
+      <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900">
+          Customer Reviews
         </h2>
-        <p className="text-gray-600 text-lg md:text-xl max-w-2xl mx-auto">Share your experience and help others make informed decisions</p>
+        <button
+          onClick={() => {
+            if (!user) {
+              router.push('/login');
+              return;
+            }
+            setShowReviewForm(!showReviewForm);
+          }}
+          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded font-medium text-sm transition-colors"
+        >
+          Write A Review
+        </button>
       </div>
 
-      {/* Review Stats and Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 px-4">
-        {/* Stats Section */}
-        <div className="lg:col-span-1">
-          <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-3xl p-10 shadow-2xl text-white relative overflow-hidden">
-            {/* Decorative background pattern */}
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
-            </div>
-            
-            <div className="relative z-10">
-              <div className="text-center mb-10">
-                <div className="text-8xl font-black mb-6 drop-shadow-lg">
-                  {stats?.averageRating.toFixed(1) || '0.0'}
-                </div>
-                <div className="flex items-center justify-center mb-6 gap-1.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      className={`h-8 w-8 ${
-                        star <= Math.round(stats?.averageRating || 0)
-                          ? 'text-yellow-300 fill-yellow-300 drop-shadow-lg'
-                          : 'text-white/30'
-                      }`}
-                    />
-                  ))}
-                </div>
-                <p className="text-white/95 text-lg font-semibold">
-                  Based on <span className="font-bold text-xl">{stats?.totalReviews || 0}</span> {stats?.totalReviews === 1 ? 'review' : 'reviews'}
-                </p>
-              </div>
-
-              {/* Rating Distribution */}
-              {getRatingDistribution() && (
-                <div className="space-y-4 pt-8 border-t border-white/30">
-                  <p className="text-base font-bold text-white mb-4">Rating Breakdown</p>
-                  {getRatingDistribution()!.map(({ rating, count, percentage }) => (
-                    <div key={rating} className="flex items-center gap-4">
-                      <span className="text-base font-bold text-white w-8">{rating}★</span>
-                      <div className="flex-1 bg-white/25 rounded-full h-4 overflow-hidden shadow-inner">
-                        <div
-                          className="bg-gradient-to-r from-yellow-300 to-yellow-400 h-4 rounded-full transition-all duration-500 shadow-lg"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-bold text-white w-10 text-right">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {(!stats || stats.totalReviews === 0) && (
-                <div className="pt-8 border-t border-white/30">
-                  <p className="text-white/90 text-base text-center italic font-medium">No ratings yet</p>
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Review Form Modal/Inline */}
+      {showReviewForm && user && (
+        <div className="mb-6 pb-6 border-b border-gray-200">
+          <ReviewForm 
+            productId={productId} 
+            onSuccess={() => {
+              fetchReviews();
+              setShowReviewForm(false);
+            }}
+            onCancel={() => setShowReviewForm(false)}
+          />
         </div>
+      )}
 
-        {/* Review Form */}
-        <div className="lg:col-span-2">
-          <ReviewForm productId={productId} onSuccess={fetchReviews} />
-        </div>
+      {/* Top Reviews Sub-heading */}
+      <div className="mb-4">
+        <h3 className="text-lg font-bold text-gray-900">
+          Top reviews from the United States
+        </h3>
       </div>
 
       {/* Reviews List */}
-      <div className="px-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-10 pb-6 border-b-2 border-gray-200">
-          <div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-2">
-              All Reviews
-            </h3>
-            <p className="text-gray-600 text-base font-medium">
-              {stats?.totalReviews || 0} {stats?.totalReviews === 1 ? 'review' : 'reviews'} total
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-5 py-3 border-2 border-emerald-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-sm font-semibold bg-white shadow-md hover:shadow-lg transition-all text-gray-700"
-            >
-              <option value="helpfulCount">Most Helpful</option>
-              <option value="createdAt">Newest First</option>
-              <option value="rating">Highest Rated</option>
-            </select>
-            <button
-              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-              className="px-5 py-3 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 transition-all text-sm font-semibold shadow-md hover:shadow-lg text-gray-700"
-              title={`Sort ${sortOrder === 'desc' ? 'Ascending' : 'Descending'}`}
-            >
-              {sortOrder === 'desc' ? '↓' : '↑'}
-            </button>
-          </div>
-        </div>
+      <div>
 
         {loading ? (
           <div className="space-y-4">
@@ -254,136 +195,108 @@ export default function ReviewList({ productId }: ReviewListProps) {
             ))}
           </div>
         ) : reviews.length === 0 ? (
-          <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-3xl p-20 text-center border-2 border-dashed border-emerald-200 my-8">
-            <div className="max-w-lg mx-auto">
-              <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-200 to-teal-200 rounded-full mb-6 shadow-lg">
-                  <Star className="h-12 w-12 text-emerald-600 fill-emerald-400" />
-                </div>
-              </div>
-              <h4 className="text-2xl font-bold text-gray-900 mb-4">No Reviews Yet</h4>
-              <p className="text-gray-700 mb-8 leading-relaxed text-lg">
-                Be the first to share your experience with this product! Your review will help other customers make informed decisions.
-              </p>
-              <div className="flex items-center justify-center gap-2 text-base text-emerald-700 font-medium">
-                <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                <span>Your feedback matters</span>
-              </div>
-            </div>
+          <div className="bg-gray-50 rounded-lg p-8 text-center border border-gray-200 my-4">
+            <p className="text-gray-600 text-sm">No reviews yet. Be the first to review this product!</p>
           </div>
         ) : (
           <>
-            <div className="space-y-8">
+            <div className="space-y-6">
               {reviews.map((review) => (
                 <div
                   key={review._id}
-                  className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-10 hover:shadow-2xl hover:border-emerald-200 transition-all duration-300"
+                  className="border-b border-gray-200 pb-6 last:border-b-0"
                 >
-                  <div className="flex items-start gap-6 mb-6">
-                    {/* User Avatar */}
-                    <div className="flex-shrink-0">
-                      <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                        {review.userName.charAt(0).toUpperCase()}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Left Column: Stars, Title, Reviewer Info */}
+                    <div className="md:col-span-1">
+                      {/* Star Rating */}
+                      <div className="flex items-center gap-1 mb-3">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`h-5 w-5 ${
+                              star <= review.rating
+                                ? 'text-yellow-400 fill-yellow-400'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      
+                      {/* Review Title */}
+                      {review.title && (
+                        <h4 className="font-bold text-gray-900 mb-3">{review.title}</h4>
+                      )}
+                      
+                      {/* Reviewer Name and Verified Badge */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-900">{review.userName}</span>
+                        {review.verifiedPurchase && (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-900">
+                            <CheckCircle className="h-4 w-4" />
+                            Verified Buyer
+                          </span>
+                        )}
                       </div>
                     </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <span className="font-bold text-gray-900 text-lg">{review.userName}</span>
-                            {review.verifiedPurchase && (
-                              <span className="inline-flex items-center gap-1.5 text-xs px-4 py-1.5 bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 rounded-full font-bold border-2 border-emerald-200 shadow-sm">
-                                <CheckCircle className="h-4 w-4" />
-                                Verified Purchase
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`h-5 w-5 ${
-                                    star <= review.rating
-                                      ? 'text-yellow-400 fill-current'
-                                      : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-sm font-semibold text-gray-700">{review.rating}.0</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="text-sm text-gray-500">{formatDate(review.createdAt)}</span>
-                          </div>
-                        </div>
-                      </div>
+
+                    {/* Right Column: Review Text */}
+                    <div className="md:col-span-2">
+                      <p className="text-gray-900 leading-relaxed">{review.comment}</p>
                       
-                      {review.title && (
-                        <h4 className="font-bold text-gray-900 text-lg mb-3">{review.title}</h4>
-                      )}
-                      <p className="text-gray-700 leading-relaxed mb-4 text-base">{review.comment}</p>
-                      
-                      <div className="flex items-center gap-6 pt-6 border-t-2 border-gray-100">
+                      {/* Helpful Button */}
+                      <div className="mt-4">
                         <button
                           onClick={() => handleHelpful(review._id)}
-                          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-sm hover:shadow-md ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${
                             helpfulVotes[review._id]
-                              ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-300'
-                              : 'bg-gray-50 text-gray-700 border-2 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                              : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-emerald-50 hover:text-emerald-700'
                           }`}
                         >
-                          <ThumbsUp className={`h-5 w-5 ${helpfulVotes[review._id] ? 'fill-current' : ''}`} />
+                          <ThumbsUp className={`h-3.5 w-3.5 ${helpfulVotes[review._id] ? 'fill-current' : ''}`} />
                           <span>Helpful</span>
                           {review.helpfulCount > 0 && (
-                            <span className="text-sm font-bold">({review.helpfulCount})</span>
+                            <span className="text-xs">({review.helpfulCount})</span>
                           )}
                         </button>
                       </div>
-                    </div>
-                  </div>
 
-                  {review.adminResponse && (
-                    <div className="mt-8 pt-8 border-t-2 border-emerald-100 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-xl p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
-                            {companyInfo.name.charAt(0)}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-base font-bold text-emerald-900 mb-2">Response from {companyInfo.name}</p>
-                          <p className="text-sm text-emerald-800 leading-relaxed mb-3">{review.adminResponse.message}</p>
-                          <p className="text-xs text-emerald-700 font-semibold">
+                      {/* Admin Response */}
+                      {review.adminResponse && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <p className="text-xs font-semibold text-gray-900 mb-1">Response from {companyInfo.name}</p>
+                          <p className="text-xs text-gray-700 leading-relaxed mb-2">{review.adminResponse.message}</p>
+                          <p className="text-xs text-gray-600">
                             {formatDate(review.adminResponse.respondedAt)}
                           </p>
                         </div>
-                      </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-12">
+              <div className="flex items-center justify-center gap-3 mt-6">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-8 py-3.5 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold shadow-md hover:shadow-lg disabled:hover:shadow-md text-gray-700"
+                  className="px-4 py-2 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium text-gray-700"
                 >
                   Previous
                 </button>
-                <div className="px-8 py-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 rounded-xl border-2 border-emerald-200 shadow-md">
-                  <span className="text-base font-bold text-gray-800">
-                    Page <span className="text-emerald-600">{page}</span> of <span className="text-teal-600">{totalPages}</span>
+                <div className="px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <span className="text-sm font-medium text-gray-800">
+                    Page {page} of {totalPages}
                   </span>
                 </div>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-8 py-3.5 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold shadow-md hover:shadow-lg disabled:hover:shadow-md text-gray-700"
+                  className="px-4 py-2 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium text-gray-700"
                 >
                   Next
                 </button>

@@ -25,6 +25,11 @@ export default function AdminToolsPage() {
   const [generateFAQsLogs, setGenerateFAQsLogs] = useState<string[]>([]);
   const [etsyProductsResult, setEtsyProductsResult] = useState<any>(null);
   const [includeAllRelevant, setIncludeAllRelevant] = useState(true);
+  const [breakoutScrapeResult, setBreakoutScrapeResult] = useState<any>(null);
+  const [engineScrapeResult, setEngineScrapeResult] = useState<any>(null);
+  const [hustlenhollaScrapeResult, setHustlenhollaScrapeResult] = useState<any>(null);
+  const [almasScrapeResult, setAlmasScrapeResult] = useState<any>(null);
+  const [unzeScrapeResult, setUnzeScrapeResult] = useState<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const faqsLogsEndRef = useRef<HTMLDivElement>(null);
 
@@ -185,6 +190,12 @@ export default function AdminToolsPage() {
           setCleanSpecsResult(data);
           const summary = data.summary || {};
           successMessage = `${data.message || 'Cleanup completed'}. Modified ${summary.cleanedProducts || 0} products, removed ${summary.totalRemoved || 0} items, renamed ${summary.totalRenamed || 0} specs, added ${summary.totalFAQsAdded || 0} FAQs`;
+        } else if (label === 'Scrape Furorjeans') {
+          const summary = data.summary || {};
+          successMessage = `Successfully scraped and imported ${summary.imported || 0} winter products (${summary.skipped || 0} skipped, ${summary.errors || 0} errors). JSON file saved to scraped/furorjeans-winter-products.json`;
+        } else if (label === 'Scrape 999.com.pk') {
+          const summary = data.summary || {};
+          successMessage = `Successfully scraped and imported ${summary.imported || 0} products (${summary.skipped || 0} skipped, ${summary.errors || 0} errors). JSON file saved to scraped/999pk-products.json`;
         } else {
           successMessage = `${label} completed successfully`;
         }
@@ -335,6 +346,171 @@ export default function AdminToolsPage() {
       toast.error(e instanceof Error ? e.message : 'Get Etsy products failed');
       setLoading(null);
       setProgress(prev => ({ ...prev, 'Get Etsy Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleScrapeBreakout = async () => {
+    try {
+      setLoading('Scrape Breakout Products');
+      setBreakoutScrapeResult(null);
+      setProgress(prev => ({ ...prev, 'Scrape Breakout Products': { current: 0, total: 0, status: 'Fetching products...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/scrape-breakout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Scrape Breakout products failed');
+      }
+
+      const data = await res.json();
+      setBreakoutScrapeResult(data);
+      setProgress(prev => ({ ...prev, 'Scrape Breakout Products': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+      
+      const summary = data.summary || {};
+      toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+    } catch (e) {
+      console.error('Error scraping Breakout products:', e);
+      toast.error(e instanceof Error ? e.message : 'Scrape Breakout products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Scrape Breakout Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleScrapeEngine = async () => {
+    try {
+      setLoading('Scrape Engine Products');
+      setEngineScrapeResult(null);
+      setProgress(prev => ({ ...prev, 'Scrape Engine Products': { current: 0, total: 0, status: 'Fetching products...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/scrape-engine', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Scrape Engine products failed');
+      }
+
+      const data = await res.json();
+      setEngineScrapeResult(data);
+      setProgress(prev => ({ ...prev, 'Scrape Engine Products': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+      
+      const summary = data.summary || {};
+      toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+    } catch (e) {
+      console.error('Error scraping Engine products:', e);
+      toast.error(e instanceof Error ? e.message : 'Scrape Engine products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Scrape Engine Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleScrapeHustlenholla = async () => {
+    try {
+      setLoading('Scrape Hustlenholla Products');
+      setHustlenhollaScrapeResult(null);
+      setProgress(prev => ({ ...prev, 'Scrape Hustlenholla Products': { current: 0, total: 0, status: 'Fetching products...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/scrape-hustlenholla', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Scrape Hustlenholla products failed');
+      }
+
+      const data = await res.json();
+      setHustlenhollaScrapeResult(data);
+      setProgress(prev => ({ ...prev, 'Scrape Hustlenholla Products': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+      
+      const summary = data.summary || {};
+      toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+    } catch (e) {
+      console.error('Error scraping Hustlenholla products:', e);
+      toast.error(e instanceof Error ? e.message : 'Scrape Hustlenholla products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Scrape Hustlenholla Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleScrapeAlmas = async () => {
+    try {
+      setLoading('Scrape Almas Products');
+      setAlmasScrapeResult(null);
+      setProgress(prev => ({ ...prev, 'Scrape Almas Products': { current: 0, total: 0, status: 'Fetching products...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/scrape-almas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Scrape Almas products failed');
+      }
+
+      const data = await res.json();
+      setAlmasScrapeResult(data);
+      setProgress(prev => ({ ...prev, 'Scrape Almas Products': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+      
+      const summary = data.summary || {};
+      toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+    } catch (e) {
+      console.error('Error scraping Almas products:', e);
+      toast.error(e instanceof Error ? e.message : 'Scrape Almas products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Scrape Almas Products': { current: 0, total: 0, status: '' } }));
+    }
+  };
+
+  const handleScrapeUnze = async () => {
+    try {
+      setLoading('Scrape Unze Products');
+      setUnzeScrapeResult(null);
+      setProgress(prev => ({ ...prev, 'Scrape Unze Products': { current: 0, total: 0, status: 'Fetching products...' } }));
+
+      const res = await authorizedFetch('/api/admin/products/scrape-unze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Scrape Unze products failed');
+      }
+
+      const data = await res.json();
+      setUnzeScrapeResult(data);
+      setProgress(prev => ({ ...prev, 'Scrape Unze Products': { current: 100, total: 100, status: 'Complete' } }));
+      setLoading(null);
+      
+      const summary = data.summary || {};
+      toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+    } catch (e) {
+      console.error('Error scraping Unze products:', e);
+      toast.error(e instanceof Error ? e.message : 'Scrape Unze products failed');
+      setLoading(null);
+      setProgress(prev => ({ ...prev, 'Scrape Unze Products': { current: 0, total: 0, status: '' } }));
     }
   };
 
@@ -651,14 +827,14 @@ export default function AdminToolsPage() {
           )}
         </div>
 
-        {/* Generate FAQs with SerpAPI and Gemini Section */}
+        {/* Generate FAQs with Gemini Section */}
         <div className="space-y-3 border-t pt-6">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="h-5 w-5 text-indigo-600" />
             <h3 className="text-lg font-semibold text-gray-900">Generate FAQs for Products</h3>
           </div>
           <p className="text-sm text-gray-600 mb-4">
-            Generate high-quality FAQs and Q&A for leather products using SerpAPI to find related questions and Gemini to create comprehensive answers. Only processes leather products (jackets and other leather items). Excludes: t-shirts, chappals, belts, bags, wallets, pants. Uses product title, description, and tags to generate SEO-optimized FAQs that can appear in Google's "People Also Ask" panels. Script will stop automatically if 3 consecutive products fail with all API keys.
+            Generate high-quality FAQs for leather products using Gemini AI. Only processes leather products (jackets and other leather items) that don't already have FAQs. Excludes: t-shirts, chappals, belts, bags, wallets, pants. Uses product title, description, and tags to generate SEO-optimized FAQs that can appear in Google's "People Also Ask" panels. Script will stop automatically if 3 consecutive products fail with all API keys.
           </p>
           
           <button
@@ -1004,6 +1180,541 @@ export default function AdminToolsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Breakout Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-pink-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Breakout Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape winter-related products from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://breakout.com.pk/products.json</code> using pagination and save them to the MongoDB stage3 database. Only products with winter-related keywords (winter, win, 25-WIN, wool, fleece, puffer, coat, jacket, etc.) will be imported. All products will be tagged with brand name "breakout". A JSON file containing all scraped winter products will be saved to <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/breakout-winter-products.json</code>.
+          </p>
+          
+          <button
+            onClick={handleScrapeBreakout}
+            disabled={loading === 'Scrape Breakout Products'}
+            className="w-full px-4 py-3 rounded-lg bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Breakout Products' ? 'Scraping…' : 'Scrape Breakout Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Breakout Products' && progress['Scrape Breakout Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Breakout Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-pink-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Breakout Products'].total > 0 
+                      ? `${(progress['Scrape Breakout Products'].current / progress['Scrape Breakout Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {breakoutScrapeResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products Fetched:</span>
+                  <span className="font-medium">{breakoutScrapeResult.summary?.totalFetched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Winter Products Found:</span>
+                  <span className="font-medium text-blue-600">{breakoutScrapeResult.summary?.totalFiltered || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Non-Winter Filtered Out:</span>
+                  <span className="font-medium text-gray-600">{breakoutScrapeResult.summary?.filteredOut || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pages Scraped:</span>
+                  <span className="font-medium">{breakoutScrapeResult.summary?.pagesScraped || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">New Products Imported:</span>
+                  <span className="font-medium text-green-600">{breakoutScrapeResult.summary?.imported || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Existing Products Updated:</span>
+                  <span className="font-medium text-purple-600">{breakoutScrapeResult.summary?.updated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Skipped:</span>
+                  <span className="font-medium text-orange-600">{breakoutScrapeResult.summary?.skipped || 0}</span>
+                </div>
+                {breakoutScrapeResult.summary?.jsonFile && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-1">JSON File Saved:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {breakoutScrapeResult.summary.jsonFile}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Furorjeans Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-green-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Furorjeans Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape <strong>winter-related products only</strong> from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://furorjeans.com/products.json</code> using pagination and save them to the MongoDB stage3 database. All products will be tagged with the brand name "furorjeans". A JSON file containing all scraped products will be saved to <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/furorjeans-winter-products.json</code>.
+          </p>
+          
+          <button
+            onClick={() => call('Scrape Furorjeans', '/api/admin/products/scrape-furorjeans')}
+            disabled={loading !== null}
+            className="w-full px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Furorjeans' ? 'Scraping…' : 'Scrape Furorjeans Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Furorjeans' && progress['Scrape Furorjeans'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Furorjeans'].status}</span>
+                <span>
+                  {progress['Scrape Furorjeans'].total > 0 
+                    ? `${progress['Scrape Furorjeans'].current}/${progress['Scrape Furorjeans'].total}`
+                    : '0/0'
+                  }
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Furorjeans'].total > 0 
+                      ? `${(progress['Scrape Furorjeans'].current / progress['Scrape Furorjeans'].total) * 100}%`
+                      : '0%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Engine Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Engine Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape all products from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://engine.com.pk/products.json</code> using pagination. Two JSON files will be created: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/engine-all-products.json</code> (all products) and <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/engine-winter-products.json</code> (winter products only). Only winter-related products will be saved to the MongoDB stage3 database with brand name "engine".
+          </p>
+          
+          <button
+            onClick={handleScrapeEngine}
+            disabled={loading === 'Scrape Engine Products'}
+            className="w-full px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Engine Products' ? 'Scraping…' : 'Scrape Engine Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Engine Products' && progress['Scrape Engine Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Engine Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Engine Products'].total > 0 
+                      ? `${(progress['Scrape Engine Products'].current / progress['Scrape Engine Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {engineScrapeResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products Fetched:</span>
+                  <span className="font-medium">{engineScrapeResult.summary?.totalFetched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Winter Products Found:</span>
+                  <span className="font-medium text-blue-600">{engineScrapeResult.summary?.totalFiltered || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Non-Winter Filtered Out:</span>
+                  <span className="font-medium text-gray-600">{engineScrapeResult.summary?.filteredOut || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pages Scraped:</span>
+                  <span className="font-medium">{engineScrapeResult.summary?.pagesScraped || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">New Products Imported:</span>
+                  <span className="font-medium text-green-600">{engineScrapeResult.summary?.imported || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Existing Products Updated:</span>
+                  <span className="font-medium text-purple-600">{engineScrapeResult.summary?.updated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Skipped:</span>
+                  <span className="font-medium text-orange-600">{engineScrapeResult.summary?.skipped || 0}</span>
+                </div>
+                {engineScrapeResult.summary?.allProductsFile && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-1">All Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {engineScrapeResult.summary.allProductsFile}
+                    </p>
+                  </div>
+                )}
+                {engineScrapeResult.summary?.winterProductsFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Winter Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {engineScrapeResult.summary.winterProductsFile}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Hustlenholla Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-teal-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Hustlenholla Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape all products from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://hustlenholla.com.pk/products.json</code> using pagination. Two JSON files will be created: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/hustlenholla-all-products.json</code> (all products) and <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/hustlenholla-winter-products.json</code> (winter products only). Only winter-related products will be saved to the MongoDB stage3 database with brand name "hustlenholla".
+          </p>
+          
+          <button
+            onClick={handleScrapeHustlenholla}
+            disabled={loading === 'Scrape Hustlenholla Products'}
+            className="w-full px-4 py-3 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Hustlenholla Products' ? 'Scraping…' : 'Scrape Hustlenholla Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Hustlenholla Products' && progress['Scrape Hustlenholla Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Hustlenholla Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-teal-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Hustlenholla Products'].total > 0 
+                      ? `${(progress['Scrape Hustlenholla Products'].current / progress['Scrape Hustlenholla Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {hustlenhollaScrapeResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products Fetched:</span>
+                  <span className="font-medium">{hustlenhollaScrapeResult.summary?.totalFetched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Winter Products Found:</span>
+                  <span className="font-medium text-blue-600">{hustlenhollaScrapeResult.summary?.totalFiltered || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Non-Winter Filtered Out:</span>
+                  <span className="font-medium text-gray-600">{hustlenhollaScrapeResult.summary?.filteredOut || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pages Scraped:</span>
+                  <span className="font-medium">{hustlenhollaScrapeResult.summary?.pagesScraped || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">New Products Imported:</span>
+                  <span className="font-medium text-green-600">{hustlenhollaScrapeResult.summary?.imported || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Existing Products Updated:</span>
+                  <span className="font-medium text-purple-600">{hustlenhollaScrapeResult.summary?.updated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Skipped:</span>
+                  <span className="font-medium text-orange-600">{hustlenhollaScrapeResult.summary?.skipped || 0}</span>
+                </div>
+                {hustlenhollaScrapeResult.summary?.allProductsFile && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-1">All Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {hustlenhollaScrapeResult.summary.allProductsFile}
+                    </p>
+                  </div>
+                )}
+                {hustlenhollaScrapeResult.summary?.winterProductsFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Winter Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {hustlenhollaScrapeResult.summary.winterProductsFile}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Almas Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Almas Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape all products from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://www.almas.pk/products.json</code> using pagination. Two JSON files will be created: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/almas-all-products.json</code> (all products) and <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/almas-winter-products.json</code> (winter products only). Only winter-related products will be saved to the MongoDB stage3 database with brand name "almas".
+          </p>
+          
+          <button
+            onClick={handleScrapeAlmas}
+            disabled={loading === 'Scrape Almas Products'}
+            className="w-full px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Almas Products' ? 'Scraping…' : 'Scrape Almas Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Almas Products' && progress['Scrape Almas Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Almas Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Almas Products'].total > 0 
+                      ? `${(progress['Scrape Almas Products'].current / progress['Scrape Almas Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {almasScrapeResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products Fetched:</span>
+                  <span className="font-medium">{almasScrapeResult.summary?.totalFetched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Winter Products Found:</span>
+                  <span className="font-medium text-blue-600">{almasScrapeResult.summary?.totalFiltered || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Non-Winter Filtered Out:</span>
+                  <span className="font-medium text-gray-600">{almasScrapeResult.summary?.filteredOut || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pages Scraped:</span>
+                  <span className="font-medium">{almasScrapeResult.summary?.pagesScraped || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">New Products Imported:</span>
+                  <span className="font-medium text-green-600">{almasScrapeResult.summary?.imported || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Existing Products Updated:</span>
+                  <span className="font-medium text-purple-600">{almasScrapeResult.summary?.updated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Skipped:</span>
+                  <span className="font-medium text-orange-600">{almasScrapeResult.summary?.skipped || 0}</span>
+                </div>
+                {almasScrapeResult.summary?.allProductsFile && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-1">All Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {almasScrapeResult.summary.allProductsFile}
+                    </p>
+                  </div>
+                )}
+                {almasScrapeResult.summary?.winterProductsFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Winter Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {almasScrapeResult.summary.winterProductsFile}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape Unze Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-cyan-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape Unze Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape all products from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://unze.com.pk/products.json</code> using pagination. Two JSON files will be created: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/unze-all-products.json</code> (all products) and <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/unze-winter-products.json</code> (winter products only). Only winter-related products will be saved to the MongoDB stage3 database with brand name "unze".
+          </p>
+          
+          <button
+            onClick={handleScrapeUnze}
+            disabled={loading === 'Scrape Unze Products'}
+            className="w-full px-4 py-3 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape Unze Products' ? 'Scraping…' : 'Scrape Unze Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape Unze Products' && progress['Scrape Unze Products'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape Unze Products'].status}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-cyan-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape Unze Products'].total > 0 
+                      ? `${(progress['Scrape Unze Products'].current / progress['Scrape Unze Products'].total) * 100}%`
+                      : '50%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          )}
+
+          {/* Results */}
+          {unzeScrapeResult && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Results:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Products Fetched:</span>
+                  <span className="font-medium">{unzeScrapeResult.summary?.totalFetched || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Winter Products Found:</span>
+                  <span className="font-medium text-blue-600">{unzeScrapeResult.summary?.totalFiltered || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Non-Winter Filtered Out:</span>
+                  <span className="font-medium text-gray-600">{unzeScrapeResult.summary?.filteredOut || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Pages Scraped:</span>
+                  <span className="font-medium">{unzeScrapeResult.summary?.pagesScraped || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">New Products Imported:</span>
+                  <span className="font-medium text-green-600">{unzeScrapeResult.summary?.imported || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Existing Products Updated:</span>
+                  <span className="font-medium text-purple-600">{unzeScrapeResult.summary?.updated || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products Skipped:</span>
+                  <span className="font-medium text-orange-600">{unzeScrapeResult.summary?.skipped || 0}</span>
+                </div>
+                {unzeScrapeResult.summary?.allProductsFile && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <p className="text-xs text-gray-500 mb-1">All Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {unzeScrapeResult.summary.allProductsFile}
+                    </p>
+                  </div>
+                )}
+                {unzeScrapeResult.summary?.winterProductsFile && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Winter Products JSON File:</p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border border-gray-200 text-gray-700">
+                      {unzeScrapeResult.summary.winterProductsFile}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Scrape 999.com.pk Products Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-purple-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scrape 999.com.pk Products</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Scrape <strong>winter-related products only</strong> from <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">https://999.com.pk/products.json</code> using pagination and save them to the MongoDB stage3 database. All products will be tagged with the brand name "999pk". A JSON file containing all scraped products will be saved to <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">scraped/999pk-winter-products.json</code>.
+          </p>
+          
+          <button
+            onClick={() => call('Scrape 999.com.pk', '/api/admin/products/scrape-999pk')}
+            disabled={loading !== null}
+            className="w-full px-4 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
+          >
+            {loading === 'Scrape 999.com.pk' ? 'Scraping…' : 'Scrape 999.com.pk Products'}
+          </button>
+
+          {/* Progress */}
+          {loading === 'Scrape 999.com.pk' && progress['Scrape 999.com.pk'] && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{progress['Scrape 999.com.pk'].status}</span>
+                <span>
+                  {progress['Scrape 999.com.pk'].total > 0 
+                    ? `${progress['Scrape 999.com.pk'].current}/${progress['Scrape 999.com.pk'].total}`
+                    : '0/0'
+                  }
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ 
+                    width: progress['Scrape 999.com.pk'].total > 0 
+                      ? `${(progress['Scrape 999.com.pk'].current / progress['Scrape 999.com.pk'].total) * 100}%`
+                      : '0%'
+                  }}
+                ></div>
               </div>
             </div>
           )}

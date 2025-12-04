@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical } from 'lucide-react';
+import { Star, Heart, Truck, Shield, RotateCcw, Minus, Plus, ArrowRight, ArrowLeft, Edit, Save, X, Trash2, PlusCircle, Image as ImageIcon, MoveUp, MoveDown, Package, Ruler, Droplet, Sparkles, CheckCircle2, HelpCircle, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Tag, Cloud, Loader2, ExternalLink, GripVertical, ShoppingBag, Wallet, DollarSign } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -21,9 +21,11 @@ import SalesCounter from '@/components/SalesCounter';
 import SocialShareButtons from '@/components/SocialShareButtons';
 import ProductQA from '@/components/ProductQA';
 import ProductFAQ from '@/components/ProductFAQ';
+import ReviewList from '@/components/ReviewList';
 import { requestDeduplicator } from '@/lib/requestDeduplication';
 import toast from 'react-hot-toast';
 import type { EmailPromoDetails } from '@/types';
+import { faqPageJsonLd, productJsonLd } from '@/lib/seo';
 
 // Brand Select Component
 function BrandSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -130,6 +132,8 @@ export default function ProductPage() {
   const [isGeneratingSpecs, setIsGeneratingSpecs] = useState(false);
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const [openFAQIndex, setOpenFAQIndex] = useState<number | null>(null);
+  const [openSection, setOpenSection] = useState<'details' | 'shipping' | 'care' | null>(null);
+  const [openSizeSelect, setOpenSizeSelect] = useState(false);
   const [isCheckingEtsyPolicies, setIsCheckingEtsyPolicies] = useState(false);
   const [openEditSelect, setOpenEditSelect] = useState<'category' | 'status' | 'inStock' | null>(null);
   const [etsyPolicyResults, setEtsyPolicyResults] = useState<any>(null);
@@ -205,10 +209,27 @@ export default function ProductPage() {
   
   const isSuperAdmin = user?.role?.name === 'SUPER_ADMIN';
   const product = currentProduct as any;
-  const availableStock =
-    product && product.inStock
-      ? Math.max(0, typeof product.stockCount === 'number' ? product.stockCount : 0)
-      : 0;
+  // Calculate available stock: 
+  // - If inStock is explicitly false, stock is 0
+  // - If inStock is true or undefined (defaults to true), check stockCount
+  // - If stockCount is not set/undefined, treat as unlimited (use a high number)
+  const availableStock = (() => {
+    if (!product) return 0;
+    
+    // If explicitly out of stock, return 0
+    if (product.inStock === false) return 0;
+    
+    // If inStock is true or undefined (defaults to true per schema)
+    const stockCount = typeof product.stockCount === 'number' ? product.stockCount : undefined;
+    
+    // If stockCount is not set (undefined), treat as unlimited stock
+    if (stockCount === undefined || stockCount === null) {
+      return 9999; // High number to represent unlimited stock
+    }
+    
+    // Return the actual stock count (at least 0)
+    return Math.max(0, stockCount);
+  })();
   
   useEffect(() => {
     setQuantity((prev) => {
@@ -789,7 +810,7 @@ export default function ProductPage() {
   // Only show error if we've attempted to fetch and we're not loading and there's actually an error or no product
   if (hasAttemptedFetch && !isLoading && (error || !currentProduct)) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900  mb-4">Product Not Found</h1>
           <p className="text-gray-600  mb-8">
@@ -1003,12 +1024,13 @@ export default function ProductPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 py-3 sm:py-4 lg:py-5">
         {/* Back Button */}
         <div className="mb-2 sm:mb-3">
           <BackButton href="/products" variant="with-label" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 xl:gap-12 max-w-7xl mx-auto">
           {/* Product Images */}
           <div className="space-y-2 sm:space-y-3">
             {isEditMode ? (
@@ -1193,6 +1215,7 @@ export default function ProductPage() {
                 )}
               </>
             )}
+
           </div>
 
         {/* Product Info */}
@@ -1297,8 +1320,8 @@ export default function ProductPage() {
             </div>
           )}
 
-          {/* Brand and Name */}
-          <div>
+          {/* Discount Badge and Product Title */}
+          <div className="relative">
             {isEditMode ? (
               <div className="space-y-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
                 <div>
@@ -1321,14 +1344,19 @@ export default function ProductPage() {
               </div>
             ) : (
               <>
-                <p className="text-sm text-gray-500  mb-2 font-medium uppercase tracking-wide">{product.brand}</p>
-                <h1 className="text-3xl font-bold text-gray-900  mb-4">{product.name}</h1>
+                {/* Discount Badge */}
+                {comparePrice && comparePrice > displayPrice && (
+                  <div className="absolute -top-2 -left-2 bg-black text-white px-3 py-1 text-sm font-bold z-10">
+                    {Math.round(((comparePrice - displayPrice) / comparePrice) * 100)}% OFF
+                  </div>
+                )}
+                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 pr-20">{product.name}</h1>
               </>
             )}
           </div>
 
-          {/* Rating */}
-          <div className="flex items-center space-x-2">
+          {/* Rating and Stock Status */}
+          <div className="flex items-center space-x-3 mb-4">
             <div className="flex items-center">
               {[...Array(5)].map((_, i) => (
                 <Star
@@ -1336,14 +1364,20 @@ export default function ProductPage() {
                   className={`h-5 w-5 ${
                     i < Math.floor(product.rating)
                       ? 'text-yellow-400 fill-current'
-                      : 'text-gray-300 '
+                      : 'text-gray-300'
                   }`}
                 />
               ))}
             </div>
-            <span className="text-gray-600  font-medium">
-              {product.rating} ({product.reviewCount} reviews)
+            <span className="text-gray-600 font-medium">
+              ({product.reviewCount || 0} Ratings)
             </span>
+            {product.inStock && (
+              <span className="flex items-center text-green-600 font-medium">
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                In Stock
+              </span>
+            )}
           </div>
 
           {/* Price */}
@@ -1372,21 +1406,16 @@ export default function ProductPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center space-x-4">
-                <span className="text-3xl font-bold text-gray-900 ">
-                  {formatCurrency(displayPrice)}
-                </span>
+            <div className="space-y-3 mb-4">
+              <div className="flex items-baseline space-x-4">
                 {comparePrice && comparePrice > displayPrice && (
                   <span className="text-xl text-gray-500 line-through">
                     {formatCurrency(comparePrice)}
                   </span>
                 )}
-                {savings && savings > 0 && (
-                  <span className="bg-red-100 text-red-800 text-sm font-bold px-3 py-1 rounded-full">
-                    Save {formatCurrency(savings)}
-                  </span>
-                )}
+                <span className="text-4xl font-bold text-gray-900">
+                  {formatCurrency(displayPrice)}
+                </span>
               </div>
               {promoDetails && (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1406,10 +1435,15 @@ export default function ProductPage() {
               {promoError && (
                 <p className="text-sm text-red-600 font-medium">{promoError}</p>
               )}
-              {/* Sales Counter - Shows items sold in last 24 hours */}
-              {!isEditMode && productId && (
-                <SalesCounter productId={productId} />
-              )}
+            </div>
+          )}
+
+          {/* Free Shipping Banner */}
+          {!isEditMode && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-700 font-medium text-sm">
+                Free Shipping & Free Returns Until Jan 31st, 2026
+              </p>
             </div>
           )}
 
@@ -1454,10 +1488,142 @@ export default function ProductPage() {
             </div>
           )}
 
-          {/* Description */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900">Description</h3>
-            {isEditMode ? (
+          {/* Collapsible Sections */}
+          {!isEditMode && (
+            <div className="space-y-0 border-t border-gray-200 pt-4">
+              {/* Product Details Section */}
+              <div className="border-b border-gray-200">
+                <button
+                  onClick={() => setOpenSection(openSection === 'details' ? null : 'details')}
+                  className="w-full flex items-center justify-between py-4 text-left"
+                >
+                  <span className="font-bold text-gray-900 text-lg">Product Details</span>
+                  {openSection === 'details' ? (
+                    <ChevronUp className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+                {openSection === 'details' && (
+                  <div className="pb-4 text-gray-900">
+                    {/* Product Description */}
+                    {product.descriptionHtml && product.descriptionHtml.trim() !== "" ? (
+                      <div
+                        className="prose max-w-none text-gray-900 mb-4"
+                        dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
+                      />
+                    ) : (
+                      <p className="leading-relaxed mb-4">{product.description}</p>
+                    )}
+                    
+                    {/* Specifications List */}
+                    {cleanSpecs && Object.keys(cleanSpecs).length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-bold text-gray-900 mb-3">Specification:</h4>
+                        <ul className="list-disc list-inside space-y-1 text-gray-900">
+                          {Object.entries(cleanSpecs).map(([key, value]) => {
+                            const valueStr = String(value).trim();
+                            const keyLower = key.toLowerCase();
+                            const valueLower = valueStr.toLowerCase();
+                            
+                            // Determine if this specification should be bolded
+                            // Bold: material/leather info with percentages, key material descriptions
+                            const shouldBold = 
+                              valueLower.includes('100%') ||
+                              (valueLower.includes('%') && (valueLower.includes('real') || valueLower.includes('leather'))) ||
+                              (valueLower.includes('real') && (valueLower.includes('leather') || valueLower.includes('lambskin'))) ||
+                              valueLower.includes('100% real lambskin leather') ||
+                              valueLower.includes('100% real') ||
+                              (keyLower.includes('material') && valueLower.includes('leather'));
+                            
+                            // Format the display value
+                            let displayValue = valueStr;
+                            
+                            // For certain keys, format as "Key: Value"
+                            const keyWords = ['color', 'closure', 'pockets', 'collar', 'cuffs', 'hoodie', 'lining'];
+                            if (keyWords.some(word => keyLower.includes(word)) && !valueStr.includes(':')) {
+                              const formattedKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                              displayValue = `${formattedKey}: ${valueStr}`;
+                            }
+                            
+                            // Ensure proper capitalization and punctuation
+                            if (!displayValue.endsWith('.') && !displayValue.endsWith('!') && !displayValue.endsWith('?')) {
+                              displayValue = displayValue + '.';
+                            }
+                            
+                            return (
+                              <li key={key} className="leading-relaxed">
+                                {shouldBold ? (
+                                  <span className="font-bold">{displayValue}</span>
+                                ) : (
+                                  <span>{displayValue}</span>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Shipping & Returns Section */}
+              <div className="border-b border-gray-200">
+                <button
+                  onClick={() => setOpenSection(openSection === 'shipping' ? null : 'shipping')}
+                  className="w-full flex items-center justify-between py-4 text-left"
+                >
+                  <span className="font-semibold text-gray-900">Shipping & Returns</span>
+                  {openSection === 'shipping' ? (
+                    <ChevronUp className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+                {openSection === 'shipping' && (
+                  <div className="pb-4 text-gray-700 space-y-2">
+                    <p><strong>Free Shipping:</strong> Free shipping on all orders. Delivery typically takes 5-7 business days.</p>
+                    <p><strong>Free Returns:</strong> 30 days free exchanges and returns. Items must be in original condition.</p>
+                    <p><strong>International Shipping:</strong> Available to most countries. Shipping times vary by location.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Care & Maintenance Section */}
+              <div className="border-b border-gray-200">
+                <button
+                  onClick={() => setOpenSection(openSection === 'care' ? null : 'care')}
+                  className="w-full flex items-center justify-between py-4 text-left"
+                >
+                  <span className="font-semibold text-gray-900">Care & Maintenance</span>
+                  {openSection === 'care' ? (
+                    <ChevronUp className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+                {openSection === 'care' && (
+                  <div className="pb-4 text-gray-700 space-y-2">
+                    {cleanSpecs && (cleanSpecs.Care || cleanSpecs.care || cleanSpecs.Maintenance || cleanSpecs.maintenance) ? (
+                      <p>{cleanSpecs.Care || cleanSpecs.care || cleanSpecs.Maintenance || cleanSpecs.maintenance}</p>
+                    ) : (
+                      <>
+                        <p><strong>Storage:</strong> Store on a hanger with broad shoulders to maintain shape. Avoid folding or crumpling.</p>
+                        <p><strong>Cleaning:</strong> Spot clean with a damp cloth. For deeper cleaning, consult a professional leather cleaner.</p>
+                        <p><strong>Maintenance:</strong> Condition leather periodically to keep it supple and prevent cracking.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Description (Edit Mode Only) */}
+          {isEditMode && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900">Description</h3>
               <div className="space-y-3 p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100">
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 mb-2">Description (Plain Text)</label>
@@ -1480,19 +1646,8 @@ export default function ProductPage() {
                   />
                 </div>
               </div>
-            ) : (
-              <>
-                {product.descriptionHtml && product.descriptionHtml.trim() !== "" ? (
-                  <div
-                    className="prose max-w-none mt-4 text-gray-600"
-                    dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
-                  />
-                ) : (
-                  <p className="text-gray-600 leading-relaxed">{product.description}</p>
-                )}
-              </>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Additional Edit Fields for Super Admin */}
           {isEditMode && (
@@ -1712,23 +1867,28 @@ export default function ProductPage() {
           )}
 
           {/* Size Selection */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Size</h3>
-            <div className="flex flex-wrap gap-2">
-              {sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`px-4 py-2 border-2 rounded-lg font-medium transition-all duration-200 ${
-                    selectedSize === size
-                      ? 'border-blue-500 bg-blue-50  text-blue-700  ring-2 ring-blue-200 '
-                      : 'border-gray-300  hover:border-gray-400  text-gray-700  hover:bg-gray-50 '
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-base font-semibold text-gray-900">Size:</label>
+              <Link href="#size-guide" className="text-sm text-blue-600 hover:text-blue-700 underline flex items-center gap-1">
+                <Ruler className="h-4 w-4" />
+                Size Guide
+              </Link>
             </div>
+            <SelectField
+              options={[
+                { value: '', label: 'Choose a Size' },
+                ...sizes.map(size => ({ value: size, label: size }))
+              ]}
+              value={selectedSize}
+              isOpen={openSizeSelect}
+              onOpenChange={setOpenSizeSelect}
+              onSelect={(value) => {
+                setSelectedSize(value);
+                setOpenSizeSelect(false);
+              }}
+              className="w-full"
+            />
           </div>
 
           {/* Color Selection */}
@@ -1751,268 +1911,87 @@ export default function ProductPage() {
             </div>
           </div>
 
-          {/* Quantity */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 ">Quantity</h3>
-            <div className="flex items-center space-x-3">
+          {/* Quantity and Add to Cart */}
+          <div className="mb-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center">
+                <label className="text-base font-semibold text-gray-900 mr-3">Quantity:</label>
+                <div className="flex items-center border-2 border-gray-300 rounded-lg">
+                  <button
+                    onClick={() => setQuantity(Math.max(availableStock > 0 ? 1 : 0, quantity - 1))}
+                    className="p-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <Minus className="h-4 w-4 text-gray-600" />
+                  </button>
+                  <input
+                    type="number"
+                    value={quantity}
+                    readOnly
+                    className="w-12 text-center text-lg font-medium text-gray-900 border-x border-gray-300 py-2"
+                  />
+                  <button
+                    onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
+                    className="p-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <Plus className="h-4 w-4 text-gray-600" />
+                  </button>
+                </div>
+              </div>
               <button
-                onClick={() => setQuantity(Math.max(availableStock > 0 ? 1 : 0, quantity - 1))}
-                className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
+                onClick={handleAddToCart}
+                disabled={product.inStock === false || availableStock <= 0}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 px-6 rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
               >
-                <Minus className="h-4 w-4 text-gray-600 " />
-              </button>
-              <span className="text-lg font-medium w-12 text-center text-gray-900 ">{quantity}</span>
-              <button
-                onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
-                className="p-2 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
-              >
-                <Plus className="h-4 w-4 text-gray-600 " />
+                <ShoppingBag className="h-5 w-5" />
+                <span>{product.inStock !== false && availableStock > 0 ? 'ADD TO CART' : 'Out of Stock'}</span>
               </button>
             </div>
-            <p className="text-sm text-gray-500  mt-2 font-medium">
-              {availableStock} items in stock
-            </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex space-x-4">
-            <button
-              onClick={handleAddToCart}
-              disabled={!product.inStock || availableStock <= 0}
-              className="flex-1 bg-blue-600 hover:bg-blue-700   text-white py-3 px-6 rounded-lg font-semibold disabled:bg-gray-300  disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
-            >
-              <span>{product.inStock && availableStock > 0 ? 'Add to Cart' : 'Out of Stock'}</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
-            <button
-              onClick={async () => {
-                if (!user) {
-                  toast.error('Please sign in to save items to your wishlist');
-                  router.push('/login');
-                  return;
-                }
-                try {
-                  const res = await toggleWishlist(product._id as any);
-                  setIsLiked(res === 'added');
-                } catch {
-                  toast.error('Unable to update wishlist right now');
-                }
-              }}
-              className="p-3 border-2 border-gray-300  rounded-lg hover:bg-gray-50  transition-colors"
-              aria-label="Add to wishlist"
-            >
-              <Heart className={`h-6 w-6 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400 '}`} />
-            </button>
-          </div>
+          {/* Cyber Deals Countdown - Only show if promo/deal is active */}
+          {!isEditMode && promoDetails && (
+            <div className="mb-4">
+              <p className="text-red-600 font-medium text-sm">Cyber Deals Countdown, Only Until Midnight</p>
+            </div>
+          )}
 
-          {/* Trust Badges - High Priority: Build confidence near CTA */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t border-gray-200 ">
-            <div className="flex items-center space-x-2">
-              <Truck className="h-5 w-5 text-blue-600 " />
-              <span className="text-sm text-gray-600  font-medium">Free Shipping</span>
+          {/* Wishlist and SKU */}
+          {!isEditMode && (
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+              <button
+                onClick={async () => {
+                  if (!user) {
+                    toast.error('Please sign in to save items to your wishlist');
+                    router.push('/login');
+                    return;
+                  }
+                  try {
+                    const res = await toggleWishlist(product._id as any);
+                    setIsLiked(res === 'added');
+                  } catch {
+                    toast.error('Unable to update wishlist right now');
+                  }
+                }}
+                className="flex items-center gap-2 text-gray-700 hover:text-red-600 transition-colors underline"
+                aria-label="Add to wishlist"
+              >
+                <Heart className={`h-5 w-5 ${(isLiked || isInWishlist(product._id as any)) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
+                <span>Add To Wishlist</span>
+              </button>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="font-medium">SKU</span>
+                <span className="bg-gray-100 px-3 py-1 rounded-full font-mono">{product.sku || product._id?.toString().slice(-6) || 'N/A'}</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-blue-600 " />
-              <span className="text-sm text-gray-600  font-medium">Secure Payment</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RotateCcw className="h-5 w-5 text-blue-600 " />
-              <span className="text-sm text-gray-600  font-medium">Easy Returns</span>
-            </div>
-          </div>
+          )}
+
         </div>
       </div>
-
-      {/* Product Specifications - Technical details for informed decisions */}
-      {(!cleanSpecs || Object.keys(cleanSpecs).length === 0) && isSuperAdmin && (
-        <div className="mt-24 mb-16">
-          <div className="text-center mb-6 sm:mb-8 px-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600 rounded-xl mb-3 sm:mb-4 shadow-md">
-              <Package className="h-8 w-8 text-white" />
-            </div>
-            <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
-              Product <span className="bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 bg-clip-text text-transparent">Specifications</span>
-            </h2>
-            <p className="text-gray-600 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed mb-4">
-              No specifications available yet. Generate them automatically from the product title and description.
-            </p>
-            <button
-              onClick={handleGenerateSpecs}
-              disabled={isGeneratingSpecs}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              title="Generate specifications from product title and description"
-            >
-              {isGeneratingSpecs ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  Generating Specifications...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-5 w-5" />
-                  Generate Specifications
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-      {cleanSpecs && Object.keys(cleanSpecs).length > 0 && (
-        <div className="mt-24 mb-16">
-          {/* Header Section */}
-          <div className="text-center mb-6 sm:mb-8 px-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-xl mb-3 sm:mb-4 shadow-md">
-              <Package className="h-8 w-8 text-white" />
-            </div>
-            <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
-              Product <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">Specifications</span>
-            </h2>
-            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed mb-4">
-              Comprehensive details to help you make an informed decision
-            </p>
-            {isSuperAdmin && (
-              <button
-                onClick={handleGenerateSpecs}
-                disabled={isGeneratingSpecs}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                title="Generate additional specifications from product title and description"
-              >
-                {isGeneratingSpecs ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    Generate More Specs
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-          
-          {/* Specifications Section - Modern Compact Grid Design */}
-          <div className="max-w-4xl mx-auto px-3 sm:px-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-              {/* Compact Grid Layout */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                {Object.entries(cleanSpecs).map(([key, value]) => {
-                  // Format key for better display
-                  const formattedKey = key
-                    .replace(/([A-Z])/g, ' $1')
-                    .replace(/^./, str => str.toUpperCase())
-                    .trim();
-                  
-                  const keyLower = key.toLowerCase();
-                  const specValue = typeof value === 'string' ? value : JSON.stringify(value);
-                  
-                  // Determine category and color scheme
-                  let bgColor = 'bg-gray-50';
-                  let borderColor = 'border-gray-200';
-                  let keyColor = 'text-gray-700';
-                  let valueColor = 'text-gray-900';
-                  let dotColor = 'bg-gray-400';
-                  
-                  if (keyLower.includes('color') || keyLower.includes('colour')) {
-                    bgColor = 'bg-pink-50';
-                    borderColor = 'border-pink-200';
-                    keyColor = 'text-pink-700';
-                    valueColor = 'text-pink-900';
-                    dotColor = 'bg-pink-400';
-                  } else if (
-                    keyLower.includes('material') || keyLower.includes('fabric') ||
-                    keyLower.includes('leather') || keyLower.includes('composition') ||
-                    keyLower.includes('fiber') || keyLower.includes('textile') ||
-                    keyLower.includes('lining') || keyLower.includes('suede') ||
-                    keyLower.includes('wool') || keyLower.includes('cotton') ||
-                    keyLower.includes('polyester')
-                  ) {
-                    bgColor = 'bg-amber-50';
-                    borderColor = 'border-amber-200';
-                    keyColor = 'text-amber-700';
-                    valueColor = 'text-amber-900';
-                    dotColor = 'bg-amber-400';
-                  } else if (
-                    keyLower.includes('design') || keyLower.includes('style') ||
-                    keyLower.includes('pattern') || keyLower.includes('cuffs') ||
-                    keyLower.includes('closure') || keyLower.includes('pockets') ||
-                    keyLower.includes('collar') || keyLower.includes('sleeve')
-                  ) {
-                    bgColor = 'bg-blue-50';
-                    borderColor = 'border-blue-200';
-                    keyColor = 'text-blue-700';
-                    valueColor = 'text-blue-900';
-                    dotColor = 'bg-blue-400';
-                  } else if (
-                    keyLower.includes('dimension') || keyLower.includes('size') ||
-                    keyLower.includes('weight') || keyLower.includes('length') ||
-                    keyLower.includes('width') || keyLower.includes('height') ||
-                    keyLower.includes('depth') || keyLower.includes('thickness') ||
-                    keyLower.includes('measurement')
-                  ) {
-                    bgColor = 'bg-indigo-50';
-                    borderColor = 'border-indigo-200';
-                    keyColor = 'text-indigo-700';
-                    valueColor = 'text-indigo-900';
-                    dotColor = 'bg-indigo-400';
-                  } else if (
-                    keyLower.includes('care') || keyLower.includes('washing') ||
-                    keyLower.includes('maintenance') || keyLower.includes('cleaning') ||
-                    keyLower.includes('dry') || keyLower.includes('iron')
-                  ) {
-                    bgColor = 'bg-emerald-50';
-                    borderColor = 'border-emerald-200';
-                    keyColor = 'text-emerald-700';
-                    valueColor = 'text-emerald-900';
-                    dotColor = 'bg-emerald-400';
-                  } else if (
-                    keyLower.includes('brand') || keyLower.includes('manufacturer') ||
-                    keyLower.includes('model') || keyLower.includes('sku')
-                  ) {
-                    bgColor = 'bg-purple-50';
-                    borderColor = 'border-purple-200';
-                    keyColor = 'text-purple-700';
-                    valueColor = 'text-purple-900';
-                    dotColor = 'bg-purple-400';
-                  }
-                  
-                  return (
-                    <div
-                      key={key}
-                      className={`${bgColor} ${borderColor} border rounded-lg p-2.5 sm:p-3 hover:shadow-sm transition-all`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className={`${dotColor} w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0`} />
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-xs font-semibold ${keyColor} mb-1`}>
-                            {formattedKey}
-                          </div>
-                          <div className={`text-xs sm:text-sm ${valueColor} line-clamp-2 break-words`}>
-                            {specValue}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Quality Assurance - Compact Badge */}
-              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-center gap-2">
-                <Shield className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-xs font-medium text-gray-700">Quality Assured</span>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Etsy Policy Check Results */}
       {showEtsyResults && etsyPolicyResults && (
         <div className="mt-24 mb-16">
-          <div className="max-w-4xl mx-auto px-4">
+          <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
             <div className="bg-white rounded-lg p-4 sm:p-5 shadow-sm border border-gray-200">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <div className="flex items-center gap-3">
@@ -2323,124 +2302,130 @@ export default function ProductPage() {
 
       {/* Product FAQs Section */}
       {allFAQs.length > 0 && (
-        <div className="mt-24 mb-16">
-          <div className="text-center mb-6 sm:mb-8 px-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl mb-3 sm:mb-4 shadow-md">
-              <HelpCircle className="h-8 w-8 text-white" />
-            </div>
-            <h2 className="text-5xl md:text-6xl font-black text-gray-900 mb-4 tracking-tight">
-              Frequently Asked <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">Questions</span>
+        <div className="mt-12 mb-12">
+          <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Frequently Asked Questions
             </h2>
-            <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed">
-              Find answers to common questions about this product
-            </p>
-          </div>
-          
-          <div className="max-w-4xl mx-auto px-4">
-            <div className="bg-white rounded-lg p-4 sm:p-5 shadow-sm border border-gray-200">
-              <div className="space-y-3">
-                {allFAQs.map((faq, index) => {
-                  // Generate a helpful answer based on the question and product info
-                  const generateAnswer = (question: string): string => {
-                    const qLower = question.toLowerCase();
-                    
-                    // Material-related questions
-                    if (qLower.includes('material') || qLower.includes('leather') || qLower.includes('fabric')) {
-                      const material = cleanSpecs.Material || cleanSpecs.material || product.brand || 'premium materials';
-                      return `This product is crafted from ${material}. You can find detailed material information in the product specifications section above. The quality and composition ensure durability and comfort.`;
-                    }
-                    
-                    // Size-related questions
-                    if (qLower.includes('size') || qLower.includes('fit') || qLower.includes('dimension')) {
-                      const size = cleanSpecs.Size || cleanSpecs.size;
-                      return size 
-                        ? `This product is available in ${size}. Please refer to the size guide in the specifications section for detailed measurements and fit information.`
-                        : `Size information is available in the product specifications above. We recommend checking the detailed measurements to ensure the perfect fit.`;
-                    }
-                    
-                    // Care/maintenance questions
-                    if (qLower.includes('care') || qLower.includes('clean') || qLower.includes('maintain') || qLower.includes('wash')) {
-                      return `Proper care instructions are essential for maintaining this product's quality. Please refer to the care instructions in the product specifications section. For best results, follow the recommended cleaning and maintenance guidelines.`;
-                    }
-                    
-                    // Quality/durability questions
-                    if (qLower.includes('quality') || qLower.includes('durable') || qLower.includes('last') || qLower.includes('premium')) {
-                      const quality = cleanSpecs.Quality || cleanSpecs.quality || 'high-quality';
-                      return `This product is made with ${quality} standards to ensure longevity and satisfaction. The quality details are outlined in the product specifications section above.`;
-                    }
-                    
-                    // Color-related questions
-                    if (qLower.includes('color') || qLower.includes('colour')) {
-                      const color = cleanSpecs.Color || cleanSpecs.color;
-                      return color 
-                        ? `This product is available in ${color}. Color information and options can be found in the product specifications above.`
-                        : `Color details are available in the product specifications section. Please refer to the product images for accurate color representation.`;
-                    }
-                    
-                    // Feature-related questions
-                    if (qLower.includes('feature') || qLower.includes('include') || qLower.includes('come with')) {
-                      const features = cleanSpecs.Features || cleanSpecs.features;
-                      return features 
-                        ? `This product includes: ${features}. For a complete list of features and specifications, please see the detailed specifications section above.`
-                        : `This product includes various features designed for your needs. Please refer to the product specifications section for a complete list of features and benefits.`;
-                    }
-                    
-                    // General/default answer
-                    return `Based on the product information, you can find relevant details in the product specifications section above. For additional assistance or specific inquiries, please don't hesitate to contact our customer service team.`;
-                  };
+            <div className="space-y-2">
+              {allFAQs.map((faq, index) => {
+                // Generate a helpful answer based on the question and product info
+                const generateAnswer = (question: string): string => {
+                  const qLower = question.toLowerCase();
                   
-                  const answer = generateAnswer(faq);
+                  // Material-related questions
+                  if (qLower.includes('material') || qLower.includes('leather') || qLower.includes('fabric')) {
+                    const material = cleanSpecs.Material || cleanSpecs.material || product.brand || 'premium materials';
+                    return `This product is crafted from ${material}. You can find detailed material information in the product specifications section above.`;
+                  }
                   
-                  return (
-                    <div
-                      key={index}
-                      className="border border-blue-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-blue-50/50 to-indigo-50/50"
+                  // Size-related questions
+                  if (qLower.includes('size') || qLower.includes('fit') || qLower.includes('dimension')) {
+                    const size = cleanSpecs.Size || cleanSpecs.size;
+                    return size 
+                      ? `This product is available in ${size}. Please refer to the size guide in the specifications section for detailed measurements.`
+                      : `Size information is available in the product specifications above.`;
+                  }
+                  
+                  // Care/maintenance questions
+                  if (qLower.includes('care') || qLower.includes('clean') || qLower.includes('maintain') || qLower.includes('wash')) {
+                    return `Please refer to the care instructions in the product specifications section for proper maintenance.`;
+                  }
+                  
+                  // Quality/durability questions
+                  if (qLower.includes('quality') || qLower.includes('durable') || qLower.includes('last') || qLower.includes('premium')) {
+                    return `This product is made with high-quality standards to ensure longevity and satisfaction.`;
+                  }
+                  
+                  // Color-related questions
+                  if (qLower.includes('color') || qLower.includes('colour')) {
+                    const color = cleanSpecs.Color || cleanSpecs.color;
+                    return color 
+                      ? `This product is available in ${color}. Color information can be found in the product specifications above.`
+                      : `Color details are available in the product specifications section.`;
+                  }
+                  
+                  // Feature-related questions
+                  if (qLower.includes('feature') || qLower.includes('include') || qLower.includes('come with')) {
+                    return `Please refer to the product specifications section for a complete list of features.`;
+                  }
+                  
+                  // General/default answer
+                  return `You can find relevant details in the product specifications section above. For additional assistance, please contact our customer service team.`;
+                };
+                
+                const answer = generateAnswer(faq);
+                
+                return (
+                  <div
+                    key={index}
+                    className="border border-gray-200 rounded-lg overflow-hidden bg-white"
+                  >
+                    <button
+                      onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)}
+                      className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+                      aria-expanded={openFAQIndex === index}
                     >
-                      <button
-                        onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)}
-                        className="w-full px-6 py-5 flex items-center justify-between text-left group"
-                        aria-expanded={openFAQIndex === index}
-                      >
-                        <span className="font-semibold text-gray-900 pr-4 text-base leading-snug group-hover:text-blue-700 transition-colors">
-                          {faq}
-                        </span>
-                        <div className="flex-shrink-0">
-                          {openFAQIndex === index ? (
-                            <ChevronUp className="h-5 w-5 text-blue-600 transition-transform" />
-                          ) : (
-                            <ChevronDown className="h-5 w-5 text-blue-600 transition-transform" />
-                          )}
+                      <span className="font-medium text-gray-900 text-sm pr-4">
+                        {faq}
+                      </span>
+                      <div className="flex-shrink-0">
+                        {openFAQIndex === index ? (
+                          <ChevronUp className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        )}
+                      </div>
+                    </button>
+                    {openFAQIndex === index && (
+                      <div className="px-4 pb-3 pt-0 border-t border-gray-100">
+                        <div className="pt-3">
+                          <p className="text-gray-700 leading-relaxed text-sm">
+                            {answer}
+                          </p>
                         </div>
-                      </button>
-                      {openFAQIndex === index && (
-                        <div className="px-6 pb-5 pt-0 bg-white border-t border-blue-100 animate-in slide-in-from-top-2 duration-200">
-                          <div className="pt-4">
-                            <p className="text-gray-700 leading-relaxed text-[15px]">
-                              {answer}
-                            </p>
-                            {Object.keys(cleanSpecs).length > 0 && (
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <p className="text-sm text-gray-600">
-                                  <span className="font-medium text-gray-900">Tip:</span> Check the Product Specifications section above for detailed technical information and complete product details.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature Boxes - Full Width Before Reviews */}
+      {!isEditMode && (
+        <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 mt-12 mb-8">
+          <div className="w-full max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <Truck className="h-6 w-6 text-gray-700 flex-shrink-0 mt-1" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Free Delivery & 30 Days Free Exchanges and Return</p>
+                  </div>
+                </div>
               </div>
-              
-              {/* Help Section */}
-              <div className="mt-8 pt-6 border-t border-gray-200">
-                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      <span className="font-semibold text-gray-900">Need more help?</span> If you have additional questions or need personalized assistance, please contact our customer service team. We're here to help you find the perfect product.
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <Wallet className="h-6 w-6 text-gray-700 flex-shrink-0 mt-1" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      Split your purchase into 4 interest-Free Payments with{' '}
+                      <span className="inline-flex items-center gap-0.5">
+                        <span className="text-blue-600 font-bold">Pay</span>
+                        <span className="text-yellow-500 font-bold">Pal</span>
+                      </span>
                     </p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <DollarSign className="h-6 w-6 text-gray-700 flex-shrink-0 mt-1" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">We want you to look luxurious on budget, without sacrificing the quality.</p>
                   </div>
                 </div>
               </div>
@@ -2449,20 +2434,11 @@ export default function ProductPage() {
         </div>
       )}
 
-      {/* Product Recommendations */}
-      {currentProduct && (
-        <>
-          <ProductRecommendations 
-            productId={productId} 
-            product={currentProduct}
-            type="you_may_like"
-          />
-          <ProductRecommendations 
-            productId={productId} 
-            product={currentProduct}
-            type="frequently_bought"
-          />
-        </>
+      {/* Customer Reviews Section */}
+      {!isEditMode && currentProduct && (
+        <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 mt-12 mb-8">
+          <ReviewList productId={productId} />
+        </div>
       )}
 
       {/* Product FAQ Section (SerpAPI) - High Priority: Answer common questions early */}
@@ -2482,13 +2458,29 @@ export default function ProductPage() {
         <ProductQA productId={productId} />
       )}
 
+      {/* Product Recommendations */}
+      {currentProduct && (
+        <>
+          <ProductRecommendations 
+            productId={productId} 
+            product={currentProduct}
+            type="you_may_like"
+          />
+          <ProductRecommendations 
+            productId={productId} 
+            product={currentProduct}
+            type="frequently_bought"
+          />
+        </>
+      )}
+
       {/* Related Products - Cross-sell opportunity */}
       <div className="mt-16">
               <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
                 Related <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Products</span>
               </h2>
               <p className="text-gray-600 mb-4 sm:mb-5">You might also like</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {relatedProducts
                   .map((relatedProduct: any) => (
               <div 
@@ -2546,7 +2538,7 @@ export default function ProductPage() {
       {/* Product Tags Section - Super Admin Only */}
       {isSuperAdmin && currentProduct.tags && currentProduct.tags.length > 0 && (
         <div className="mt-16 mb-12">
-          <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16">
             <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-lg p-4 sm:p-6 shadow-sm border border-indigo-100">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
@@ -2657,23 +2649,54 @@ export default function ProductPage() {
         </div>
       )}
 
-      {/* Structured Data: Product JSON-LD */}
-      <Script id="product-jsonld" type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "Product",
-          name: product.name,
-          description: product.description,
-          image: images,
-          sku: product.sku || product._id,
-          brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
-          offers: {
-            "@type": "Offer",
-            priceCurrency: "USD",
-            price: product.price,
-            availability: product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
-          }
-        }) }} />
+      {/* Structured Data: Product JSON-LD with FAQ support */}
+      {product && (
+        <>
+          <Script 
+            id="product-jsonld" 
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ 
+              __html: JSON.stringify(
+                productJsonLd({
+                  id: product._id?.toString() || productId,
+                  name: product.name,
+                  description: product.description,
+                  urlPath: `/products/${productId}`,
+                  imageUrls: images,
+                  sku: product.sku || product._id?.toString() || productId,
+                  brand: product.brand,
+                  price: product.price,
+                  currency: "USD",
+                  availability: product.inStock ? "InStock" : "OutOfStock",
+                  faqs: product.generatedFAQs?.map((faq: any) => ({
+                    question: faq.question,
+                    answer: faq.answer
+                  })) || []
+                })
+              )
+            }} 
+          />
+          
+          {/* FAQ Schema JSON-LD for Rich Snippets */}
+          {product.generatedFAQs && product.generatedFAQs.length > 0 && (
+            <Script 
+              id="faq-schema" 
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ 
+                __html: JSON.stringify(
+                  faqPageJsonLd({
+                    faqs: product.generatedFAQs.map((faq: any) => ({
+                      question: faq.question,
+                      answer: faq.answer
+                    })),
+                    urlPath: `/products/${productId}`
+                  })
+                )
+              }} 
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

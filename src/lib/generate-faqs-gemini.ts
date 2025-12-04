@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { GoogleGenAI } from '@google/genai';
-import { SEOAPIs } from './external-apis';
 
 type LogType = 'log' | 'error';
 type Logger = (type: LogType, message: string) => void;
@@ -181,10 +180,9 @@ function buildFAQPrompt(input: {
   tags?: string[];
   category?: string;
   brand?: string;
-  serpQuestions?: Array<{ question: string; snippet?: string }>;
 }) {
   const baseContext = `You are an expert SEO content writer specializing in creating high-quality FAQ content for e-commerce products. Your goal is to create FAQs that:
-1. Answer real customer questions (based on search data)
+1. Answer real customer questions
 2. Help improve SEO rankings for long-tail keywords
 3. Appear in Google's "People Also Ask" (PAA) panels
 4. Convert browsers into buyers by addressing concerns
@@ -207,17 +205,12 @@ SEO BEST PRACTICES FOR FAQs:
 - Category: ${input.category || ''}
 - Brand: ${input.brand || ''}`;
 
-  const serpContext = input.serpQuestions && input.serpQuestions.length > 0
-    ? `\n\nRelated Questions from Search (People Also Ask):
-${input.serpQuestions.map((q, i) => `${i + 1}. ${q.question}${q.snippet ? ` (Context: ${q.snippet.substring(0, 100)}...)` : ''}`).join('\n')}`
-    : '';
-
-  return `${baseContext}${productContext}${serpContext}
+  return `${baseContext}${productContext}
 
 Task: Generate 8-12 high-quality FAQ questions and answers for this product.
 
 REQUIREMENTS:
-1. Use the related questions from search as inspiration, but create unique, well-crafted questions
+1. Create unique, well-crafted questions based on the product details
 2. Include questions about: product features, usage, care/maintenance, shipping/delivery, sizing/fit (if applicable), materials, warranty/returns, comparisons
 3. Each answer should be 40-60 words (optimal for featured snippets)
 4. Answers should be specific to THIS product, not generic
@@ -239,8 +232,7 @@ Return ONLY the JSON array, no markdown formatting, no code blocks, no additiona
 }
 
 async function generateFAQsWithGemini(
-  product: any,
-  serpQuestions: Array<{ question: string; snippet?: string }>
+  product: any
 ) {
   const primaryKey = process.env.GEMINI_API_KEY;
   const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
@@ -252,7 +244,6 @@ async function generateFAQsWithGemini(
     tags: product.tags || [],
     category: product.category,
     brand: product.brand,
-    serpQuestions: serpQuestions,
   };
 
   const prompt = buildFAQPrompt(input);
@@ -405,10 +396,8 @@ export async function generateFAQsForProducts(logger?: Logger) {
     throw error;
   }
 
-  const seoAPIs = new SEOAPIs();
-
   try {
-    log('log', '🚀 Starting FAQ generation with SerpAPI and Gemini...');
+    log('log', '🚀 Starting FAQ generation with Gemini...');
     log('log', '📋 Fetching active leather products (excluding t-shirts, chappals, belts, bags, wallets, pants)...\n');
 
     // Fetch all active products first
@@ -451,35 +440,19 @@ export async function generateFAQsForProducts(logger?: Logger) {
         continue;
       }
 
+      // Check if product already has FAQs
+      if (product.generatedFAQs && 
+          Array.isArray(product.generatedFAQs) && 
+          product.generatedFAQs.length > 0) {
+        log('log', `  ⏭️  Skipping: Product already has ${product.generatedFAQs.length} FAQs`);
+        skippedCount++;
+        continue;
+      }
+
       try {
-        // Step 1: Get related questions from SerpAPI
-        log('log', '  🔍 Fetching related questions from SerpAPI...');
-        
-        // Build search query from product name, description keywords, and tags
-        const searchTerms = [
-          product.name,
-          ...(product.tags || []).slice(0, 3), // Use top 3 tags
-        ]
-          .filter(Boolean)
-          .join(' ');
-
-        const serpResult = await seoAPIs.getRelatedQuestions(searchTerms);
-        
-        if (serpResult.questions.length === 0) {
-          log('log', '  ⚠️  No questions found from SerpAPI, will generate from product details only');
-        } else {
-          log('log', `  ✅ Found ${serpResult.questions.length} related questions from SerpAPI`);
-        }
-
-        // Wait a bit before Gemini call
-        await delay(1000); // Reduced delay for Flash-Lite
-
-        // Step 2: Generate FAQs with Gemini
+        // Generate FAQs with Gemini
         log('log', '  🤖 Generating FAQs with Gemini...');
-        const faqResult = await generateFAQsWithGemini(
-          product,
-          serpResult.questions.slice(0, 10) // Use top 10 questions
-        );
+        const faqResult = await generateFAQsWithGemini(product);
 
         if (!faqResult.ok) {
           log('log', `  ❌ FAQ generation failed: ${faqResult.error}`);

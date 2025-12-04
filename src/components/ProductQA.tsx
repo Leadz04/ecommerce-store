@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, HelpCircle, ThumbsUp, Send, User, Shield, Loader2 } from 'lucide-react';
+import { MessageSquare, HelpCircle, ThumbsUp, Send, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { requestDeduplicator } from '@/lib/requestDeduplication';
@@ -273,39 +273,35 @@ export default function ProductQA({ productId }: ProductQAProps) {
     }
   };
 
-  if (isLoading) {
-    return (
-      <section className="py-12 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   return (
-    <section className="py-12 bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-              <MessageSquare className="h-6 w-6 mr-3 text-blue-600" />
-              Customer Questions & Answers
-            </h2>
-            <button
-              onClick={() => setShowQuestionForm(!showQuestionForm)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <HelpCircle className="h-4 w-4" />
-              Ask a Question
-            </button>
-          </div>
+    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 mt-12 mb-8">
+      <div className="w-full max-w-7xl mx-auto">
+        {/* Header with Ask a Question Button */}
+        <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-gray-700" />
+            Customer Questions & Answers
+          </h2>
+          <button
+            onClick={() => {
+              if (!isAuthenticated) {
+                toast.error('Please sign in to ask a question');
+                return;
+              }
+              setShowQuestionForm(!showQuestionForm);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors flex items-center gap-2"
+          >
+            <HelpCircle className="h-4 w-4" />
+            Ask a Question
+          </button>
+        </div>
 
-          {/* Ask Question Form */}
-          {showQuestionForm && (
-            <form onSubmit={handleSubmitQuestion} className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        {/* Ask Question Form */}
+        {showQuestionForm && isAuthenticated && (
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <form onSubmit={handleSubmitQuestion} className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="mb-4">
                 <label htmlFor="question" className="block text-sm font-medium text-gray-700 mb-2">
                   Your Question
@@ -315,49 +311,17 @@ export default function ProductQA({ productId }: ProductQAProps) {
                   value={newQuestion}
                   onChange={(e) => setNewQuestion(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Ask a question about this product..."
                   maxLength={500}
                 />
                 <p className="text-xs text-gray-500 mt-1">{newQuestion.length}/500 characters</p>
               </div>
-              {!isAuthenticated && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label htmlFor="guest-name" className="block text-sm font-medium text-gray-700 mb-2">
-                      Your Name
-                    </label>
-                    <input
-                      id="guest-name"
-                      type="text"
-                      value={guestInfo.name}
-                      onChange={(e) => setGuestInfo({ ...guestInfo, name: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Your name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="guest-email" className="block text-sm font-medium text-gray-700 mb-2">
-                      Your Email
-                    </label>
-                    <input
-                      id="guest-email"
-                      type="email"
-                      value={guestInfo.email}
-                      onChange={(e) => setGuestInfo({ ...guestInfo, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="your.email@example.com"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
                   disabled={isSubmittingQuestion}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
                 >
                   {isSubmittingQuestion ? (
                     <>
@@ -376,164 +340,128 @@ export default function ProductQA({ productId }: ProductQAProps) {
                   onClick={() => {
                     setShowQuestionForm(false);
                     setNewQuestion('');
-                    setGuestInfo({ name: '', email: '' });
                   }}
-                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors text-sm"
                 >
                   Cancel
                 </button>
               </div>
             </form>
-          )}
+          </div>
+        )}
 
-          {/* Questions List */}
-          {questions.length === 0 ? (
-            <div className="text-center py-12">
-              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">No questions yet. Be the first to ask!</p>
-              {!showQuestionForm && (
-                <button
-                  onClick={() => setShowQuestionForm(true)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                >
-                  Ask a Question
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {questions.map((question) => (
-                <div key={question._id} className="border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-                  {/* Question */}
-                  <div className="mb-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <User className="h-4 w-4 text-gray-500" />
-                          <span className="font-semibold text-gray-900">{question.userName}</span>
-                          <span className="text-sm text-gray-500">
-                            asked {new Date(question.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-gray-800 text-lg">{question.question}</p>
+        {/* Questions List */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : questions.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <MessageSquare className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600 mb-4">No questions yet. Be the first to ask!</p>
+            {isAuthenticated && !showQuestionForm && (
+              <button
+                onClick={() => setShowQuestionForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors"
+              >
+                Ask a Question
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {questions.map((question) => (
+              <div key={question._id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                {/* Question */}
+                <div className="mb-3">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-900">{question.userName}</span>
+                        <span className="text-xs text-gray-500">
+                          asked {new Date(question.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 mt-3">
-                      <button
-                        onClick={() => handleMarkHelpful('question', question._id)}
-                        className={`flex items-center gap-1 text-sm ${
-                          helpfulQuestions.has(question._id)
-                            ? 'text-blue-600 font-semibold'
-                            : 'text-gray-600 hover:text-blue-600'
-                        }`}
-                      >
-                        <ThumbsUp className={`h-4 w-4 ${helpfulQuestions.has(question._id) ? 'fill-current' : ''}`} />
-                        Helpful ({question.helpfulCount})
-                      </button>
+                      <p className="text-gray-900 font-medium">{question.question}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleMarkHelpful('question', question._id)}
+                    className={`flex items-center gap-1 text-xs mt-2 ${
+                      helpfulQuestions.has(question._id)
+                        ? 'text-blue-600 font-medium'
+                        : 'text-gray-600 hover:text-blue-600'
+                    }`}
+                  >
+                    <ThumbsUp className={`h-3.5 w-3.5 ${helpfulQuestions.has(question._id) ? 'fill-current' : ''}`} />
+                    Helpful ({question.helpfulCount})
+                  </button>
+                </div>
 
-                  {/* Answers */}
-                  {question.answers && question.answers.length > 0 ? (
-                    <div className="ml-6 space-y-4 border-l-2 border-gray-200 pl-6">
-                      {question.answers.map((answer) => (
-                        <div key={answer._id} className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                {answer.isAdminAnswer ? (
-                                  <Shield className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <User className="h-4 w-4 text-gray-500" />
-                                )}
-                                <span className={`font-semibold ${answer.isAdminAnswer ? 'text-green-700' : 'text-gray-900'}`}>
-                                  {answer.userName}
-                                  {answer.isAdminAnswer && ' (Admin)'}
-                                </span>
-                                <span className="text-sm text-gray-500">
-                                  answered {new Date(answer.createdAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <p className="text-gray-700">{answer.answer}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleMarkHelpful('answer', question._id, answer._id)}
-                            className={`flex items-center gap-1 text-sm mt-2 ${
-                              helpfulAnswers.has(`${question._id}-${answer._id}`)
-                                ? 'text-blue-600 font-semibold'
-                                : 'text-gray-600 hover:text-blue-600'
-                            }`}
-                          >
-                            <ThumbsUp className={`h-4 w-4 ${helpfulAnswers.has(`${question._id}-${answer._id}`) ? 'fill-current' : ''}`} />
-                            Helpful ({answer.helpfulCount})
-                          </button>
+                {/* Answers */}
+                {question.answers && question.answers.length > 0 && (
+                  <div className="ml-4 space-y-3 border-l-2 border-gray-200 pl-4">
+                    {question.answers.map((answer) => (
+                      <div key={answer._id} className="text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-gray-900">{answer.userName}</span>
+                          {answer.isAdminAnswer && (
+                            <span className="text-xs text-green-600 font-medium">(Admin)</span>
+                          )}
+                          <span className="text-xs text-gray-500">
+                            {new Date(answer.createdAt).toLocaleDateString()}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="ml-6 text-sm text-gray-500 italic">No answers yet.</div>
-                  )}
+                        <p className="text-gray-700 mb-2">{answer.answer}</p>
+                        <button
+                          onClick={() => handleMarkHelpful('answer', question._id, answer._id)}
+                          className={`flex items-center gap-1 text-xs ${
+                            helpfulAnswers.has(`${question._id}-${answer._id}`)
+                              ? 'text-blue-600 font-medium'
+                              : 'text-gray-600 hover:text-blue-600'
+                          }`}
+                        >
+                          <ThumbsUp className={`h-3.5 w-3.5 ${helpfulAnswers.has(`${question._id}-${answer._id}`) ? 'fill-current' : ''}`} />
+                          Helpful ({answer.helpfulCount})
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                  {/* Answer Form */}
-                  <div className="ml-6 mt-4 p-4 bg-gray-50 rounded-lg">
-                    <label htmlFor={`answer-${question._id}`} className="block text-sm font-medium text-gray-700 mb-2">
-                      Your Answer
-                    </label>
+                {/* Answer Form */}
+                {isAuthenticated && (
+                  <div className="ml-4 mt-4 pt-4 border-t border-gray-100">
                     <textarea
-                      id={`answer-${question._id}`}
                       value={newAnswer[question._id] || ''}
                       onChange={(e) => setNewAnswer({ ...newAnswer, [question._id]: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-2"
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm mb-2"
                       placeholder="Write your answer..."
                       maxLength={2000}
                     />
-                    {!isAuthenticated && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
-                        <input
-                          type="text"
-                          value={guestInfo.name}
-                          onChange={(e) => setGuestInfo({ ...guestInfo, name: e.target.value })}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Your name"
-                          required={!isAuthenticated}
-                        />
-                        <input
-                          type="email"
-                          value={guestInfo.email}
-                          onChange={(e) => setGuestInfo({ ...guestInfo, email: e.target.value })}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="your.email@example.com"
-                          required={!isAuthenticated}
-                        />
-                      </div>
-                    )}
                     <button
                       onClick={() => handleSubmitAnswer(question._id)}
-                      disabled={isSubmittingAnswer === question._id}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      disabled={isSubmittingAnswer === question._id || !newAnswer[question._id]?.trim()}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmittingAnswer === question._id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
                           Submitting...
-                        </>
+                        </span>
                       ) : (
-                        <>
-                          <Send className="h-4 w-4" />
-                          Submit Answer
-                        </>
+                        'Submit Answer'
                       )}
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </section>
+    </div>
   );
 }
 

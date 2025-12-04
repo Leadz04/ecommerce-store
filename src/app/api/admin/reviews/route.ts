@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isValidObjectId } from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import Review from '@/models/Review';
 import Product from '@/models/Product';
-import { verifyToken } from '@/lib/auth';
+import { requirePermission, requireAnyPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 
 // GET /api/admin/reviews - Get all reviews with filtering
 export async function GET(request: NextRequest) {
   try {
-    const user = await verifyToken(request);
-    
-    // Check if user is admin
-    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
+    const user = await requirePermission(PERMISSIONS.REVIEW_VIEW)(request);
 
     await connectDB();
 
@@ -35,17 +29,62 @@ export async function GET(request: NextRequest) {
     }
 
     const reviews = await Review.find(query)
-      .populate('productId', 'name image')
-      .populate('userId', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
+    // Manually populate product and user data since they're stored as strings
+    const User = (await import('@/models/User')).default;
+    const reviewsWithPopulated = await Promise.all(
+      reviews.map(async (review: any) => {
+        let productData = null;
+        let userData = null;
+
+        // Fetch product data
+        if (review.productId && isValidObjectId(review.productId)) {
+          try {
+            const product = await Product.findById(review.productId).select('name image').lean();
+            if (product) {
+              productData = {
+                _id: product._id.toString(),
+                name: product.name,
+                image: product.image,
+              };
+            }
+          } catch (err) {
+            console.error(`Error fetching product ${review.productId}:`, err);
+          }
+        }
+
+        // Fetch user data
+        if (review.userId && isValidObjectId(review.userId)) {
+          try {
+            const user = await User.findById(review.userId).select('name email').lean();
+            if (user) {
+              userData = {
+                _id: user._id.toString(),
+                name: user.name,
+                email: user.email,
+              };
+            }
+          } catch (err) {
+            console.error(`Error fetching user ${review.userId}:`, err);
+          }
+        }
+
+        return {
+          ...review,
+          productId: productData || review.productId,
+          userId: userData || review.userId,
+        };
+      })
+    );
+
     const total = await Review.countDocuments(query);
 
     return NextResponse.json({
-      reviews,
+      reviews: reviewsWithPopulated,
       pagination: {
         page,
         limit,
@@ -55,6 +94,18 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching reviews:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
+    if (error instanceof Error && (error.message.includes('No token') || error.message.includes('Invalid token'))) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -65,15 +116,7 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/reviews - Update review status (approve/reject)
 export async function PUT(request: NextRequest) {
   try {
-    const user = await verifyToken(request);
-    
-    // Check if user is admin
-    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
+    const user = await requireAnyPermission([PERMISSIONS.REVIEW_APPROVE, PERMISSIONS.REVIEW_REJECT])(request);
 
     await connectDB();
 
@@ -94,7 +137,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const review = await Review.findById(reviewId);
+    const review = await Review.findById(reviewId).lean();
     if (!review) {
       return NextResponse.json(
         { error: 'Review not found' },
@@ -103,24 +146,41 @@ export async function PUT(request: NextRequest) {
     }
 
     const oldStatus = review.status;
-    review.status = status;
+    
+    // Build update object
+    const updateData: any = {
+      status,
+    };
 
     if (adminResponse) {
-      review.adminResponse = {
+      updateData.adminResponse = {
         message: adminResponse,
         respondedBy: user.userId as any,
         respondedAt: new Date(),
       };
     }
 
-    await review.save();
+    // Use findByIdAndUpdate with $set to only update specific fields
+    // This avoids validation issues with productId/userId that are already stored
+    const updatedReview = await Review.findByIdAndUpdate(
+      reviewId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedReview) {
+      return NextResponse.json(
+        { error: 'Failed to update review' },
+        { status: 500 }
+      );
+    }
 
     // If review was approved, update product rating and review count
     if (status === 'approved' && oldStatus !== 'approved') {
-      await updateProductRating(review.productId);
+      await updateProductRating(updatedReview.productId);
     } else if (oldStatus === 'approved' && status !== 'approved') {
       // If review was unapproved, recalculate
-      await updateProductRating(review.productId);
+      await updateProductRating(updatedReview.productId);
     }
 
     // Send email notification to customer about review status
@@ -128,12 +188,12 @@ export async function PUT(request: NextRequest) {
       try {
         const { sendEmail, generateReviewStatusEmailHTML } = await import('@/lib/email');
         const Product = (await import('@/models/Product')).default;
-        const product = await Product.findById(review.productId).select('name').lean();
+        const product = await Product.findById(updatedReview.productId).select('name').lean();
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
         
-        if (review.userEmail && product) {
+        if (updatedReview.userEmail && product) {
           const statusEmailHTML = generateReviewStatusEmailHTML({
-            userName: review.userName,
+            userName: updatedReview.userName,
             productName: product.name || 'Product',
             status: status as 'approved' | 'rejected',
             adminMessage: adminResponse,
@@ -141,7 +201,7 @@ export async function PUT(request: NextRequest) {
           });
           
           await sendEmail({
-            to: review.userEmail,
+            to: updatedReview.userEmail,
             subject: `Review ${status === 'approved' ? 'Approved' : 'Status Update'} - ${product.name}`,
             html: statusEmailHTML,
             text: `Your review for ${product.name} has been ${status === 'approved' ? 'approved and published' : 'rejected'}.`
@@ -156,10 +216,22 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       message: 'Review updated successfully',
-      review,
+      review: updatedReview,
     });
   } catch (error) {
     console.error('Error updating review:', error);
+    if (error instanceof Error && error.message.includes('Insufficient permissions')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
+    if (error instanceof Error && (error.message.includes('No token') || error.message.includes('Invalid token'))) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

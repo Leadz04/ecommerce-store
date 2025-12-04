@@ -241,14 +241,14 @@ export default function ProductFAQ({
 
   if (isLoading) {
     return (
-      <section className="py-12 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12">
+        <div className="w-full max-w-7xl mx-auto">
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             <span className="ml-3 text-gray-600">Loading frequently asked questions...</span>
           </div>
         </div>
-      </section>
+      </div>
     );
   }
 
@@ -256,8 +256,8 @@ export default function ProductFAQ({
   // This ensures the section is visible on the page
 
   return (
-    <section className="py-12 bg-gradient-to-b from-gray-50 via-white to-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12">
+      <div className="w-full max-w-7xl mx-auto">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
           {/* Header Section */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 sm:px-8 py-6">
@@ -420,7 +420,7 @@ export default function ProductFAQ({
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

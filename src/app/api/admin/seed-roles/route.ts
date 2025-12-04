@@ -5,12 +5,15 @@ import { PERMISSIONS } from '@/lib/permissions';
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify user has admin permissions
+    // Verify user has admin permissions (either SYSTEM_SETTINGS or is ADMIN/SUPER_ADMIN role)
     const user = await verifyToken(request);
     
-    if (!user.permissions.includes(PERMISSIONS.SYSTEM_SETTINGS)) {
+    const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+    const hasSystemSettings = user.permissions.includes(PERMISSIONS.SYSTEM_SETTINGS);
+    
+    if (!isAdmin && !hasSystemSettings) {
       return NextResponse.json(
-        { error: 'Insufficient permissions' },
+        { error: 'Insufficient permissions. Admin access required.' },
         { status: 403 }
       );
     }

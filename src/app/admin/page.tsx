@@ -65,7 +65,8 @@ import {
   X,
   ArrowUpRight,
   ChevronsDown,
-  Target
+  Target,
+  Star
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -83,7 +84,7 @@ import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
-const allowedTabs = ['users','roles','products','policy-review','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
+const allowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
 type TabKey = typeof allowedTabs[number];
 type SidebarTab = {
   id: TabKey;
@@ -641,6 +642,23 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productPage, setProductPage] = useState(1);
   const [productPerPage, setProductPerPage] = useState(20);
+  
+  // Jacket Maker Products state (from STAGE3 database)
+  const [jacketMakerProducts, setJacketMakerProducts] = useState<Product[]>([]);
+  const [jacketMakerPage, setJacketMakerPage] = useState(1);
+  const [jacketMakerPerPage, setJacketMakerPerPage] = useState(20);
+  const [jacketMakerTotal, setJacketMakerTotal] = useState(0);
+  const [jacketMakerTotalPages, setJacketMakerTotalPages] = useState(1);
+  const [jacketMakerLoading, setJacketMakerLoading] = useState(false);
+  const [jacketMakerSearchTerm, setJacketMakerSearchTerm] = useState('');
+  const [jacketMakerCategory, setJacketMakerCategory] = useState('');
+  const [jacketMakerBrand, setJacketMakerBrand] = useState('');
+  const [jacketMakerStatus, setJacketMakerStatus] = useState('');
+  const [jacketMakerIsActive, setJacketMakerIsActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [jacketMakerSortBy, setJacketMakerSortBy] = useState<string>('createdAt');
+  const [jacketMakerSortOrder, setJacketMakerSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [jacketMakerBrands, setJacketMakerBrands] = useState<string[]>([]);
+  const [jacketMakerCategories, setJacketMakerCategories] = useState<string[]>([]);
   const [productEmailStats, setProductEmailStats] = useState<Record<string, {
     totalSent: number;
     totalOpened: number;
@@ -663,6 +681,23 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Reviews state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewStatusFilter, setReviewStatusFilter] = useState('all');
+  const [reviewSearchTerm, setReviewSearchTerm] = useState('');
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotalPages, setReviewTotalPages] = useState(1);
+  const [reviewTotal, setReviewTotal] = useState(0);
+  const [editingReview, setEditingReview] = useState<any | null>(null);
+  const [editReviewForm, setEditReviewForm] = useState({
+    rating: 5,
+    title: '',
+    comment: '',
+    images: [] as string[],
+  });
+  const [deleteReviewConfirm, setDeleteReviewConfirm] = useState<{ reviewId: string; reviewTitle?: string } | null>(null);
   
   // Support Tickets state
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
@@ -702,7 +737,7 @@ export default function AdminDashboard() {
   const [selectedIsActive, setSelectedIsActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [productSortBy, setProductSortBy] = useState<string>('createdAt');
   const [productSortOrder, setProductSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | null>(null);
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | 'reviewStatus' | 'jacketMakerCategory' | 'jacketMakerBrand' | 'jacketMakerStatus' | 'jacketMakerIsActive' | 'jacketMakerSortBy' | 'jacketMakerSortOrder' | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -941,96 +976,217 @@ export default function AdminDashboard() {
 
         {/* Product Details Modal */}
         {showProductModal && selectedProductForModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900">Product Details</h2>
-                  <button
-                    onClick={() => setShowProductModal(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <XCircle className="h-6 w-6" />
-                  </button>
-                </div>
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+            onClick={() => setShowProductModal(false)}
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
+                <button
+                  onClick={() => setShowProductModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
 
-                <div className="space-y-6">
-                  {/* Product Image */}
-                  <div className="flex justify-center">
-                    <img
-                      src={selectedProductForModal.image || '/placeholder-product.svg'}
-                      alt={selectedProductForModal.name}
-                      className="w-48 h-48 object-cover rounded-lg border border-gray-200"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/placeholder-product.svg';
-                      }}
-                    />
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column - Images */}
+                  <div className="space-y-4">
+                    {/* Main Product Image */}
+                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
+                      <img
+                        src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
+                        alt={selectedProductForModal.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Image Gallery */}
+                    {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
+                          <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer hover:border-blue-400 transition-colors">
+                            <img
+                              src={img}
+                              alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Product Info */}
-                  <div className="space-y-4">
+                  {/* Right Column - Product Info */}
+                  <div className="space-y-6">
                     <div>
-                      <h3 className="text-2xl font-bold text-gray-900">{selectedProductForModal.name}</h3>
-                      <p className="text-lg text-gray-600 mt-1">{selectedProductForModal.description}</p>
-                    </div>
-
-                    <div className="flex items-center space-x-4">
-                      <span className="text-3xl font-bold text-green-600">${selectedProductForModal.price}</span>
-                      {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > selectedProductForModal.price && (
-                        <span className="text-xl text-gray-500 line-through">${selectedProductForModal.originalPrice}</span>
+                      <h3 className="text-3xl font-bold text-gray-900 mb-2">{selectedProductForModal.name}</h3>
+                      {selectedProductForModal.description && (
+                        <p className="text-base text-gray-600 leading-relaxed">{selectedProductForModal.description}</p>
                       )}
                     </div>
 
-                    <div className="flex items-center space-x-4">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                        {selectedProductForModal.category}
+                    {/* Price Section */}
+                    <div className="flex items-baseline space-x-4 pb-4 border-b border-gray-200">
+                      <span className="text-4xl font-bold text-green-600">
+                        ${typeof selectedProductForModal.price === 'number' ? selectedProductForModal.price.toFixed(2) : selectedProductForModal.price || '0.00'}
                       </span>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                        {selectedProductForModal.brand}
-                      </span>
+                      {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > (selectedProductForModal.price || 0) && (
+                        <>
+                          <span className="text-2xl text-gray-400 line-through">
+                            ${selectedProductForModal.originalPrice.toFixed(2)}
+                          </span>
+                          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
+                            {Math.round(((selectedProductForModal.originalPrice - (selectedProductForModal.price || 0)) / selectedProductForModal.originalPrice) * 100)}% OFF
+                          </span>
+                        </>
+                      )}
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <svg
-                            key={i}
-                            className={`h-5 w-5 ${i < Math.floor(selectedProductForModal.rating || 0)
-                              ? 'text-yellow-400'
-                              : 'text-gray-300'
-                              }`}
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                        <span className="text-sm text-gray-500 ml-2">
-                          {selectedProductForModal.rating || 0} ({selectedProductForModal.reviewCount || 0} reviews)
+                    {/* Badges */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedProductForModal.category && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                          <Tag className="h-3.5 w-3.5 mr-1.5" />
+                          {selectedProductForModal.category}
+                        </span>
+                      )}
+                      {selectedProductForModal.brand && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          {selectedProductForModal.brand}
+                        </span>
+                      )}
+                      {selectedProductForModal.productType && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          {selectedProductForModal.productType}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rating */}
+                    {(selectedProductForModal.rating || selectedProductForModal.reviewCount) && (
+                      <div className="flex items-center space-x-2 pb-4 border-b border-gray-200">
+                        <div className="flex items-center">
+                          {[...Array(5)].map((_, i) => (
+                            <svg
+                              key={i}
+                              className={`h-5 w-5 ${i < Math.floor(selectedProductForModal.rating || 0)
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                                }`}
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700">
+                          {selectedProductForModal.rating?.toFixed(1) || '0.0'}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          ({selectedProductForModal.reviewCount || 0} {selectedProductForModal.reviewCount === 1 ? 'review' : 'reviews'})
                         </span>
                       </div>
-                    </div>
+                    )}
 
+                    {/* Status Grid */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Stock Status</h4>
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedProductForModal.inStock
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                          }`}>
-                          {selectedProductForModal.inStock ? `In Stock (${selectedProductForModal.stockCount || 0})` : 'Out of Stock'}
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Stock Status</h4>
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold ${
+                          (selectedProductForModal.inStock || (selectedProductForModal.stockCount && selectedProductForModal.stockCount > 0))
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {(selectedProductForModal.inStock || (selectedProductForModal.stockCount && selectedProductForModal.stockCount > 0))
+                            ? `In Stock (${selectedProductForModal.stockCount || 0})`
+                            : 'Out of Stock'}
                         </span>
                       </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Status</h4>
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedProductForModal.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                          }`}>
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</h4>
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold ${
+                          selectedProductForModal.isActive
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
                           {selectedProductForModal.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </div>
                     </div>
+
+                    {/* Source URL */}
+                    {selectedProductForModal.sourceUrl && (
+                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                        <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Source</h4>
+                        <a
+                          href={selectedProductForModal.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 underline break-all flex items-center gap-2"
+                        >
+                          <span className="truncate">{selectedProductForModal.sourceUrl}</span>
+                          <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Variants */}
+                    {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Variants</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {selectedProductForModal.variants.map((variant: any, idx: number) => (
+                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {variant.title || variant.name || `Variant ${idx + 1}`}
+                                  </span>
+                                  {variant.price && (
+                                    <span className="text-sm text-gray-600 ml-2">
+                                      ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
+                                    </span>
+                                  )}
+                                  {variant.originalPrice && variant.originalPrice > (variant.price || 0) && (
+                                    <span className="text-xs text-gray-400 line-through ml-1">
+                                      ${typeof variant.originalPrice === 'number' ? variant.originalPrice.toFixed(2) : variant.originalPrice}
+                                    </span>
+                                  )}
+                                </div>
+                                {(variant.available !== undefined || variant.inventory !== undefined) && (
+                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                    (variant.available !== false && (variant.inventory === null || variant.inventory === undefined || variant.inventory > 0))
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {(variant.available !== false && (variant.inventory === null || variant.inventory === undefined || variant.inventory > 0))
+                                      ? `In Stock${variant.inventory !== null && variant.inventory !== undefined ? ` (${variant.inventory})` : ''}`
+                                      : 'Out of Stock'}
+                                  </span>
+                                )}
+                              </div>
+                              {variant.sku && (
+                                <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {isSuperAdmin && (
                       <div className="flex items-center justify-between p-4 border border-purple-100 rounded-lg bg-purple-50/40">
@@ -1060,12 +1216,32 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
+                    {/* Description (Full) */}
+                    {selectedProductForModal.description && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Description</h4>
+                        <div className="prose prose-sm max-w-none">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {selectedProductForModal.description}
+                          </p>
+                        </div>
+                        {selectedProductForModal.descriptionHtml && (
+                          <div 
+                            className="mt-3 text-sm text-gray-700 prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: selectedProductForModal.descriptionHtml }}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tags */}
                     {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Tags</h4>
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Tags ({selectedProductForModal.tags.length})</h4>
                         <div className="flex flex-wrap gap-2">
                           {selectedProductForModal.tags.map((tag, index) => (
-                            <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200 transition-colors">
+                              <Tag className="h-3 w-3 mr-1" />
                               {tag}
                             </span>
                           ))}
@@ -1073,19 +1249,73 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
+                    {/* Specifications */}
                     {selectedProductForModal.specifications && Object.keys(selectedProductForModal.specifications).length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Specifications</h4>
-                        <div className="grid grid-cols-1 gap-2">
-                          {Object.entries(selectedProductForModal.specifications).map(([key, value]) => (
-                            <div key={key} className="flex justify-between py-1 border-b border-gray-100">
-                              <span className="font-medium text-gray-600">{key}:</span>
-                              <span className="text-gray-900">{value}</span>
-                            </div>
-                          ))}
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Specifications</h4>
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                          <div className="grid grid-cols-1 gap-3">
+                            {Object.entries(selectedProductForModal.specifications).map(([key, value]) => (
+                              <div key={key} className="flex justify-between items-start py-2 border-b border-gray-200 last:border-0">
+                                <span className="font-semibold text-gray-700 text-sm capitalize">{key}:</span>
+                                <span className="text-gray-900 text-sm text-right ml-4 flex-1">{String(value)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
+
+                    {/* Additional Product Info */}
+                    <div className="pt-4 border-t border-gray-200 space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Additional Information</h4>
+                      
+                      {/* Stock Details */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Stock Count</div>
+                          <div className="text-lg font-bold text-gray-900">{selectedProductForModal.stockCount ?? 'N/A'}</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">In Stock</div>
+                          <div className={`text-lg font-bold ${selectedProductForModal.inStock ? 'text-green-600' : 'text-red-600'}`}>
+                            {selectedProductForModal.inStock ? 'Yes' : 'No'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rating Details */}
+                      {(selectedProductForModal.rating || selectedProductForModal.reviewCount) && (
+                        <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">Rating</div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-4 w-4 ${
+                                        i < Math.floor(selectedProductForModal.rating || 0)
+                                          ? 'fill-yellow-400 text-yellow-400'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">
+                                  {selectedProductForModal.rating?.toFixed(1) || '0.0'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">Reviews</div>
+                              <div className="text-lg font-bold text-gray-900">{selectedProductForModal.reviewCount || 0}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {isSuperAdmin && (
                       <div className="space-y-3">
@@ -1115,26 +1345,161 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium">Created:</span> {new Date(selectedProductForModal.createdAt).toLocaleDateString()}
+                    {/* FAQs */}
+                    {((selectedProductForModal.faqs && selectedProductForModal.faqs.length > 0) || 
+                     (selectedProductForModal.generatedFAQs && selectedProductForModal.generatedFAQs.length > 0)) && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                          FAQs {selectedProductForModal.generatedFAQs ? `(${selectedProductForModal.generatedFAQs.length})` : `(${selectedProductForModal.faqs?.length || 0})`}
+                        </h4>
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                          {selectedProductForModal.generatedFAQs?.map((faq: any, idx: number) => (
+                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <div className="flex items-start gap-2 mb-2">
+                                <HelpCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-sm font-semibold text-gray-900">{faq.question}</p>
+                              </div>
+                              <p className="text-sm text-gray-700 ml-6">{faq.answer}</p>
+                              {faq.source && (
+                                <div className="mt-2 ml-6">
+                                  <span className="text-xs text-gray-500">Source: {faq.source}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {selectedProductForModal.faqs?.map((faq: string, idx: number) => (
+                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <p className="text-sm text-gray-700">{faq}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-medium">Updated:</span> {new Date(selectedProductForModal.updatedAt).toLocaleDateString()}
+                    )}
+
+                    {/* Related Searches */}
+                    {selectedProductForModal.relatedSearches && selectedProductForModal.relatedSearches.length > 0 && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                          Related Searches ({selectedProductForModal.relatedSearches.length})
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProductForModal.relatedSearches.map((search: string, idx: number) => (
+                            <span key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {search}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* People Also Search For */}
+                    {selectedProductForModal.peopleAlsoSearchFor && selectedProductForModal.peopleAlsoSearchFor.length > 0 && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+                          People Also Search For ({selectedProductForModal.peopleAlsoSearchFor.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedProductForModal.peopleAlsoSearchFor.map((item: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg border border-gray-200 bg-gray-50">
+                              <span className="text-sm text-gray-900">{item.text}</span>
+                              {item.link && (
+                                <a
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                >
+                                  View
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expected Release Date */}
+                    {selectedProductForModal.expectedReleaseDate && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-2 uppercase tracking-wide">Expected Release Date</h4>
+                        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-semibold text-blue-900">
+                              {new Date(selectedProductForModal.expectedReleaseDate).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Metadata */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Metadata</h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Created</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {new Date(selectedProductForModal.createdAt || new Date()).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Last Updated</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {new Date(selectedProductForModal.updatedAt || new Date()).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
+                        {selectedProductForModal.publishAt && (
+                          <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Publish Date</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {new Date(selectedProductForModal.publishAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {selectedProductForModal._id && (
+                          <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Product ID</div>
+                            <div className="text-xs font-mono text-gray-600 break-all">{selectedProductForModal._id}</div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                {/* Modal Footer */}
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end space-x-3">
                   <button
                     onClick={() => setShowProductModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
                   >
                     Close
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       handleProductSelection(selectedProductForModal._id);
                       toast.success(selectedProductIds.includes(selectedProductForModal._id) ? 'Product deselected' : 'Product selected');
                       setShowProductModal(false);
@@ -1324,8 +1689,10 @@ export default function AdminDashboard() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roles', label: 'Roles & Permissions', icon: Shield },
     { id: 'products', label: 'Products', icon: Package },
+    { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker (STAGE3)' },
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
     { id: 'support', label: 'Support Tickets', icon: MessageSquare },
     {
       id: 'marketing',
@@ -1479,6 +1846,22 @@ export default function AdminDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated]);
+
+  // Fetch jacket maker products when tab is active
+  useEffect(() => {
+    if (activeTab === 'jacket-maker-products' && isAuthenticated) {
+      fetchJacketMakerProducts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated, jacketMakerPage, jacketMakerSearchTerm, jacketMakerCategory, jacketMakerBrand, jacketMakerStatus, jacketMakerIsActive, jacketMakerSortBy, jacketMakerSortOrder]);
+
+  // Fetch reviews when reviews tab is active
+  useEffect(() => {
+    if (activeTab === 'reviews' && isAuthenticated) {
+      fetchReviews();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated, reviewStatusFilter, reviewPage]);
 
   // Fetch support tickets when support tab is active
   useEffect(() => {
@@ -1681,6 +2064,89 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to fetch products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchJacketMakerProducts = async (pageToFetch?: number) => {
+    try {
+      setJacketMakerLoading(true);
+      const token = localStorage.getItem('token');
+      const page = pageToFetch || jacketMakerPage;
+      const limit = jacketMakerPerPage;
+
+      // Build query params including all filters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      if (jacketMakerSearchTerm) {
+        params.append('search', jacketMakerSearchTerm);
+      }
+      if (jacketMakerCategory) {
+        params.append('category', jacketMakerCategory);
+      }
+      if (jacketMakerBrand) {
+        params.append('brand', jacketMakerBrand);
+      }
+      if (jacketMakerStatus) {
+        params.append('status', jacketMakerStatus);
+      }
+      if (jacketMakerIsActive && jacketMakerIsActive !== 'all') {
+        params.append('isActive', jacketMakerIsActive);
+      }
+      if (jacketMakerSortBy) {
+        params.append('sortBy', jacketMakerSortBy);
+      }
+      if (jacketMakerSortOrder) {
+        params.append('sortOrder', jacketMakerSortOrder);
+      }
+
+      const res = await fetch(`/api/admin/jacket-maker-products?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => '');
+        throw new Error(`Failed to fetch jacket maker products (page ${page}): ${res.status} ${err}`);
+      }
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Invalid response format (page ${page}): ${text.substring(0, 100)}`);
+      }
+      const json = await res.json().catch((err) => {
+        throw new Error(`Failed to parse JSON response (page ${page}): ${err.message}`);
+      });
+      const items = Array.isArray(json.products) ? json.products : [];
+      setJacketMakerProducts(items);
+
+      const totalFromResponse = Number(json.pagination?.total ?? json.total ?? items.length);
+      const total = Number.isFinite(totalFromResponse) && totalFromResponse > 0
+        ? totalFromResponse
+        : items.length;
+      const pagesFromResponse = Number(json.pagination?.pages ?? 0);
+      const calculatedPages = pagesFromResponse > 0
+        ? pagesFromResponse
+        : Math.max(1, Math.ceil(total / Math.max(1, limit)));
+
+      setJacketMakerTotal(total);
+      setJacketMakerTotalPages(calculatedPages);
+      setJacketMakerPage(page);
+
+      // Update available brands and categories from filters
+      if (json.filters) {
+        if (json.filters.brands) {
+          setJacketMakerBrands(json.filters.brands);
+        }
+        if (json.filters.categories) {
+          setJacketMakerCategories(json.filters.categories);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching jacket maker products:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch jacket maker products');
+    } finally {
+      setJacketMakerLoading(false);
     }
   };
 
@@ -2193,6 +2659,159 @@ export default function AdminDashboard() {
       toast.error('Failed to fetch orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch reviews
+  const fetchReviews = async () => {
+    try {
+      setReviewsLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (reviewStatusFilter !== 'all') params.set('status', reviewStatusFilter);
+      params.set('page', reviewPage.toString());
+      params.set('limit', '20');
+      
+      const response = await fetch(`/api/admin/reviews?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to fetch reviews';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        
+        if (response.status === 401) {
+          toast.error('Unauthorized. Please log in again.');
+          router.push('/login');
+          return;
+        }
+        
+        if (response.status === 403) {
+          toast.error('Access denied. You do not have permission to view reviews.');
+          return;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setReviews(data.reviews || []);
+      setReviewTotalPages(data.pagination?.totalPages || 1);
+      setReviewTotal(data.pagination?.total || 0);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch reviews';
+      toast.error(errorMessage);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  // Approve or reject review
+  const handleReviewStatusChange = async (reviewId: string, status: 'approved' | 'rejected', adminResponse?: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/reviews', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reviewId,
+          status,
+          adminResponse,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update review');
+      }
+
+      toast.success(`Review ${status === 'approved' ? 'approved' : 'rejected'} successfully`);
+      await fetchReviews();
+    } catch (error) {
+      console.error('Error updating review:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update review');
+    }
+  };
+
+  // Edit review
+  const handleEditReview = (review: any) => {
+    setEditingReview(review);
+    setEditReviewForm({
+      rating: review.rating || 5,
+      title: review.title || '',
+      comment: review.comment || '',
+      images: review.images || [],
+    });
+  };
+
+  const handleSaveReviewEdit = async () => {
+    if (!editingReview) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/reviews/${editingReview._id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editReviewForm),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update review');
+      }
+
+      toast.success('Review updated successfully');
+      setEditingReview(null);
+      await fetchReviews();
+    } catch (error) {
+      console.error('Error updating review:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to update review');
+    }
+  };
+
+  // Delete review
+  const handleDeleteReview = (reviewId: string, reviewTitle?: string) => {
+    setDeleteReviewConfirm({ reviewId, reviewTitle });
+  };
+
+  const confirmDeleteReview = async () => {
+    if (!deleteReviewConfirm) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/reviews/${deleteReviewConfirm.reviewId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete review');
+      }
+
+      toast.success('Review deleted successfully');
+      setDeleteReviewConfirm(null);
+      await fetchReviews();
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete review');
     }
   };
 
@@ -8460,6 +9079,250 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+              {/* Jacket Maker Products Tab */}
+              {activeTab === 'jacket-maker-products' && (
+                <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
+                  <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Jacket Maker Products</h2>
+                        <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker (STAGE3 Database) - {jacketMakerTotal} total products</p>
+                      </div>
+                      <button
+                        onClick={() => fetchJacketMakerProducts()}
+                        className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
+                      >
+                        <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Search and Filters */}
+                    <div className="flex flex-col gap-4 sm:gap-5">
+                      {/* Search Section */}
+                      <div className="w-full">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Search Products</label>
+                        <div className="relative">
+                          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                          <input
+                            type="text"
+                            placeholder="Search by name, description, or brand..."
+                            value={jacketMakerSearchTerm}
+                            onChange={(e) => { setJacketMakerSearchTerm(e.target.value); setJacketMakerPage(1); }}
+                            className="w-full pl-12 pr-4 py-3.5 text-base border-2 border-gray-300 text-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all shadow-sm hover:shadow-md bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Filters Section */}
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filters</h3>
+                          <button
+                            onClick={() => {
+                              setJacketMakerCategory('');
+                              setJacketMakerBrand('');
+                              setJacketMakerStatus('');
+                              setJacketMakerIsActive('all');
+                              setJacketMakerPage(1);
+                            }}
+                            className="text-xs text-purple-600 hover:text-purple-800 font-medium underline"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+
+                        {/* Filter Groups */}
+                        <div className="flex flex-col gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Category</label>
+                              <SelectField
+                                options={[
+                                  { value: '', label: 'All Categories' },
+                                  ...jacketMakerCategories.map(cat => ({ value: cat, label: cat })),
+                                ]}
+                                value={jacketMakerCategory}
+                                isOpen={openSelect === 'jacketMakerCategory'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerCategory' : null)}
+                                onSelect={(value) => { setJacketMakerCategory(value); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Brand</label>
+                              <SelectField
+                                options={[
+                                  { value: '', label: jacketMakerBrands.length === 0 ? 'No brands available' : 'All Brands' },
+                                  ...jacketMakerBrands.map(brand => ({ value: brand, label: brand })),
+                                ]}
+                                value={jacketMakerBrand}
+                                isOpen={openSelect === 'jacketMakerBrand'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerBrand' : null)}
+                                onSelect={(value) => { setJacketMakerBrand(value); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Status</label>
+                              <SelectField
+                                options={[
+                                  { value: '', label: 'All Statuses' },
+                                  { value: 'draft', label: 'Draft' },
+                                  { value: 'published', label: 'Published' },
+                                  { value: 'archived', label: 'Archived' },
+                                ]}
+                                value={jacketMakerStatus}
+                                isOpen={openSelect === 'jacketMakerStatus'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerStatus' : null)}
+                                onSelect={(value) => { setJacketMakerStatus(value); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Active Status</label>
+                              <SelectField
+                                options={[
+                                  { value: 'all', label: 'All' },
+                                  { value: 'active', label: 'Active' },
+                                  { value: 'inactive', label: 'Inactive' },
+                                ]}
+                                value={jacketMakerIsActive}
+                                isOpen={openSelect === 'jacketMakerIsActive'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerIsActive' : null)}
+                                onSelect={(value) => { setJacketMakerIsActive(value as 'all' | 'active' | 'inactive'); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Sort Options */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                              <SelectField
+                                options={[
+                                  { value: 'createdAt', label: 'Created Date' },
+                                  { value: 'updatedAt', label: 'Updated Date' },
+                                  { value: 'name', label: 'Name' },
+                                  { value: 'price', label: 'Price' },
+                                ]}
+                                value={jacketMakerSortBy}
+                                isOpen={openSelect === 'jacketMakerSortBy'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerSortBy' : null)}
+                                onSelect={(value) => { setJacketMakerSortBy(value); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-sm font-medium text-gray-700 mb-2">Sort Order</label>
+                              <SelectField
+                                options={[
+                                  { value: 'desc', label: 'Descending' },
+                                  { value: 'asc', label: 'Ascending' },
+                                ]}
+                                value={jacketMakerSortOrder}
+                                isOpen={openSelect === 'jacketMakerSortOrder'}
+                                onOpenChange={(open) => setOpenSelect(open ? 'jacketMakerSortOrder' : null)}
+                                onSelect={(value) => { setJacketMakerSortOrder(value as 'asc' | 'desc'); setJacketMakerPage(1); }}
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Products List */}
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    {jacketMakerLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                        {[...Array(8)].map((_, i) => (
+                          <AdminSkeleton key={i} />
+                        ))}
+                      </div>
+                    ) : jacketMakerProducts.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No products found</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                          {jacketMakerProducts.map((product) => (
+                            <AdminProductCard
+                              key={product._id}
+                              product={product}
+                              clickable={true}
+                              onClick={() => {
+                                setSelectedProductForModal(product);
+                                setShowProductModal(true);
+                              }}
+                              highlightTone="violet"
+                            />
+                          ))}
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 py-5 sm:py-6 bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50 border-t-2 border-gray-200 mt-6">
+                          <div className="text-sm sm:text-base text-gray-700 font-semibold text-center sm:text-left">
+                            {(() => {
+                              const start = (jacketMakerPage - 1) * jacketMakerPerPage + 1;
+                              const end = Math.min(jacketMakerPage * jacketMakerPerPage, jacketMakerTotal);
+                              return (
+                                <span>
+                                  Showing <span className="text-purple-700 font-bold">{start}</span> to <span className="text-purple-700 font-bold">{end}</span> of <span className="text-purple-700 font-bold">{jacketMakerTotal}</span> products
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <button
+                              onClick={() => {
+                                const prevPage = jacketMakerPage - 1;
+                                setJacketMakerPage(prevPage);
+                                fetchJacketMakerProducts(prevPage);
+                              }}
+                              className="px-4 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm hover:shadow-md"
+                              disabled={jacketMakerPage <= 1}
+                            >
+                              <span className="flex items-center space-x-1.5">
+                                <ChevronLeft className="h-4 w-4" />
+                                <span>Previous</span>
+                              </span>
+                            </button>
+                            <div className="flex items-center space-x-1">
+                              <span className="px-4 py-2.5 text-sm font-bold text-purple-700 bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-300 rounded-xl shadow-sm">
+                                {jacketMakerPage} / {jacketMakerTotalPages}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const nextPage = jacketMakerPage + 1;
+                                setJacketMakerPage(nextPage);
+                                fetchJacketMakerProducts(nextPage);
+                              }}
+                              className="px-4 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm hover:shadow-md"
+                              disabled={jacketMakerPage >= jacketMakerTotalPages}
+                            >
+                              <span className="flex items-center space-x-1.5">
+                                <span>Next</span>
+                                <ChevronLeft className="h-4 w-4 rotate-180" />
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Policy Review Tab */}
               {activeTab === 'policy-review' && (
                 <div className="space-y-6 max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -9016,6 +9879,327 @@ export default function AdminDashboard() {
           </div>
         )}
 
+              {/* Reviews Tab */}
+              {activeTab === 'reviews' && (
+                <div className="bg-white rounded-lg shadow-sm border">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">Review Management</h2>
+                        <p className="text-sm text-gray-500 mt-1">View and approve customer reviews for products</p>
+                      </div>
+                      <button
+                        onClick={fetchReviews}
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Search and Filters */}
+                    <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search reviews by customer name, product name, or comment..."
+                            value={reviewSearchTerm}
+                            onChange={(e) => setReviewSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border text-gray-700 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <div className="w-full lg:w-auto">
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Statuses' },
+                            { value: 'pending', label: 'Pending' },
+                            { value: 'approved', label: 'Approved' },
+                            { value: 'rejected', label: 'Rejected' },
+                          ]}
+                          value={reviewStatusFilter}
+                          isOpen={openSelect === 'reviewStatus'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'reviewStatus' : null)}
+                          onSelect={(value) => {
+                            setReviewStatusFilter(value);
+                            setReviewPage(1);
+                          }}
+                          className="w-full lg:w-auto"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-yellow-700">Pending</p>
+                            <p className="text-2xl font-bold text-yellow-900">
+                              {reviews.filter(r => r.status === 'pending').length}
+                            </p>
+                          </div>
+                          <Clock className="h-8 w-8 text-yellow-600" />
+                        </div>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-green-700">Approved</p>
+                            <p className="text-2xl font-bold text-green-900">
+                              {reviews.filter(r => r.status === 'approved').length}
+                            </p>
+                          </div>
+                          <CheckCircle className="h-8 w-8 text-green-600" />
+                        </div>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-red-700">Rejected</p>
+                            <p className="text-2xl font-bold text-red-900">
+                              {reviews.filter(r => r.status === 'rejected').length}
+                            </p>
+                          </div>
+                          <XCircle className="h-8 w-8 text-red-600" />
+                        </div>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-blue-700">Total</p>
+                            <p className="text-2xl font-bold text-blue-900">{reviewTotal}</p>
+                          </div>
+                          <Star className="h-8 w-8 text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    {reviewsLoading ? (
+                      <TableSkeleton rows={8} columns={6} />
+                    ) : (
+                      <div className="divide-y divide-gray-200">
+                        {reviews
+                          .filter(review => {
+                            const matchesSearch = 
+                              review.userName?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                              review.productId?.name?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                              review.comment?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                              review.title?.toLowerCase().includes(reviewSearchTerm.toLowerCase());
+                            return matchesSearch;
+                          })
+                          .map((review) => (
+                            <div key={review._id} className="p-6 hover:bg-gray-50 transition-colors">
+                              <div className="flex flex-col lg:flex-row gap-4">
+                                {/* Product Info */}
+                                <div className="flex-1">
+                                  <div className="flex items-start gap-4">
+                                    {review.productId?.image && (
+                                      <img
+                                        src={review.productId.image}
+                                        alt={review.productId.name}
+                                        className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                                      />
+                                    )}
+                                    <div className="flex-1">
+                                      <Link
+                                        href={`/products/${review.productId?._id || review.productId}`}
+                                        className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                                      >
+                                        {review.productId?.name || 'Product'}
+                                      </Link>
+                                      <div className="mt-1 flex items-center gap-2">
+                                        {[...Array(5)].map((_, i) => (
+                                          <Star
+                                            key={i}
+                                            className={`h-4 w-4 ${
+                                              i < review.rating
+                                                ? 'fill-yellow-400 text-yellow-400'
+                                                : 'text-gray-300'
+                                            }`}
+                                          />
+                                        ))}
+                                        <span className="text-sm text-gray-600 ml-1">{review.rating}/5</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Review Content */}
+                                <div className="flex-1 lg:flex-2">
+                                  <div className="mb-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-gray-900">{review.userName}</span>
+                                        {review.verifiedPurchase && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                            Verified Purchase
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        review.status === 'approved'
+                                          ? 'bg-green-100 text-green-800'
+                                          : review.status === 'rejected'
+                                          ? 'bg-red-100 text-red-800'
+                                          : 'bg-yellow-100 text-yellow-800'
+                                      }`}>
+                                        {review.status}
+                                      </span>
+                                    </div>
+                                    {review.title && (
+                                      <h4 className="font-medium text-gray-900 mb-1">{review.title}</h4>
+                                    )}
+                                    <p className="text-gray-700 text-sm mb-2">{review.comment}</p>
+                                    {review.images && review.images.length > 0 && (
+                                      <div className="flex gap-2 mb-2">
+                                        {review.images.map((img: string, idx: number) => (
+                                          <img
+                                            key={idx}
+                                            src={img}
+                                            alt={`Review image ${idx + 1}`}
+                                            className="w-16 h-16 object-cover rounded border border-gray-200"
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
+                                    {review.adminResponse && (
+                                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <p className="text-sm text-blue-900">
+                                          <strong>Admin Response:</strong> {review.adminResponse.message}
+                                        </p>
+                                        <p className="text-xs text-blue-700 mt-1">
+                                          {new Date(review.adminResponse.respondedAt).toLocaleString()}
+                                        </p>
+                                      </div>
+                                    )}
+                                    <p className="text-xs text-gray-500 mt-2">
+                                      {new Date(review.createdAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex flex-col gap-2 lg:w-48">
+                                  {review.status === 'pending' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleEditReview(review)}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleReviewStatusChange(review._id, 'approved')}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                      >
+                                        <CheckCircle className="h-4 w-4" />
+                                        <span>Approve</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const response = prompt('Enter rejection reason (optional):');
+                                          if (response !== null) {
+                                            handleReviewStatusChange(review._id, 'rejected', response || undefined);
+                                          }
+                                        }}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                        <span>Reject</span>
+                                      </button>
+                                    </>
+                                  )}
+                                  {review.status === 'approved' && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          const response = prompt('Enter rejection reason (optional):');
+                                          if (response !== null) {
+                                            handleReviewStatusChange(review._id, 'rejected', response || undefined);
+                                          }
+                                        }}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                        <span>Reject</span>
+                                      </button>
+                                    </>
+                                  )}
+                                  {review.status === 'rejected' && (
+                                    <button
+                                      onClick={() => handleReviewStatusChange(review._id, 'approved')}
+                                      className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                    >
+                                      <CheckCircle className="h-4 w-4" />
+                                      <span>Approve</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteReview(review._id, review.title || review.comment?.substring(0, 50))}
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {reviews.filter(review => {
+                          const matchesSearch = 
+                            review.userName?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                            review.productId?.name?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                            review.comment?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
+                            review.title?.toLowerCase().includes(reviewSearchTerm.toLowerCase());
+                          return matchesSearch;
+                        }).length === 0 && (
+                          <div className="p-12 text-center text-gray-500">
+                            <Star className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                            <p className="text-lg font-medium">No reviews found</p>
+                            <p className="text-sm mt-1">
+                              {reviewStatusFilter !== 'all'
+                                ? `No ${reviewStatusFilter} reviews match your search.`
+                                : 'No reviews match your search criteria.'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pagination */}
+                  {reviewTotalPages > 1 && (
+                    <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+                      <div className="text-sm text-gray-700">
+                        Showing page {reviewPage} of {reviewTotalPages} ({reviewTotal} total reviews)
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setReviewPage(p => Math.max(1, p - 1))}
+                          disabled={reviewPage === 1}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setReviewPage(p => Math.min(reviewTotalPages, p + 1))}
+                          disabled={reviewPage === reviewTotalPages}
+                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Orders Tab */}
               {activeTab === 'orders' && (
                 <div className="bg-white rounded-lg shadow-sm border">
@@ -9256,6 +10440,227 @@ export default function AdminDashboard() {
                 }}
                 onSuccess={handleProductFormSuccess}
               />
+
+              {/* Delete Review Confirmation Modal */}
+              {deleteReviewConfirm && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 transform transition-all">
+                    <div className="p-6">
+                      {/* Icon */}
+                      <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+                        <AlertTriangle className="h-8 w-8 text-red-600" />
+                      </div>
+
+                      {/* Title */}
+                      <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
+                        Delete Review?
+                      </h3>
+
+                      {/* Message */}
+                      <p className="text-gray-600 text-center mb-6">
+                        Are you sure you want to delete this review? This action cannot be undone.
+                      </p>
+
+                      {deleteReviewConfirm.reviewTitle && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-6">
+                          <p className="text-xs font-medium text-gray-500 mb-1">Review:</p>
+                          <p className="text-sm text-gray-900 line-clamp-2">
+                            {deleteReviewConfirm.reviewTitle}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Warning */}
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-yellow-800">
+                            <strong>Warning:</strong> This will permanently remove the review and update the product's rating.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Buttons */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setDeleteReviewConfirm(null)}
+                          className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={confirmDeleteReview}
+                          className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl"
+                        >
+                          Delete Review
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Review Modal */}
+              {editingReview && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-100">
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">Edit Review</h2>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Editing review by <span className="font-semibold text-gray-900">{editingReview.userName}</span> for <span className="font-semibold text-gray-900">{editingReview.productId?.name || 'Product'}</span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setEditingReview(null)}
+                          className="text-gray-400 hover:text-gray-700 hover:bg-white rounded-full p-1 transition-all"
+                        >
+                          <X className="h-6 w-6" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-6 space-y-6 bg-gray-50">
+                      {/* Rating */}
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-semibold text-gray-800 mb-3">
+                          Rating <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <button
+                              key={rating}
+                              type="button"
+                              onClick={() => setEditReviewForm({ ...editReviewForm, rating })}
+                              className={`p-2 rounded-lg transition-all transform ${
+                                editReviewForm.rating >= rating
+                                  ? 'text-yellow-500 bg-yellow-50 scale-110'
+                                  : 'text-gray-300 hover:text-gray-400'
+                              } hover:scale-110 active:scale-95`}
+                            >
+                              <Star
+                                className={`h-7 w-7 ${
+                                  editReviewForm.rating >= rating ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+                          ))}
+                          <span className="ml-3 text-base font-semibold text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
+                            {editReviewForm.rating} / 5
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Title */}
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-semibold text-gray-800 mb-2">
+                          Title <span className="text-gray-500 font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editReviewForm.title}
+                          onChange={(e) => setEditReviewForm({ ...editReviewForm, title: e.target.value })}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-400 transition-all"
+                          placeholder="Enter review title..."
+                          maxLength={200}
+                        />
+                      </div>
+
+                      {/* Comment */}
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-semibold text-gray-800 mb-2">
+                          Comment <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={editReviewForm.comment}
+                          onChange={(e) => setEditReviewForm({ ...editReviewForm, comment: e.target.value })}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-400 transition-all resize-none"
+                          rows={6}
+                          placeholder="Write your review comment here..."
+                          maxLength={2000}
+                          required
+                        />
+                        <div className="flex justify-between items-center mt-2">
+                          <p className="text-xs text-gray-500">
+                            {editReviewForm.comment.length < 10 ? (
+                              <span className="text-orange-600 font-medium">Minimum 10 characters required</span>
+                            ) : (
+                              <span className="text-green-600">✓ Valid comment</span>
+                            )}
+                          </p>
+                          <p className="text-xs font-medium text-gray-600">
+                            {editReviewForm.comment.length} / 2000 characters
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Images */}
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-semibold text-gray-800 mb-2">
+                          Images <span className="text-gray-500 font-normal">(URLs, one per line)</span>
+                        </label>
+                        <textarea
+                          value={editReviewForm.images.join('\n')}
+                          onChange={(e) =>
+                            setEditReviewForm({
+                              ...editReviewForm,
+                              images: e.target.value.split('\n').filter((url) => url.trim()),
+                            })
+                          }
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-400 transition-all font-mono text-sm"
+                          rows={3}
+                          placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+                        />
+                        {editReviewForm.images.length > 0 && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <p className="text-xs font-medium text-gray-600 mb-2">Preview ({editReviewForm.images.length} image{editReviewForm.images.length !== 1 ? 's' : ''}):</p>
+                            <div className="flex gap-2 flex-wrap">
+                              {editReviewForm.images.map((img, idx) => (
+                                <div key={idx} className="relative group">
+                                  <img
+                                    src={img}
+                                    alt={`Review image ${idx + 1}`}
+                                    className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const newImages = editReviewForm.images.filter((_, i) => i !== idx);
+                                      setEditReviewForm({ ...editReviewForm, images: newImages });
+                                    }}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-6 border-t border-gray-200 bg-white flex justify-end gap-3">
+                      <button
+                        onClick={() => setEditingReview(null)}
+                        className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveReviewEdit}
+                        disabled={!editReviewForm.comment.trim() || editReviewForm.comment.trim().length < 10}
+                        className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
         {/* Order Detail Modal */}
         <OrderDetailModal

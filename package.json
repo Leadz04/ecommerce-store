@@ -38,7 +38,10 @@
     "cron:prices": "node scripts/run-cron.js price-alerts",
     "cron:stock": "node scripts/run-cron.js stock-notifications",
     "cron:subscriptions": "node scripts/run-cron.js subscriptions",
-    "cron:all": "node scripts/run-cron.js all"
+    "cron:all": "node scripts/run-cron.js all",
+    "add:featured": "node scripts/add-featured-products.js",
+    "add:jackets": "node scripts/add-jackets.js",
+    "restore:images": "node scripts/restore-product-images.js"
   },
   "dependencies": {
     "@google/genai": "^0.6.1",

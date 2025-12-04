@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
     const brand = searchParams.get('brand');
     const minRating = searchParams.get('minRating');
     const collection = (searchParams.get('collection') || '').toLowerCase();
+    const style = searchParams.get('style');
+    const color = searchParams.get('color');
 
     // Build query - include legacy products without status/publishAt
     const now = new Date();
@@ -38,12 +40,17 @@ export async function GET(request: NextRequest) {
       query.category = category;
     }
     
+    // Build $and array for complex filters
+    const andConditions: any[] = [];
+
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { category: { $regex: search, $options: 'i' } }
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+          { category: { $regex: search, $options: 'i' } }
+        ]
+      });
     }
     
     if (minPrice || maxPrice) {
@@ -65,6 +72,34 @@ export async function GET(request: NextRequest) {
       if (!Number.isNaN(parsed)) {
         query.rating = { $gte: parsed };
       }
+    }
+
+    // Style filter - search in tags and productType
+    if (style) {
+      andConditions.push({
+        $or: [
+          { tags: { $regex: style, $options: 'i' } },
+          { productType: { $regex: style, $options: 'i' } },
+          { name: { $regex: style, $options: 'i' } }
+        ]
+      });
+    }
+
+    // Color filter - search in tags, specifications, and name
+    if (color) {
+      andConditions.push({
+        $or: [
+          { tags: { $regex: color, $options: 'i' } },
+          { name: { $regex: color, $options: 'i' } },
+          { 'specifications.Color': { $regex: color, $options: 'i' } },
+          { 'specifications.color': { $regex: color, $options: 'i' } }
+        ]
+      });
+    }
+
+    // Add all AND conditions to query
+    if (andConditions.length > 0) {
+      query.$and = [...(query.$and || []), ...andConditions];
     }
 
     // Collections can influence query and sort

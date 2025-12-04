@@ -43,14 +43,26 @@ export async function seedRoles() {
       }
     ];
 
-    // Insert or update roles
+    // Insert or update roles and update users with those roles
     for (const roleData of roles) {
-      await Role.findOneAndUpdate(
+      const updatedRole = await Role.findOneAndUpdate(
         { name: roleData.name },
         roleData,
         { upsert: true, new: true }
       );
       console.log(`✅ Role ${roleData.name} created/updated`);
+      
+      // Update all users with this role to have the updated permissions
+      if (updatedRole) {
+        const usersWithRole = await User.find({ role: updatedRole._id });
+        if (usersWithRole.length > 0) {
+          await User.updateMany(
+            { role: updatedRole._id },
+            { permissions: roleData.permissions }
+          );
+          console.log(`✅ Updated ${usersWithRole.length} users with ${roleData.name} role permissions`);
+        }
+      }
     }
 
     // Create default super admin user if it doesn't exist

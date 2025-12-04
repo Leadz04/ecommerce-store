@@ -5,7 +5,7 @@ export const fetchCache = 'force-no-store';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, Grid, List, SlidersHorizontal, X, Search } from 'lucide-react';
+import { Filter, Grid, List, SlidersHorizontal, X, Search, Tag } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
@@ -31,6 +31,7 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
+  const [pendingFilters, setPendingFilters] = useState<any>(null);
   
   // Get the current limit from URL or use default
   const getCurrentLimit = () => {
@@ -65,18 +66,38 @@ export default function ProductsPage() {
   const currentPriceRange = filters.priceRange || [0, 1000];
 
   // Initialize from URL params - use ref to prevent duplicate calls
-  const hasInitialized = useRef(false);
+  const hasInitialized = useRef<string | false>(false);
   useEffect(() => {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || 'all';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
+    const minPrice = searchParams.get('minPrice');
+    const maxPrice = searchParams.get('maxPrice');
+    const inStock = searchParams.get('inStock');
+    const style = searchParams.get('style') || '';
+    const color = searchParams.get('color') || '';
     // Always use default limit for products listing page, or read from URL if specified
     const limit = getCurrentLimit();
     
+    // Only use price range from URL if explicitly set, otherwise use defaults
+    const priceRange: [number, number] = minPrice || maxPrice
+      ? [
+          minPrice ? parseInt(minPrice, 10) : 0,
+          maxPrice ? parseInt(maxPrice, 10) : 1000
+        ]
+      : [0, 1000];
+    
+    // Only use inStock if explicitly set in URL
+    const inStockValue = inStock === 'true' ? true : null;
+    
+    // Only use style/color if explicitly set in URL
+    const styleValue = style ? style : undefined;
+    const colorValue = color ? color : undefined;
+    
     // Only fetch if params actually changed or on first mount
-    const paramsKey = `${search}-${category}-${sortBy}-${page}-${limit}`;
-    if (hasInitialized.current && paramsKey === hasInitialized.current) {
+    const paramsKey = `${search}-${category}-${sortBy}-${page}-${limit}-${minPrice}-${maxPrice}-${inStock}-${style}-${color}`;
+    if (hasInitialized.current !== false && paramsKey === hasInitialized.current) {
       return;
     }
     hasInitialized.current = paramsKey;
@@ -86,87 +107,253 @@ export default function ProductsPage() {
       search, 
       category, 
       sortBy,
-      priceRange: [0, 1000],
-      inStock: null
+      priceRange,
+      inStock: inStockValue,
+      style: styleValue,
+      color: colorValue
     });
     
     fetchProducts({ 
-      search, 
+      search: search || undefined, 
       category: category === 'all' ? undefined : category, 
-      sortBy, 
+      sortBy: sortBy === 'name' ? undefined : sortBy, 
       page,
-      limit 
+      limit,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStockValue === true ? true : undefined,
+      style: styleValue,
+      color: colorValue
     });
   }, [searchParams, setFilters, fetchProducts]);
-
-  // Update URL when filters change
-  const updateURL = (newParams: Record<string, string>) => {
-    const params = new URLSearchParams(searchParams);
-    
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value && value !== 'all' && value !== 'name') {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    
-    const newURL = params.toString() ? `?${params.toString()}` : '/products';
-    router.push(newURL, { scroll: false });
-  };
 
   // Debounce search to avoid firing a request on every keystroke
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchInput !== filters.search) {
+        const params = new URLSearchParams(searchParams);
+        if (searchInput) {
+          params.set('search', searchInput);
+        } else {
+          params.delete('search');
+        }
+        params.set('page', '1');
+        
         setFilters({ search: searchInput });
-        updateURL({ search: searchInput, page: '1' });
-        fetchProducts({ search: searchInput, page: 1, limit: getCurrentLimit() });
+        const newURL = params.toString() ? `?${params.toString()}` : '/products';
+        router.push(newURL, { scroll: false });
+        
+        // Build fetch params from URL
+        const category = params.get('category') || 'all';
+        const sortBy = params.get('sortBy') || 'name';
+        const minPrice = params.get('minPrice');
+        const maxPrice = params.get('maxPrice');
+        const inStock = params.get('inStock');
+        const style = params.get('style') || '';
+        const color = params.get('color') || '';
+        
+        fetchProducts({ 
+          search: searchInput || undefined, 
+          page: 1, 
+          limit: getCurrentLimit(),
+          category: category === 'all' ? undefined : category,
+          sortBy: sortBy !== 'name' ? sortBy : undefined,
+          minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+          maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+          inStock: inStock === 'true' ? true : undefined,
+          style: style || undefined,
+          color: color || undefined
+        });
       }
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchInput, filters.search, setFilters, fetchProducts]);
+  }, [searchInput, filters.search, setFilters, fetchProducts, searchParams, router]);
 
   const handleCategoryChange = (category: string) => {
+    // Build URL params from current URL and new category
+    const params = new URLSearchParams(searchParams);
+    if (category === 'all') {
+      params.delete('category');
+    } else {
+      params.set('category', category);
+    }
+    params.set('page', '1');
+    
     setFilters({ category });
-    updateURL({ category, page: '1' });
-    fetchProducts({ category: category === 'all' ? undefined : category, page: 1, limit: getCurrentLimit() });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      category: category === 'all' ? undefined : category, 
+      page: 1, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
   };
 
   const handleSortChange = (sortBy: string) => {
+    // Build URL params from current URL and new sortBy
+    const params = new URLSearchParams(searchParams);
+    if (sortBy === 'name') {
+      params.delete('sortBy');
+    } else {
+      params.set('sortBy', sortBy);
+    }
+    params.set('page', '1');
+    
     setFilters({ sortBy });
-    updateURL({ sortBy, page: '1' });
-    fetchProducts({ sortBy, page: 1, limit: getCurrentLimit() });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      sortBy: sortBy !== 'name' ? sortBy : undefined, 
+      page: 1, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
   };
 
   const handlePriceRangeChange = (priceRange: [number, number]) => {
+    // Build URL params from current URL and new price range
+    const params = new URLSearchParams(searchParams);
+    if (priceRange[0] > 0) {
+      params.set('minPrice', priceRange[0].toString());
+    } else {
+      params.delete('minPrice');
+    }
+    if (priceRange[1] < 1000) {
+      params.set('maxPrice', priceRange[1].toString());
+    } else {
+      params.delete('maxPrice');
+    }
+    params.set('page', '1');
+    
     setFilters({ priceRange });
-    updateURL({ minPrice: priceRange[0].toString(), maxPrice: priceRange[1].toString(), page: '1' });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
     fetchProducts({ 
-      minPrice: priceRange[0], 
-      maxPrice: priceRange[1], 
+      minPrice: priceRange[0] > 0 ? priceRange[0] : undefined, 
+      maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined, 
       page: 1,
-      limit: getCurrentLimit()
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
     });
   };
 
   const handlePageChange = (page: number) => {
-    updateURL({ page: page.toString() });
-    fetchProducts({ page, limit: getCurrentLimit() });
+    // Preserve all filters when changing page - just update page number
+    const params = new URLSearchParams(searchParams);
+    params.set('page', page.toString());
+    
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      page, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
   };
 
   const clearSearch = () => {
     setSearchInput('');
+    const params = new URLSearchParams(searchParams);
+    params.delete('search');
+    params.set('page', '1');
+    
     setFilters({ search: '' });
-    updateURL({ search: '', page: '1' });
-    fetchProducts({ search: '', page: 1, limit: getCurrentLimit() });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      page: 1, 
+      limit: getCurrentLimit(),
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
   };
 
   const clearAllFilters = () => {
     setSearchInput('');
-    setFilters({ search: '', category: 'all', priceRange: [0, 1000], inStock: null });
-    updateURL({});
-    fetchProducts({ search: '', category: undefined, minPrice: 0, maxPrice: 1000, page: 1, limit: getCurrentLimit() });
+    setFilters({ search: '', category: 'all', priceRange: [0, 1000], inStock: null, style: undefined, color: undefined });
+    // Clear all URL params by navigating to clean URL
+    router.push('/products', { scroll: false });
+    fetchProducts({ page: 1, limit: getCurrentLimit() });
   };
 
   const handleClearAllFiltersClick = () => {
@@ -176,13 +363,196 @@ export default function ProductsPage() {
     }
   };
 
+  // Individual filter removal handlers
+  const removeCategoryFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('category');
+    params.set('page', '1');
+    
+    setFilters({ category: 'all' });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    const search = params.get('search') || '';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      page: 1, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
+  };
+
+  const removeStyleFilter = () => {
+    handleStyleChange(filters.style || '');
+  };
+
+  const removeColorFilter = () => {
+    handleColorChange(filters.color || '');
+  };
+
+  const removePriceFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('minPrice');
+    params.delete('maxPrice');
+    params.set('page', '1');
+    
+    setFilters({ priceRange: [0, 1000] });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      page: 1, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
+  };
+
+  const removeInStockFilter = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('inStock');
+    params.set('page', '1');
+    
+    setFilters({ inStock: null });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({ 
+      page: 1, 
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
+  };
+
+  // Active Filters Display Component
+  const ActiveFiltersDisplay = () => {
+    const activeFilters: Array<{ label: string; onRemove: () => void }> = [];
+
+    if (filters.search && filters.search.trim() !== '') {
+      activeFilters.push({
+        label: `Search: "${filters.search}"`,
+        onRemove: clearSearch
+      });
+    }
+
+    if (filters.category && filters.category !== 'all') {
+      activeFilters.push({
+        label: `Category: ${filters.category}`,
+        onRemove: removeCategoryFilter
+      });
+    }
+
+    if (filters.style) {
+      const styleLabel = styleOptions.find(s => s.toLowerCase() === filters.style) || filters.style;
+      activeFilters.push({
+        label: `Style: ${styleLabel}`,
+        onRemove: removeStyleFilter
+      });
+    }
+
+    if (filters.color) {
+      const colorLabel = colorOptions.find(c => c.value === filters.color)?.name || filters.color;
+      activeFilters.push({
+        label: `Color: ${colorLabel}`,
+        onRemove: removeColorFilter
+      });
+    }
+
+    if (filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000)) {
+      activeFilters.push({
+        label: `Price: $${filters.priceRange[0]} - $${filters.priceRange[1]}`,
+        onRemove: removePriceFilter
+      });
+    }
+
+    if (filters.inStock === true) {
+      activeFilters.push({
+        label: 'In Stock Only',
+        onRemove: removeInStockFilter
+      });
+    }
+
+    if (activeFilters.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-100">
+        <div className="flex items-center gap-2 mb-3">
+          <Tag className="h-4 w-4 text-blue-600" />
+          <h4 className="text-sm font-semibold text-gray-900">Active Filters ({activeFilters.length})</h4>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {activeFilters.map((filter, index) => (
+            <button
+              key={index}
+              onClick={filter.onRemove}
+              className="group inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-blue-200 rounded-full text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm"
+            >
+              <span>{filter.label}</span>
+              <X className="h-3.5 w-3.5 text-gray-400 group-hover:text-red-500 transition-colors" />
+            </button>
+          ))}
+          {activeFilters.length > 1 && (
+            <button
+              onClick={clearAllFilters}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 border-2 border-red-200 rounded-full text-sm font-medium text-red-700 hover:bg-red-100 hover:border-red-300 transition-all"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Clear All</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Check if there are any active filters
   const hasActiveFilters = () => {
     return (
       filters.search && filters.search.trim() !== '' ||
       filters.category && filters.category !== 'all' ||
       filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000) ||
-      filters.inStock !== null
+      filters.inStock !== null ||
+      filters.style !== undefined ||
+      filters.color !== undefined
     );
   };
 
@@ -190,104 +560,521 @@ export default function ProductsPage() {
     filters.search && filters.search.trim() !== '',
     filters.category && filters.category !== 'all',
     filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000),
-    filters.inStock !== null
+    filters.inStock !== null,
+    filters.style !== undefined,
+    filters.color !== undefined
   ].filter(Boolean).length;
 
-  const FiltersContent = () => (
-    <div className="space-y-6">
-      {/* Category Section */}
-      <div>
-        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Category</h4>
-        <div className="grid grid-cols-2 gap-2">
-          {categories.map((category) => (
-            <label 
-              key={category} 
-              className={`flex items-center justify-center px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${
-                filters.category === category
-                  ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <input
-                type="radio"
-                name="category"
-                value={category}
-                checked={filters.category === category}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                className="sr-only"
-              />
-              <span className="capitalize text-sm">{category}</span>
-            </label>
-          ))}
+  const handleStyleChange = (style: string) => {
+    const params = new URLSearchParams(searchParams);
+    const newStyle = filters.style === style ? undefined : style;
+    
+    if (newStyle) {
+      params.set('style', newStyle);
+    } else {
+      params.delete('style');
+    }
+    params.set('page', '1');
+    
+    setFilters({ style: newStyle });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const color = params.get('color') || '';
+    
+    fetchProducts({
+      style: newStyle || undefined,
+      page: 1,
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      color: color || undefined
+    });
+  };
+
+  const handleColorChange = (color: string) => {
+    const params = new URLSearchParams(searchParams);
+    const newColor = filters.color === color ? undefined : color;
+    
+    if (newColor) {
+      params.set('color', newColor);
+    } else {
+      params.delete('color');
+    }
+    params.set('page', '1');
+    
+    setFilters({ color: newColor });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const minPrice = params.get('minPrice');
+    const maxPrice = params.get('maxPrice');
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    
+    fetchProducts({
+      color: newColor || undefined,
+      page: 1,
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined
+    });
+  };
+
+  const handlePricePreset = (min: number, max: number) => {
+    const params = new URLSearchParams(searchParams);
+    const newRange: [number, number] = [min, max];
+    
+    if (min > 0) {
+      params.set('minPrice', min.toString());
+    } else {
+      params.delete('minPrice');
+    }
+    if (max < 1000) {
+      params.set('maxPrice', max.toString());
+    } else {
+      params.delete('maxPrice');
+    }
+    params.set('page', '1');
+    
+    setFilters({ priceRange: newRange });
+    const newURL = params.toString() ? `?${params.toString()}` : '/products';
+    router.push(newURL, { scroll: false });
+    
+    // Build fetch params from URL
+    const search = params.get('search') || '';
+    const category = params.get('category') || 'all';
+    const sortBy = params.get('sortBy') || 'name';
+    const inStock = params.get('inStock');
+    const style = params.get('style') || '';
+    const color = params.get('color') || '';
+    
+    fetchProducts({
+      minPrice: min > 0 ? min : undefined,
+      maxPrice: max < 1000 ? max : undefined,
+      page: 1,
+      limit: getCurrentLimit(),
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      inStock: inStock === 'true' ? true : undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
+  };
+
+  const styleOptions = [
+    'Trucker jacket', 'Belted', 'Cowhide', 'Removable hood', 'Chocolate', 
+    'Biker jacket', 'Cognac', 'Shirt', 'Shirt collar', 'Harrington', 'Fur', 'Blazer',
+    'Leather', 'Vintage', 'Hood', 'Hooded', 'Moto', 'Motorcycle', 'Cafe racer',
+    'Asymmetrical', 'Biker', 'Quilted', 'Casual', 'Distressed', 'Bomber', 'Waxed'
+  ];
+
+  const colorOptions = [
+    { name: 'Black', value: 'black', hex: '#000000' },
+    { name: 'Maroon', value: 'maroon', hex: '#800000' },
+    { name: 'Brown', value: 'brown', hex: '#8B4513' },
+    { name: 'Cognac', value: 'cognac', hex: '#9F4636' },
+    { name: 'Yellow', value: 'yellow', hex: '#FFD700' },
+    { name: 'Blue', value: 'blue', hex: '#0000FF' },
+    { name: 'Camel', value: 'camel', hex: '#C19A6B' },
+    { name: 'Grey', value: 'grey', hex: '#808080' },
+    { name: 'Green', value: 'green', hex: '#008000' },
+    { name: 'Olive', value: 'olive', hex: '#808000' },
+    { name: 'Off white', value: 'off white', hex: '#FAF9F6' },
+    { name: 'White', value: 'white', hex: '#FFFFFF' },
+    { name: 'Beige', value: 'beige', hex: '#F5F5DC' },
+    { name: 'Red', value: 'red', hex: '#FF0000' }
+  ];
+
+  const pricePresets = [
+    { label: '$199 - $249', min: 199, max: 249 },
+    { label: '$100 - $199', min: 100, max: 199 },
+    { label: '$250 - $399', min: 250, max: 399 },
+    { label: '$400 - $599', min: 400, max: 599 },
+    { label: '$600+', min: 600, max: 1000 }
+  ];
+
+  const FiltersContent = ({ 
+    onFilterChange, 
+    pendingFilters 
+  }: { 
+    onFilterChange?: (filters: any) => void;
+    pendingFilters?: any;
+  } = {}) => {
+    const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+      style: false,
+      color: false,
+      price: false
+    });
+
+    const toggleSection = (section: string) => {
+      setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+    };
+
+    // Use pendingFilters if provided, otherwise use current filters
+    const displayFilters = pendingFilters || filters;
+    const currentPriceRange = displayFilters.priceRange || [0, 1000];
+
+    return (
+      <div className="space-y-6">
+        {/* Price Presets Section */}
+        <div>
+          <button
+            onClick={() => toggleSection('price')}
+            className="w-full flex items-center justify-between mb-3 text-gray-900"
+          >
+            <h4 className="font-semibold text-sm uppercase tracking-wide">Price</h4>
+            <span className="text-gray-500">{expandedSections.price ? '−' : '+'}</span>
+          </button>
+          {expandedSections.price && (
+            <div className="space-y-2">
+              {pricePresets.map((preset) => {
+                const isActive = displayFilters.priceRange?.[0] === preset.min && displayFilters.priceRange?.[1] === preset.max;
+                return (
+                  <button
+                    key={preset.label}
+                    onClick={() => {
+                      const newFilters = { ...(pendingFilters || filters), priceRange: [preset.min, preset.max] };
+                      if (onFilterChange) {
+                        onFilterChange(newFilters);
+                      } else {
+                        handlePricePreset(preset.min, preset.max);
+                      }
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg border-2 transition-all ${
+                      isActive
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="text-sm underline">{preset.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Availability Section */}
-      <div>
-        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Availability</h4>
-        <label className="flex items-center p-3 rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer transition-all">
-          <input
-            type="checkbox"
-            checked={filters.inStock === true}
-              onChange={(e) => {
-              const nextInStock = e.target.checked ? true : null;
-              setFilters({ inStock: nextInStock });
-              updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
-              fetchProducts({ inStock: e.target.checked ? true : undefined, page: 1, limit: getCurrentLimit() });
-            }}
-            className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-          />
-          <span className="ml-3 text-gray-700 font-medium">In stock only</span>
-        </label>
-      </div>
+        {/* Category Section */}
+        <div>
+          <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Category</h4>
+          <div className="grid grid-cols-2 gap-2">
+            {categories.map((category) => (
+              <label 
+                key={category} 
+                className={`flex items-center justify-center px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  displayFilters.category === category
+                    ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="category"
+                  value={category}
+                  checked={displayFilters.category === category}
+                  onChange={(e) => {
+                    const newFilters = { ...(pendingFilters || filters), category: e.target.value };
+                    if (onFilterChange) {
+                      onFilterChange(newFilters);
+                    } else {
+                      handleCategoryChange(e.target.value);
+                    }
+                  }}
+                  className="sr-only"
+                />
+                <span className="capitalize text-sm">{category}</span>
+              </label>
+            ))}
+          </div>
+        </div>
 
-      {/* Price Range Section */}
-      <div>
-        <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Price Range</h4>
-        <div className="space-y-4">
-          <div className="relative">
+        {/* Style Section */}
+        <div>
+          <button
+            onClick={() => toggleSection('style')}
+            className="w-full flex items-center justify-between mb-3 text-gray-900 hover:text-blue-600 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <h4 className="font-semibold text-sm uppercase tracking-wide">Style</h4>
+              {displayFilters.style && (
+                <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                  {styleOptions.find(s => s.toLowerCase() === displayFilters.style) || displayFilters.style}
+                </span>
+              )}
+            </div>
+            <span className="text-gray-500">{expandedSections.style ? '−' : '+'}</span>
+          </button>
+          {expandedSections.style && (
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {styleOptions.map((style) => {
+                const isActive = displayFilters.style === style.toLowerCase();
+                return (
+                  <button
+                    key={style}
+                    onClick={() => {
+                      const newStyle = displayFilters.style === style.toLowerCase() ? undefined : style.toLowerCase();
+                      const newFilters = { ...(pendingFilters || filters), style: newStyle };
+                      if (onFilterChange) {
+                        onFilterChange(newFilters);
+                      } else {
+                        handleStyleChange(style.toLowerCase());
+                      }
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-700 font-medium border-2 border-blue-200'
+                        : 'text-gray-700 hover:bg-gray-50 border-2 border-transparent'
+                    }`}
+                  >
+                    <span className="text-sm">{style}</span>
+                    {isActive && (
+                      <span className="text-blue-600">
+                        <X className="h-4 w-4" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Color Section */}
+        <div>
+          <button
+            onClick={() => toggleSection('color')}
+            className="w-full flex items-center justify-between mb-3 text-gray-900 hover:text-blue-600 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <h4 className="font-semibold text-sm uppercase tracking-wide">Color</h4>
+              {displayFilters.color && (
+                <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                  {colorOptions.find(c => c.value === displayFilters.color)?.name || displayFilters.color}
+                </span>
+              )}
+            </div>
+            <span className="text-gray-500">{expandedSections.color ? '−' : '+'}</span>
+          </button>
+          {expandedSections.color && (
+            <div className="grid grid-cols-3 gap-3">
+              {colorOptions.map((color) => {
+                const isActive = displayFilters.color === color.value;
+                return (
+                  <button
+                    key={color.value}
+                    onClick={() => {
+                      const newColor = displayFilters.color === color.value ? undefined : color.value;
+                      const newFilters = { ...(pendingFilters || filters), color: newColor };
+                      if (onFilterChange) {
+                        onFilterChange(newFilters);
+                      } else {
+                        handleColorChange(color.value);
+                      }
+                    }}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-all relative ${
+                      isActive
+                        ? 'border-blue-600 bg-blue-50 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                    }`}
+                  >
+                    {isActive && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                        <X className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    <div
+                      className={`w-8 h-8 rounded-full border-2 ${isActive ? 'ring-2 ring-blue-400' : ''}`}
+                      style={{
+                        backgroundColor: color.hex,
+                        borderColor: color.value === 'white' || color.value === 'off white' ? '#e5e7eb' : color.hex
+                      }}
+                    />
+                    <span className={`text-xs ${isActive ? 'font-medium text-blue-700' : 'text-gray-700'}`}>
+                      {color.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Availability Section */}
+        <div>
+          <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Availability</h4>
+          <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${
+            displayFilters.inStock === true
+              ? 'border-blue-600 bg-blue-50'
+              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+          }`}>
             <input
-              type="range"
-              min="0"
-              max="1000"
-              value={currentPriceRange[1]}
-              onChange={(e) => handlePriceRangeChange([currentPriceRange[0], parseInt(e.target.value, 10)])}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              style={{
-                background: `linear-gradient(to right, #2563eb 0%, #2563eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb 100%)`
+              type="checkbox"
+              checked={displayFilters.inStock === true}
+              onChange={(e) => {
+                const nextInStock = e.target.checked ? true : null;
+                const newFilters = { ...(pendingFilters || filters), inStock: nextInStock };
+                if (onFilterChange) {
+                  onFilterChange(newFilters);
+                } else {
+                  const params = new URLSearchParams(searchParams);
+                  if (e.target.checked) {
+                    params.set('inStock', 'true');
+                  } else {
+                    params.delete('inStock');
+                  }
+                  params.set('page', '1');
+                  
+                  setFilters({ inStock: nextInStock });
+                  const newURL = params.toString() ? `?${params.toString()}` : '/products';
+                  router.push(newURL, { scroll: false });
+                  
+                  // Build fetch params from URL
+                  const search = params.get('search') || '';
+                  const category = params.get('category') || 'all';
+                  const sortBy = params.get('sortBy') || 'name';
+                  const minPrice = params.get('minPrice');
+                  const maxPrice = params.get('maxPrice');
+                  const style = params.get('style') || '';
+                  const color = params.get('color') || '';
+                  
+                  fetchProducts({
+                    inStock: e.target.checked ? true : undefined,
+                    page: 1,
+                    limit: getCurrentLimit(),
+                    search: search || undefined,
+                    category: category === 'all' ? undefined : category,
+                    sortBy: sortBy !== 'name' ? sortBy : undefined,
+                    minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+                    maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+                    style: style || undefined,
+                    color: color || undefined
+                  });
+                }
               }}
+              className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
             />
+            <span className={`ml-3 font-medium ${displayFilters.inStock === true ? 'text-blue-700' : 'text-gray-700'}`}>
+              In stock only
+            </span>
+            {displayFilters.inStock === true && (
+              <span className="ml-auto text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                Active
+              </span>
+            )}
+          </label>
+        </div>
+
+        {/* Price Range Slider Section */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Price Range</h4>
+            {displayFilters.priceRange && (displayFilters.priceRange[0] > 0 || displayFilters.priceRange[1] < 1000) && (
+              <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                Active
+              </span>
+            )}
           </div>
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-gray-500">Min:</span>
-              <span className="text-sm font-semibold text-gray-900">${currentPriceRange[0]}</span>
+          <div className={`space-y-4 p-4 rounded-lg border-2 transition-all ${
+            displayFilters.priceRange && (displayFilters.priceRange[0] > 0 || displayFilters.priceRange[1] < 1000)
+              ? 'border-blue-200 bg-blue-50/30'
+              : 'border-gray-100 bg-gray-50/30'
+          }`}>
+            <div className="relative">
+              <input
+                type="range"
+                min="0"
+                max="1000"
+                value={currentPriceRange[1]}
+                onChange={(e) => {
+                  const newPriceRange: [number, number] = [currentPriceRange[0], parseInt(e.target.value, 10)];
+                  const newFilters = { ...(pendingFilters || filters), priceRange: newPriceRange };
+                  if (onFilterChange) {
+                    onFilterChange(newFilters);
+                  } else {
+                    handlePriceRangeChange(newPriceRange);
+                  }
+                }}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                style={{
+                  background: `linear-gradient(to right, #2563eb 0%, #2563eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb ${(currentPriceRange[1] / 1000) * 100}%, #e5e7eb 100%)`
+                }}
+              />
             </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-gray-500">Max:</span>
-              <span className="text-sm font-semibold text-blue-600">${currentPriceRange[1]}</span>
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">Min:</span>
+                <span className={`text-sm font-semibold ${
+                  filters.priceRange && filters.priceRange[0] > 0 ? 'text-blue-600' : 'text-gray-900'
+                }`}>
+                  ${currentPriceRange[0]}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">Max:</span>
+                <span className={`text-sm font-semibold ${
+                  filters.priceRange && filters.priceRange[1] < 1000 ? 'text-blue-600' : 'text-gray-900'
+                }`}>
+                  ${currentPriceRange[1]}
+                </span>
+              </div>
             </div>
+            {filters.priceRange && (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000) && (
+              <button
+                onClick={removePriceFilter}
+                className="w-full mt-2 text-xs text-red-600 hover:text-red-700 font-medium underline"
+              >
+                Reset Price Range
+              </button>
+            )}
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 sm:py-12 md:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-4">All Products</h1>
-          <p className="text-base sm:text-lg md:text-xl text-blue-100">Discover our complete collection of products</p>
+      {/* Header - Conversion Optimized */}
+      <section className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white py-12 sm:py-16 md:py-20 overflow-hidden">
+        {/* Animated background pattern */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20 animate-pulse"></div>
+        <div className="w-full sm:w-[90%] md:w-[85%] lg:w-[80%] mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-4 sm:mb-6 leading-tight">
+            All Products
+          </h1>
+          <p className="text-base sm:text-lg md:text-xl text-blue-50 font-medium max-w-2xl mx-auto">
+            Discover our complete collection of premium quality products
+          </p>
         </div>
       </section>
 
-      {/* Products Section */}
-      <section className="py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Search and Controls */}
-          <div className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8">
+      {/* Products Section - Conversion Optimized */}
+      <section className="py-8 sm:py-12 md:py-16 bg-white">
+        <div className="w-full sm:w-[90%] md:w-[85%] lg:w-[80%] mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Search and Controls - Conversion Optimized */}
+          <div className="flex flex-col gap-4 sm:gap-6 mb-8 sm:mb-10">
             {/* Search */}
             <div className="flex-1 relative">
               <div className="relative">
@@ -297,7 +1084,7 @@ export default function ProductsPage() {
                   placeholder="Search products..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500 text-sm sm:text-base"
+                  className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-3 sm:py-3.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-400 text-sm sm:text-base font-medium shadow-sm hover:shadow-md transition-all"
                 />
                 {searchInput && (
                   <button
@@ -327,17 +1114,17 @@ export default function ProductsPage() {
             {/* Controls Row */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* View Mode Toggle */}
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-2 bg-white border-2 border-gray-200 rounded-xl p-1 shadow-sm">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-1.5 sm:p-2 rounded ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
                   aria-label="Grid view"
                 >
                   <Grid className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-1.5 sm:p-2 rounded ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
                   aria-label="List view"
                 >
                   <List className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -362,16 +1149,21 @@ export default function ProductsPage() {
                 />
               </div>
 
-              {/* Filter Toggle */}
+              {/* Filter Toggle - Show for all screen sizes */}
               <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="lg:hidden flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 text-sm sm:text-base"
+                onClick={() => {
+                  setShowFilters(!showFilters);
+                  if (!showFilters) {
+                    setPendingFilters(filters);
+                  }
+                }}
+                className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 hover:bg-gray-50 text-sm sm:text-base font-medium shadow-sm hover:shadow-md transition-all"
                 aria-expanded={showFilters}
-                aria-controls="mobile-filter-drawer"
+                aria-controls="filter-panel"
               >
                 <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span>
-                  Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                  {showFilters ? 'Hide' : 'Show'} Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
                 </span>
               </button>
             </div>
@@ -422,7 +1214,11 @@ export default function ProductsPage() {
                 
                 {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto px-5 py-4">
-                  <FiltersContent />
+                  <ActiveFiltersDisplay />
+                  <FiltersContent 
+                    onFilterChange={(newFilters) => setPendingFilters(newFilters)}
+                    pendingFilters={pendingFilters}
+                  />
                 </div>
                 
                 {/* Footer with action buttons */}
@@ -430,14 +1226,73 @@ export default function ProductsPage() {
                   <div className="flex gap-3">
                     {hasActiveFilters() && (
                       <button
-                        onClick={handleClearAllFiltersClick}
+                        onClick={() => {
+                          clearAllFilters();
+                          setPendingFilters(null);
+                          setShowFilters(false);
+                        }}
                         className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
                       >
                         Clear All
                       </button>
                     )}
                     <button
-                      onClick={() => setShowFilters(false)}
+                      onClick={() => {
+                        const filtersToApply = pendingFilters || filters;
+                        setFilters(filtersToApply);
+                        const params = new URLSearchParams(searchParams);
+                        
+                        // Update URL params
+                        if (filtersToApply.category && filtersToApply.category !== 'all') {
+                          params.set('category', filtersToApply.category);
+                        } else {
+                          params.delete('category');
+                        }
+                        
+                        if (filtersToApply.priceRange) {
+                          if (filtersToApply.priceRange[0] > 0) {
+                            params.set('minPrice', filtersToApply.priceRange[0].toString());
+                          } else {
+                            params.delete('minPrice');
+                          }
+                          if (filtersToApply.priceRange[1] < 1000) {
+                            params.set('maxPrice', filtersToApply.priceRange[1].toString());
+                          } else {
+                            params.delete('maxPrice');
+                          }
+                        }
+                        
+                        if (filtersToApply.inStock === true) {
+                          params.set('inStock', 'true');
+                        } else {
+                          params.delete('inStock');
+                        }
+                        
+                        if (filtersToApply.style) {
+                          params.set('style', filtersToApply.style);
+                        } else {
+                          params.delete('style');
+                        }
+                        
+                        if (filtersToApply.color) {
+                          params.set('color', filtersToApply.color);
+                        } else {
+                          params.delete('color');
+                        }
+                        
+                        params.set('page', '1');
+                        const newURL = params.toString() ? `?${params.toString()}` : '/products';
+                        router.push(newURL, { scroll: false });
+                        
+                        fetchProducts({ 
+                          ...filtersToApply,
+                          category: filtersToApply.category === 'all' ? undefined : filtersToApply.category,
+                          page: 1, 
+                          limit: getCurrentLimit() 
+                        });
+                        setPendingFilters(null);
+                        setShowFilters(false);
+                      }}
                       className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-md"
                     >
                       Apply Filters
@@ -448,29 +1303,125 @@ export default function ProductsPage() {
             </div>
           )}
 
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Sidebar Filters */}
-            <div className="hidden lg:block lg:w-64 flex-shrink-0">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
-                  <Filter className="h-5 w-5 mr-2 text-blue-600" />
-                  Filters
-                </h3>
-                <FiltersContent />
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
+            {/* Sidebar Filters - Hidden by default, shown when showFilters is true */}
+            {showFilters && (
+              <div className="hidden lg:block lg:w-64 flex-shrink-0">
+                <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-100 sticky top-4">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold flex items-center text-gray-900">
+                      <Filter className="h-5 w-5 mr-2 text-blue-600" />
+                      Filters
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowFilters(false);
+                        setPendingFilters(null);
+                      }}
+                      className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                      aria-label="Close filters"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <ActiveFiltersDisplay />
+                  <FiltersContent 
+                    onFilterChange={(newFilters) => setPendingFilters(newFilters)}
+                    pendingFilters={pendingFilters}
+                  />
+                  <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+                    {hasActiveFilters() && (
+                      <button
+                        onClick={() => {
+                          clearAllFilters();
+                          setPendingFilters(null);
+                        }}
+                        className="w-full px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const filtersToApply = pendingFilters || filters;
+                        setFilters(filtersToApply);
+                        const params = new URLSearchParams(searchParams);
+                        
+                        // Update URL params
+                        if (filtersToApply.category && filtersToApply.category !== 'all') {
+                          params.set('category', filtersToApply.category);
+                        } else {
+                          params.delete('category');
+                        }
+                        
+                        if (filtersToApply.priceRange) {
+                          if (filtersToApply.priceRange[0] > 0) {
+                            params.set('minPrice', filtersToApply.priceRange[0].toString());
+                          } else {
+                            params.delete('minPrice');
+                          }
+                          if (filtersToApply.priceRange[1] < 1000) {
+                            params.set('maxPrice', filtersToApply.priceRange[1].toString());
+                          } else {
+                            params.delete('maxPrice');
+                          }
+                        }
+                        
+                        if (filtersToApply.inStock === true) {
+                          params.set('inStock', 'true');
+                        } else {
+                          params.delete('inStock');
+                        }
+                        
+                        if (filtersToApply.style) {
+                          params.set('style', filtersToApply.style);
+                        } else {
+                          params.delete('style');
+                        }
+                        
+                        if (filtersToApply.color) {
+                          params.set('color', filtersToApply.color);
+                        } else {
+                          params.delete('color');
+                        }
+                        
+                        params.set('page', '1');
+                        const newURL = params.toString() ? `?${params.toString()}` : '/products';
+                        router.push(newURL, { scroll: false });
+                        
+                        fetchProducts({ 
+                          ...filtersToApply,
+                          category: filtersToApply.category === 'all' ? undefined : filtersToApply.category,
+                          page: 1, 
+                          limit: getCurrentLimit() 
+                        });
+                        setPendingFilters(null);
+                        setShowFilters(false);
+                      }}
+                      className="w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-md"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Products Grid */}
             <div className="flex-1">
-              <div className="mb-4">
-                <p className="text-gray-600">
-                  Showing {products.length} of {pagination.total} products
+              {/* Active Filters Display for Desktop */}
+              <div className="lg:hidden mb-4">
+                <ActiveFiltersDisplay />
+              </div>
+              <div className="mb-6 sm:mb-8">
+                <p className="text-base sm:text-lg font-semibold text-gray-900">
+                  Showing <span className="text-blue-600">{products.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
                 </p>
               </div>
 
               {/* Loading State */}
               {isLoading && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <ProductCardSkeleton key={i} />
                   ))}
@@ -544,10 +1495,10 @@ export default function ProductsPage() {
 
               {!isLoading && !error && products.length > 0 && (
                 <>
-                  <div className={`grid gap-6 ${
+                  <div className={`grid ${
                     viewMode === 'grid' 
-                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                      : 'grid-cols-1'
+                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6' 
+                      : 'grid-cols-1 gap-6'
                   }`}>
                     {products.map((product) => (
                       <ProductCard key={product._id} product={product} />
@@ -595,6 +1546,120 @@ export default function ProductsPage() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Leather Jackets Section */}
+      <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-50 to-white">
+        <div className="w-full sm:w-[90%] md:w-[85%] lg:w-[85%] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="w-full">
+            {/* Main Heading */}
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-6 sm:mb-8 text-center">
+              DISCOVER OUR LEATHER JACKETS FOR MEN
+            </h2>
+
+            {/* Introduction */}
+            <p className="text-sm sm:text-base text-gray-700 mb-6 sm:mb-8 leading-relaxed text-center">
+              For us, a leather jacket is not just a piece of clothing to wear; it's an obsession that needs to look good, fit good, and feel good.
+            </p>
+
+            <p className="text-sm sm:text-base text-gray-700 mb-10 sm:mb-12 leading-relaxed text-center">
+              So, enjoy a 100% real experience with <span className="font-bold text-blue-600">EverStyleCrafts</span>' mens leather jackets. Constructed from real lambskin leather, easy to pair and effortless to style — just throw it over your everyday outfits, and you're good to go.
+            </p>
+
+            {/* Jacket Types */}
+            <div className="space-y-6 sm:space-y-8 mb-10 sm:mb-12">
+              {/* Biker */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">
+                  Biker
+                </h3>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                  Rugged, buttery-soft lining, and the epitome of style with a lot of history. Our motorcycle leather jacket collection has many designs intended to help you impersonate that biker look like Marlon Brando. Whether you're a common guy going grocery shopping or representing a rock band, we have selections you can wear in many places.
+                </p>
+              </div>
+
+              {/* Blazer */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">
+                  Blazer
+                </h3>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                  Speaking of designs, for a more sophisticated look, explore our leather blazer jackets. They are not just for formal or 9 to 5 work hours or those boring meetings but also allow you to layer over casual attire and pair with your favorite jeans.
+                </p>
+              </div>
+
+              {/* Suede */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">
+                  Suede
+                </h3>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                  Still deciding between casual outings and special occasions? Go with suede jackets made for both. Their smooth texture gives them that Bond-worthy feeling, though they may be less durable than our real mens leather jacket but suede is an excellent choice purely for its stylish appeal.
+                </p>
+              </div>
+
+              {/* Hooded */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">
+                  Hooded
+                </h3>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                  Cozy options like our hooded leather jackets for men are the best layers for fall and winter to give you enough insulation while making a statement. See the hooded collection here.
+                </p>
+              </div>
+
+              {/* Leather Accessories */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">
+                  Leather Accessories
+                </h3>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                  Additionally, if you want to add some extra compliments to your looks, try leather jacket men styles with our genuine leather accessories — they make a killer combination!
+                </p>
+              </div>
+            </div>
+
+            {/* FAQ Section */}
+            <div className="mb-8 sm:mb-10">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-center">
+                Frequently Asked Questions
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+                    How can I prevent my leather jacket from creasing or wrinkling?
+                  </h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Store them on a hanger with broad shoulders and avoid folding or crumpling.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+                    Do you have same styles for women?
+                  </h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Yes, many of men's versions are available for women as well.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Collaboration Spotlight */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 sm:p-8 md:p-10 text-white shadow-xl">
+              <h3 className="text-base sm:text-lg font-bold mb-4 text-center">
+                Collaboration Spotlight
+              </h3>
+              <p className="text-sm sm:text-base text-blue-50 leading-relaxed text-center mb-4">
+                We've partnered with Decrum to unite our signature craftsmanship with their sumptuous linings and vibrant new hues
+              </p>
+              <p className="text-sm sm:text-base text-blue-50 leading-relaxed text-center font-semibold">
+                Check out the full <span className="font-bold">EverStyleCrafts</span> × Decrum range here: Mens Leather Jackets
+              </p>
             </div>
           </div>
         </div>

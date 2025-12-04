@@ -42,6 +42,8 @@ interface ProductStore {
     brand?: string;
     minRating?: number;
     collection?: string;
+    style?: string;
+    color?: string;
   };
   fetchProducts: (params?: {
     page?: number;
@@ -55,6 +57,8 @@ interface ProductStore {
     brand?: string;
     minRating?: number;
     collection?: string;
+    style?: string;
+    color?: string;
   }) => Promise<void>;
   fetchProduct: (id: string) => Promise<void>;
   setFilters: (filters: Partial<ProductStore['filters']>) => void;
@@ -82,6 +86,8 @@ export const useProductStore = create<ProductStore>((set, get) => ({
     brand: undefined,
     minRating: undefined,
     collection: undefined,
+    style: undefined,
+    color: undefined,
   },
 
   fetchProducts: async (params = {}) => {
@@ -134,6 +140,16 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       const effectiveCollection = (params.collection ?? filters.collection)?.toLowerCase();
       if (effectiveCollection) {
         searchParams.set('collection', effectiveCollection);
+      }
+
+      const effectiveStyle = params.style ?? filters.style;
+      if (effectiveStyle) {
+        searchParams.set('style', effectiveStyle);
+      }
+
+      const effectiveColor = params.color ?? filters.color;
+      if (effectiveColor) {
+        searchParams.set('color', effectiveColor);
       }
 
       // Create a unique key for deduplication (after all params are set)

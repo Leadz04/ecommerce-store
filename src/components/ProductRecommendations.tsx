@@ -90,7 +90,7 @@ export default function ProductRecommendations({
             <Sparkles className="h-6 w-6 text-blue-600" />
             <span>You May Also Like</span>
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {[...Array(4)].map((_, i) => (
               <ProductCardSkeleton key={i} />
             ))}
@@ -117,7 +117,7 @@ export default function ProductRecommendations({
           <Sparkles className="h-6 w-6 text-blue-600" />
           <span>{titles[type]}</span>
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {recommendations.map((product) => (
             <ProductCard key={(product as any)._id || (product as any).id} product={product} />
           ))}

@@ -88,7 +88,14 @@ export async function GET(request: NextRequest) {
           category: { $in: topCategories },
           isActive: true,
           status: 'published',
-          rating: { $gte: 3.5 }
+          rating: { $gte: 3.5 },
+          image: {
+            $exists: true,
+            $ne: null,
+            $not: {
+              $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
+            }
+          }
         })
           .sort({ rating: -1, reviewCount: -1, createdAt: -1 })
           .limit(8)
@@ -118,7 +125,14 @@ export async function GET(request: NextRequest) {
             category: { $in: Array.from(wishlistCategories) },
             isActive: true,
             status: 'published',
-            rating: { $gte: 4.0 }
+            rating: { $gte: 4.0 },
+            image: {
+              $exists: true,
+              $ne: null,
+              $not: {
+                $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
+              }
+            }
           })
             .sort({ rating: -1, reviewCount: -1 })
             .limit(8)
@@ -138,7 +152,14 @@ export async function GET(request: NextRequest) {
           isActive: true,
           status: 'published',
           rating: { $gte: 4.0 },
-          reviewCount: { $gte: 5 }
+          reviewCount: { $gte: 5 },
+          image: {
+            $exists: true,
+            $ne: null,
+            $not: {
+              $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
+            }
+          }
         })
           .sort({ reviewCount: -1, rating: -1, createdAt: -1 })
           .limit(8)
@@ -149,17 +170,25 @@ export async function GET(request: NextRequest) {
       // We'll return empty array here, client will use recentlyViewedStore
     }
 
-    // 5. Featured Products - Fallback for all users (guests and authenticated)
-    // High-rated, popular products
-    personalizedData.featuredProducts = await Product.find({
+    // 5. Featured Products - Random selection from products with original Cloudinary images
+    // Exclude products with demo/unsplash placeholder images
+    const allFeaturedCandidates = await Product.find({
       isActive: true,
       status: 'published',
-      rating: { $gte: 4.0 },
-      reviewCount: { $gte: 3 }
+      inStock: true,
+      image: {
+        $exists: true,
+        $ne: null,
+        $not: {
+          $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
+        }
+      }
     })
-      .sort({ rating: -1, reviewCount: -1, createdAt: -1 })
-      .limit(8)
       .lean();
+    
+    // Randomly shuffle and select 8 products
+    const shuffled = allFeaturedCandidates.sort(() => Math.random() - 0.5);
+    personalizedData.featuredProducts = shuffled.slice(0, 8);
 
     // If user is authenticated but no personalized data, fill with featured
     if (userId) {
