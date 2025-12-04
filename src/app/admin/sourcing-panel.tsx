@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, Link2, RefreshCw } from 'lucide-react';
+import { Download, Link2, RefreshCw, Code, Copy, Check, ChevronDown, ChevronUp, ExternalLink, ShoppingCart, BarChart3, Settings, Cloud, Shield, ShieldCheck, Activity, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SelectField from '@/components/SelectField';
 
@@ -128,7 +128,12 @@ export default function SourcingPanel() {
   const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
   const [savedViewMode, setSavedViewMode] = useState<'list' | 'brands'>('list');
   const [savedViewModeOpen, setSavedViewModeOpen] = useState(false);
+  const [savedBrandFilter, setSavedBrandFilter] = useState<string>('');
   const [savedSectionExpanded, setSavedSectionExpanded] = useState(true);
+  const [jacketMakerApisExpanded, setJacketMakerApisExpanded] = useState(true);
+  const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
+  const [scrapingShopify, setScrapingShopify] = useState(false);
+  const [shopifyScrapeProgress, setShopifyScrapeProgress] = useState<string>('');
 
   // Filters (must appear after selected/savedSelected exist)
   const filteredSelectedImages = useMemo(
@@ -153,6 +158,18 @@ export default function SourcingPanel() {
           /images\/close/i.test(u)),
     ),
     [savedSelected],
+  );
+
+  // Brand options for list view filter (derived from currently loaded items)
+  const listViewBrands = useMemo(
+    () => {
+      const set = new Set<string>();
+      for (const item of savedItems) {
+        if (item.brand) set.add(item.brand);
+      }
+      return Array.from(set).sort();
+    },
+    [savedItems],
   );
   // Etsy editable preview state
   const [etsyTitle, setEtsyTitle] = useState('');
@@ -704,18 +721,143 @@ export default function SourcingPanel() {
     })();
   }, [savedSelected?._id]);
 
+  // Jacket Maker Shopify API endpoints data
+  const jacketMakerApis = {
+    cartApis: [
+      { name: 'Get Cart', endpoint: '/cart.js', method: 'GET', description: 'Retrieve current cart data' },
+      { name: 'Update Cart', endpoint: '/cart/update.js', method: 'POST', description: 'Update cart items' },
+      { name: 'Cart Form', endpoint: '/cart', method: 'POST', description: 'Cart form action endpoint' },
+    ],
+    storefrontApis: [
+      { name: 'Shop Domain', endpoint: '35d34f-2.myshopify.com', method: 'N/A', description: 'Shopify shop domain' },
+      { name: 'Storefront Base URL', endpoint: 'https://www.thejacketmaker.com', method: 'N/A', description: 'Storefront base URL' },
+      { name: 'Shop ID', endpoint: '77420626207', method: 'N/A', description: 'Shopify shop ID' },
+    ],
+    analyticsApis: [
+      { name: 'Monorail Produce', endpoint: 'https://monorail-edge.shopifysvc.com/v1/produce', method: 'POST', description: 'Send analytics events' },
+      { name: 'Monorail Batch', endpoint: 'https://monorail-edge.shopifysvc.com/unstable/produce_batch', method: 'POST', description: 'Batch analytics events' },
+    ],
+    localizationApis: [
+      { name: 'Localization', endpoint: '/localization', method: 'POST', description: 'Update localization settings' },
+    ],
+    browsingApis: [
+      { name: 'Browsing Context', endpoint: '/browsing_context_suggestions.json', method: 'GET', description: 'Get geolocation recommendations' },
+    ],
+    cdnApis: [
+      { name: 'Extensions CDN', endpoint: 'https://cdn.shopify.com/extensions/', method: 'GET', description: 'App extension assets' },
+      { name: 'Web Pixels Manager', endpoint: 'https://extensions.shopifycdn.com/cdn/shopifycloud/web-pixels-manager', method: 'GET', description: 'Web pixels manager' },
+    ],
+    apiClients: [
+      { name: 'App Pixel 1', endpoint: '2887701', method: 'N/A', description: 'API Client ID for app pixel' },
+      { name: 'App Pixel 2', endpoint: '9876439041', method: 'N/A', description: 'API Client ID for app pixel' },
+      { name: 'Analytics App 1', endpoint: '219313', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 2', endpoint: '123074', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 3', endpoint: '5519923', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 4', endpoint: '4539653', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 5', endpoint: '3977633', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 6', endpoint: '2531653', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Analytics App 7', endpoint: '2329312', method: 'N/A', description: 'API Client ID for analytics' },
+      { name: 'Facebook CAPI', endpoint: '580111', method: 'N/A', description: 'Facebook Conversions API Client ID' },
+      { name: 'Shopify Pixel', endpoint: 'shopify-pixel', method: 'N/A', description: 'Shopify pixel client ID' },
+    ],
+    apiKeys: [
+      { name: 'API Key', endpoint: '29ae53b3b51f0c8439bc21cab5c28004', method: 'N/A', description: 'Shopify API key' },
+    ],
+    checkoutApis: [
+      { name: 'Checkout', endpoint: '/checkout', method: 'GET', description: 'Checkout page endpoint' },
+    ],
+    productApis: [
+      { name: 'Get Single Product', endpoint: '/products/{product-handle}.json', method: 'GET', description: 'Get product details by handle (e.g., /products/exton-black-hooded-down-puffer-jacket.json)' },
+      { name: 'Get All Products', endpoint: '/products.json', method: 'GET', description: 'Get all products (paginated)' },
+      { name: 'Get Collection Products', endpoint: '/collections/{collection-handle}/products.json', method: 'GET', description: 'Get products in a collection' },
+    ],
+    collectionExamples: [
+      { name: 'Men\'s Puffer Jackets', endpoint: '/collections/mens-puffer-jackets', collectionId: '465577181471', method: 'GET' },
+      { name: 'Men\'s Leather Jackets', endpoint: '/collections/mens-leather-jackets', method: 'GET' },
+      { name: 'Men\'s Bomber Jackets', endpoint: '/collections/mens-bomber-jackets', method: 'GET' },
+      { name: 'Men\'s Biker Jackets', endpoint: '/collections/mens-biker-leather-jackets', method: 'GET' },
+      { name: 'Men\'s Suede Jackets', endpoint: '/collections/mens-suede-jackets', method: 'GET' },
+      { name: 'Men\'s Varsity Jackets', endpoint: '/collections/mens-varsity-jacket', method: 'GET' },
+      { name: 'Men\'s Fur & Shearling', endpoint: '/collections/mens-fur-shearling-jackets', method: 'GET' },
+      { name: 'Men\'s Blazers', endpoint: '/collections/mens-blazers', method: 'GET' },
+      { name: 'Men\'s Aviator Jackets', endpoint: '/collections/mens-aviator-jackets', method: 'GET' },
+      { name: 'Men\'s Leather Puffer Jackets', endpoint: '/collections/mens-leather-puffer-jackets', method: 'GET' },
+      { name: 'Men\'s Hooded Leather Jackets', endpoint: '/collections/mens-leather-jackets-hood', method: 'GET' },
+      { name: 'Men\'s Leather Vests', endpoint: '/collections/mens-leather-vests', method: 'GET' },
+      { name: 'Best Sellers', endpoint: '/collections/mens-best-sellers', method: 'GET' },
+      { name: 'Factory Seconds (40% Off)', endpoint: '/collections/factory-seconds', method: 'GET' },
+      { name: 'Men\'s Windbreaker Jackets', endpoint: '/collections/mens-windbreaker-jackets', method: 'GET' },
+      { name: 'Men\'s Denim Jackets', endpoint: '/collections/mens-denim-jackets', method: 'GET' },
+      { name: 'Men\'s Waxed Canvas Jackets', endpoint: '/collections/mens-waxed-canvas-jackets', method: 'GET' },
+      { name: 'Men\'s Lightweight Jackets', endpoint: '/collections/mens-lightweight-jackets', method: 'GET' },
+      { name: 'Men\'s Soft Shell Jackets', endpoint: '/collections/mens-soft-shell-jackets', method: 'GET' },
+      { name: 'Men\'s Puffer Vests', endpoint: '/collections/mens-puffer-vests', method: 'GET' },
+      { name: 'Men\'s Winter Coats', endpoint: '/collections/mens-winter-coats', method: 'GET' },
+      { name: 'Men\'s Wool Coats', endpoint: '/collections/mens-wool-coats-jackets', method: 'GET' },
+      { name: 'Men\'s Fur & Shearling Coats', endpoint: '/collections/mens-fur-shearling-coats', method: 'GET' },
+      { name: 'Men\'s Leather Coats', endpoint: '/collections/mens-leather-coats', method: 'GET' },
+      { name: 'Men\'s Leather Dusters', endpoint: '/collections/mens-leather-dusters', method: 'GET' },
+    ],
+    thirdPartyApis: [
+      { name: 'Tolstoy Widget', endpoint: 'https://widget.gotolstoy.com', method: 'GET', description: 'Tolstoy shoppable video widget' },
+      { name: 'Rebuy Engine', endpoint: 'https://cdn.rebuyengine.com', method: 'GET', description: 'Rebuy upsell engine' },
+      { name: 'Shop Pay', endpoint: 'https://shop.app/pay/hop', method: 'GET', description: 'Shop Pay checkout' },
+    ],
+    performanceApis: [
+      { name: 'Performance Kit', endpoint: 'https://www.thejacketmaker.pk/cdn/shopifycloud/perf-kit/shopify-perf-kit-2.1.2.min.js', method: 'GET', description: 'Shopify performance monitoring' },
+      { name: 'Store Events Listener', endpoint: '//www.thejacketmaker.pk/cdn/shopifycloud/storefront/assets/shop_events_listener-3da45d37.js', method: 'GET', description: 'Store events listener script' },
+    ],
+  };
+
+  const copyToClipboard = (text: string, name: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedEndpoint(name);
+    toast.success(`Copied ${name} to clipboard`);
+    setTimeout(() => setCopiedEndpoint(null), 2000);
+  };
+
+  async function scrapeShopifyProducts() {
+    try {
+      setScrapingShopify(true);
+      setShopifyScrapeProgress('Starting to scrape products from Shopify API...');
+      
+      const res = await fetch('/api/admin/sourcing/scrape-shopify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scrapeAll: true,
+          scrapeCollections: false,
+          maxPages: 100,
+        }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Scraping failed');
+      
+      setShopifyScrapeProgress('');
+      toast.success(`Scraped ${data.stats?.totalScraped || 0} products (${data.stats?.saved || 0} new, ${data.stats?.updated || 0} updated)`);
+      await fetchList();
+      await fetchSaved(1);
+    } catch (e: any) {
+      setShopifyScrapeProgress('');
+      toast.error(e.message || 'Failed to scrape Shopify products');
+    } finally {
+      setScrapingShopify(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Sourcing Panel Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Product Sourcing Panel</h2>
         <p className="text-gray-600 mb-6">
-          Import products from external sources by URL or browse saved sourced products.
+          Import products from external sources by URL, or scrape all products directly from The Jacket Maker&apos;s Shopify APIs and browse them below.
         </p>
 
-        {/* Import by URL Section */}
+        {/* Top actions: Import by URL + Scrape Shopify */}
         <div className="space-y-4">
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:space-x-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Link2 className="inline h-4 w-4 mr-2" />
@@ -729,17 +871,32 @@ export default function SourcingPanel() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={importUrl}
                 disabled={loading || !url}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 <Download className="h-4 w-4" />
-                <span>{loading ? 'Importing...' : 'Import'}</span>
+                <span>{loading ? 'Importing...' : 'Import URL'}</span>
+              </button>
+
+              <button
+                onClick={scrapeShopifyProducts}
+                disabled={scrapingShopify}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${scrapingShopify ? 'animate-spin' : ''}`} />
+                <span>{scrapingShopify ? 'Scraping & Saving JSON...' : 'Scrape Shopify Products'}</span>
               </button>
             </div>
           </div>
+
+          {shopifyScrapeProgress && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">{shopifyScrapeProgress}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -772,13 +929,35 @@ export default function SourcingPanel() {
             </div>
           </div>
 
-          <input
-            type="text"
-            value={savedQuery}
-            onChange={(e) => setSavedQuery(e.target.value)}
-            placeholder="Search saved products..."
-            className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+            <input
+              type="text"
+              value={savedQuery}
+              onChange={(e) => setSavedQuery(e.target.value)}
+              placeholder="Search saved products..."
+              className="w-full md:flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+
+            {savedViewMode === 'list' && (
+              <div className="w-full md:w-64">
+                <SelectField
+                  value={savedBrandFilter || 'all'}
+                  options={[
+                    { value: 'all', label: 'All brands' },
+                    ...listViewBrands.map((brand) => ({
+                      value: brand,
+                      label: brand,
+                    })),
+                  ]}
+                  isOpen={false}
+                  onOpenChange={() => {}}
+                  onSelect={(val) => setSavedBrandFilter(val === 'all' ? '' : val)}
+                  placeholder="Filter by brand"
+                  className="w-full"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-6">
@@ -858,7 +1037,9 @@ export default function SourcingPanel() {
             )
           ) : savedItems.length ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {savedItems.map((item) => (
+              {savedItems
+                .filter((item) => !savedBrandFilter || item.brand === savedBrandFilter)
+                .map((item) => (
                 <div
                   key={item._id}
                   onClick={() => setSavedSelected(item)}
@@ -910,6 +1091,496 @@ export default function SourcingPanel() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Jacket Maker Shopify APIs Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <button
+          onClick={() => setJacketMakerApisExpanded(!jacketMakerApisExpanded)}
+          className="w-full p-6 border-b border-gray-200 flex items-center justify-between hover:bg-gray-50 transition"
+        >
+          <div className="flex items-center space-x-3">
+            <Code className="h-5 w-5 text-blue-600" />
+            <h3 className="text-xl font-semibold text-gray-900">The Jacket Maker Shopify APIs</h3>
+          </div>
+          {jacketMakerApisExpanded ? (
+            <ChevronUp className="h-5 w-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="h-5 w-5 text-gray-400" />
+          )}
+        </button>
+
+        {jacketMakerApisExpanded && (
+          <div className="p-6 space-y-6">
+            {/* Cart APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <ShoppingCart className="h-4 w-4 mr-2 text-blue-600" />
+                Cart APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.cartApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded ${api.method === 'GET' ? 'bg-green-100 text-green-700' : api.method === 'POST' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Storefront APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Link2 className="h-4 w-4 mr-2 text-blue-600" />
+                Storefront Configuration
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.storefrontApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Analytics APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <BarChart3 className="h-4 w-4 mr-2 text-blue-600" />
+                Analytics APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.analyticsApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Localization & Browsing APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Settings className="h-4 w-4 mr-2 text-blue-600" />
+                Localization & Browsing APIs
+              </h4>
+              <div className="space-y-2">
+                {[...jacketMakerApis.localizationApis, ...jacketMakerApis.browsingApis].map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded ${api.method === 'GET' ? 'bg-green-100 text-green-700' : api.method === 'POST' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CDN & Extension APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Cloud className="h-4 w-4 mr-2 text-blue-600" />
+                CDN & Extension APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.cdnApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* API Client IDs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Shield className="h-4 w-4 mr-2 text-blue-600" />
+                API Client IDs
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {jacketMakerApis.apiClients.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-900 text-sm">{api.name}</span>
+                        <code className="text-xs text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-1 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-2 p-1.5 hover:bg-gray-200 rounded transition"
+                        title="Copy ID"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* API Keys */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <ShieldCheck className="h-4 w-4 mr-2 text-blue-600" />
+                API Keys
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.apiKeys.map((api, idx) => (
+                  <div key={idx} className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-yellow-100 text-yellow-700">
+                            Sensitive
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all font-mono">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-yellow-100 rounded transition"
+                        title="Copy API key"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Checkout APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <ShoppingCart className="h-4 w-4 mr-2 text-blue-600" />
+                Checkout APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.checkoutApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Product APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Package className="h-4 w-4 mr-2 text-blue-600" />
+                Public Product APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.productApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(api.endpoint, api.name)}
+                        className="ml-3 p-2 hover:bg-gray-200 rounded transition"
+                        title="Copy endpoint"
+                      >
+                        {copiedEndpoint === api.name ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Example Product URLs */}
+              <div className="mt-4">
+                <h5 className="text-md font-semibold text-gray-700 mb-3">Example Product Endpoints</h5>
+                <div className="space-y-2">
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block break-all">
+                      https://www.thejacketmaker.com/products/exton-black-hooded-down-puffer-jacket.json
+                    </code>
+                    <p className="text-xs text-gray-500 mt-1">Get product details for "Exton Black Hooded Down Puffer Jacket"</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block break-all">
+                      https://www.thejacketmaker.com/products.json
+                    </code>
+                    <p className="text-xs text-gray-500 mt-1">Get all products (use ?page=2 for pagination)</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block break-all">
+                      https://www.thejacketmaker.com/collections/mens-puffer-jackets/products.json
+                    </code>
+                    <p className="text-xs text-gray-500 mt-1">Get all products in "Men's Puffer Jackets" collection</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Third-Party APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <ExternalLink className="h-4 w-4 mr-2 text-blue-600" />
+                Third-Party Integrations
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.thirdPartyApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <a
+                          href={api.endpoint}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 hover:bg-gray-200 rounded transition"
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4 text-gray-600" />
+                        </a>
+                        <button
+                          onClick={() => copyToClipboard(api.endpoint, api.name)}
+                          className="p-2 hover:bg-gray-200 rounded transition"
+                          title="Copy endpoint"
+                        >
+                          {copiedEndpoint === api.name ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Performance APIs */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <Activity className="h-4 w-4 mr-2 text-blue-600" />
+                Performance & Monitoring APIs
+              </h4>
+              <div className="space-y-2">
+                {jacketMakerApis.performanceApis.map((api, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-gray-900">{api.name}</span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">
+                            {api.method}
+                          </span>
+                        </div>
+                        <code className="text-sm text-gray-700 bg-white px-2 py-1 rounded border border-gray-300 block mt-2 break-all">
+                          {api.endpoint}
+                        </code>
+                        <p className="text-xs text-gray-500 mt-1">{api.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <a
+                          href={api.endpoint.startsWith('//') ? `https:${api.endpoint}` : api.endpoint}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 hover:bg-gray-200 rounded transition"
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4 text-gray-600" />
+                        </a>
+                        <button
+                          onClick={() => copyToClipboard(api.endpoint, api.name)}
+                          className="p-2 hover:bg-gray-200 rounded transition"
+                          title="Copy endpoint"
+                        >
+                          {copiedEndpoint === api.name ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product Detail Modal */}

@@ -191,7 +191,7 @@ Return ONLY the comma-separated list.`;
 // Simple global rate limiter state (per lambda invocation)
 let lastGeminiCallTime = 0;
 let currentBackoffMs = 0;
-const BASE_DELAY_MS = 2000; // base delay between calls
+const BASE_DELAY_MS = 10000; // base delay between calls
 const MAX_BACKOFF_MS = 60000; // max backoff 60s
 
 async function applyRateLimitDelay() {
@@ -244,7 +244,7 @@ async function optimizeTitle(product: any) {
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-pro';
+      const model = 'gemini-2.5-flash-lite';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -354,7 +354,7 @@ async function optimizeTags(product: any) {
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-pro';
+      const model = 'gemini-2.5-flash-lite';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -561,7 +561,7 @@ export async function optimizeProducts(logger?: Logger) {
             log('log', '  ⚠️  Rate limit detected. Waiting 10 seconds...');
             await delay(10000);
           } else {
-            await delay(2000);
+            await delay(10000);
           }
 
           continue;
@@ -572,8 +572,8 @@ export async function optimizeProducts(logger?: Logger) {
         const optimizedTitle = titleResult.output;
         log('log', `  ✅ Optimized title: ${optimizedTitle}`);
 
-        log('log', '  ⏳ Waiting 2 seconds before next API call...');
-        await delay(2000);
+        log('log', '  ⏳ Waiting 10 seconds before next API call...');
+        await delay(10000);
 
         log('log', '  🔄 Optimizing tags...');
         const tagsResult = await optimizeTags(product);
@@ -617,7 +617,7 @@ export async function optimizeProducts(logger?: Logger) {
             log('log', '  ⚠️  Rate limit detected. Waiting 10 seconds...');
             await delay(10000);
           } else {
-            await delay(2000);
+            await delay(10000);
           }
 
           continue;
@@ -645,8 +645,8 @@ export async function optimizeProducts(logger?: Logger) {
         log('log', '  ✅ Stock count set to 5');
         successCount++;
 
-        log('log', '  ⏳ Waiting 2 seconds before next product...');
-        await delay(2000);
+        log('log', '  ⏳ Waiting 10 seconds before next product...');
+        await delay(10000);
       } catch (error: any) {
         log('error', `  ❌ Error processing product: ${error.message}`);
         errors.push({
@@ -655,7 +655,7 @@ export async function optimizeProducts(logger?: Logger) {
           error: error.message,
         });
         failureCount++;
-        await delay(2000);
+        await delay(10000);
       }
     }
 
@@ -698,5 +698,6 @@ export async function optimizeProducts(logger?: Logger) {
     log('log', '\n🔌 Database connection closed');
   }
 }
+
 
 

@@ -62,7 +62,10 @@ import {
   MessageCircle,
   Send,
   User,
-  X
+  X,
+  ArrowUpRight,
+  ChevronsDown,
+  Target
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -80,7 +83,7 @@ import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
-const allowedTabs = ['users', 'roles', 'products', 'policy-review', 'orders', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking', 'support', 'chat'] as const;
+const allowedTabs = ['users','roles','products','policy-review','orders','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
 type TabKey = typeof allowedTabs[number];
 type SidebarTab = {
   id: TabKey;
@@ -279,7 +282,7 @@ export default function AdminDashboard() {
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'products' | 'policy-review' | 'orders' | 'overview' | 'marketing' | 'performance' | 'analytics' | 'etsy' | 'seo' | 'seo-raw' | 'analytics-seo' | 'blogs' | 'keyword-planner' | 'sourcing' | 'email-tracking' | 'support' | 'related-questions'>(initialTab);
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState('');
@@ -300,12 +303,10 @@ export default function AdminDashboard() {
   const seoLoadedOnceRef = useRef(false);
   const [seoAudit, setSeoAudit] = useState<any>(null);
   const [seoHistory, setSeoHistory] = useState<any[]>([]);
-  
-  // Related Questions state
   const [relatedQuestionsQuery, setRelatedQuestionsQuery] = useState('');
-  const [relatedQuestions, setRelatedQuestions] = useState<Array<{ question: string; snippet?: string; title?: string; link?: string; nextPageToken?: string }>>([]);
+  const [relatedQuestions, setRelatedQuestions] = useState<any[]>([]);
   const [relatedQuestionsLoading, setRelatedQuestionsLoading] = useState(false);
-
+  
   // Product modal state
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -777,11 +778,31 @@ export default function AdminDashboard() {
     try {
       setMetricsLoading(true);
       const token = localStorage.getItem('token');
+      if (!token) {
+        // If no token, we can't fetch metrics.
+        // We might want to redirect or just stop here.
+        // Since this is called in useEffect, stopping is safer to avoid loops.
+        console.warn('No token found, skipping metrics fetch');
+        return;
+      }
+
       const response = await fetch(`/api/admin/metrics?days=${days}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch metrics');
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid
+          localStorage.removeItem('token');
+          router.push('/login');
+          toast.error('Session expired. Please login again.');
+          return;
+        }
+        throw new Error(data.error || 'Failed to fetch metrics');
+      }
+
       setMetrics(data);
     } catch (e) {
       console.error('Metrics fetch error', e);
@@ -1306,7 +1327,6 @@ export default function AdminDashboard() {
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'support', label: 'Support Tickets', icon: MessageSquare },
-    { id: 'chat', label: 'Live Chat', icon: MessageCircle, description: 'Manage customer chat conversations' },
     {
       id: 'marketing',
       label: 'Growth & Insights',
@@ -3024,6 +3044,55 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Delete order error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to delete order');
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please login to export data');
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch('/api/admin/products/export-csv', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          router.push('/login');
+          toast.error('Session expired. Please login again.');
+          return;
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to export CSV');
+      }
+
+      // Get the blob content
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // Create download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `products-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('Products exported successfully');
+    } catch (error) {
+      console.error('Export CSV error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to export CSV');
     }
   };
 
@@ -6931,166 +7000,269 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {/* No Results */}
-                  {analyticsResults.length === 0 && analyticsSearchQuery && !analyticsSeoLoading && (
-                    <div className="bg-white rounded-lg shadow-sm border border-purple-100 p-6 text-center">
-                      <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
-                    </div>
-                  )}
-                </div>
-              )}
+            {/* No Results */}
+            {analyticsResults.length === 0 && analyticsSearchQuery && !analyticsSeoLoading && (
+              <div className="bg-white rounded-lg shadow-sm border border-purple-100 p-6 text-center">
+                <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
+              </div>
+            )}
+          </div>
+        )}
 
-              {/* Related Questions Tab */}
-              {(activeTab as any) === 'related-questions' && (
-                <div className="space-y-8">
-                  <div className="bg-white rounded-lg shadow-sm border border-blue-100">
-                    <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-xl font-semibold text-blue-900">Google Related Questions</h2>
-                          <p className="text-blue-700/80 mt-1 text-sm">Get questions people ask about your search term using Google's "People also ask" feature.</p>
-                        </div>
+        {/* Related Questions Tab */}
+        {activeTab === 'related-questions' && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-blue-900">Google Related Questions</h2>
+                  <p className="text-blue-700/80 mt-1 text-sm">
+                    Discover questions people ask about your products and niche using Google&apos;s &quot;People also ask&quot; data.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-8">
+              {/* Search */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-2">Search Term</label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. handmade jewelry, sustainable fashion, vintage furniture"
+                          value={relatedQuestionsQuery}
+                          onChange={(e) => setRelatedQuestionsQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              searchRelatedQuestions();
+                            }
+                          }}
+                          className="w-full pl-9 pr-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <button
+                        onClick={searchRelatedQuestions}
+                        disabled={relatedQuestionsLoading || !relatedQuestionsQuery.trim()}
+                        className="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {relatedQuestionsLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            <span>Searching...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="h-4 w-4 mr-2" />
+                            <span>Search</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Usage Tips */}
+                  <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">Tips for better results</h3>
+                    <ul className="text-sm text-blue-800/90 space-y-1 list-disc list-inside">
+                      <li>Use specific product or niche terms (e.g. &quot;minimalist gold necklace&quot; instead of just &quot;jewelry&quot;).</li>
+                      <li>Include customer intent words like &quot;best&quot;, &quot;how to&quot;, &quot;ideas&quot;, &quot;guide&quot;.</li>
+                      <li>Try both broad and narrow variations of your keywords.</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Why Related Questions / Helper content */}
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-lg">
+                    <h3 className="font-semibold mb-1">Why Related Questions?</h3>
+                    <p className="text-sm text-blue-50/90">
+                      These are real questions customers ask on Google. Use them to create product descriptions, FAQs, blog posts, and support content
+                      that actually answers what people search for.
+                    </p>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-blue-100 p-4 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <HelpCircle className="h-4 w-4 text-blue-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">Content ideas</p>
+                        <p className="text-xs text-blue-700/80">
+                          Turn questions into product descriptions, FAQs, and blog posts.
+                        </p>
                       </div>
                     </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="md:col-span-2 space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-blue-800 mb-2">Search Term</label>
-                            <div className="flex space-x-2">
-                              <input
-                                type="text"
-                                placeholder="e.g. handmade jewelry, sustainable fashion, vintage furniture"
-                                value={relatedQuestionsQuery}
-                                onChange={(e) => setRelatedQuestionsQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    searchRelatedQuestions();
-                                  }
-                                }}
-                                className="flex-1 px-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                              <button
-                                onClick={searchRelatedQuestions}
-                                disabled={relatedQuestionsLoading || !relatedQuestionsQuery.trim()}
-                                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {relatedQuestionsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <h3 className="font-medium text-blue-900 mb-3">Related Questions</h3>
-                            <div className="space-y-3 max-h-96 overflow-y-auto">
-                              {relatedQuestions.length > 0 ? (
-                                relatedQuestions.map((q, idx) => (
-                                  <div key={idx} className="p-4 rounded-lg border border-blue-100 bg-white shadow-sm">
-                                    <div className="flex items-start gap-3">
-                                      <div className="flex-shrink-0 mt-1">
-                                        <HelpCircle className="h-5 w-5 text-blue-600" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <h4 className="font-semibold text-blue-900 mb-2">{q.question}</h4>
-                                        {q.snippet && (
-                                          <p className="text-sm text-gray-700 mb-2 line-clamp-3">{q.snippet}</p>
-                                        )}
-                                        {q.link && (
-                                          <div className="flex items-center gap-2 mt-2">
-                                            <a
-                                              href={q.link}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
-                                            >
-                                              <ExternalLink className="h-3 w-3" />
-                                              View Source
-                                            </a>
-                                          </div>
-                                        )}
-                                        {q.nextPageToken && (
-                                          <button
-                                            onClick={() => loadMoreRelatedQuestions(q.nextPageToken!)}
-                                            disabled={relatedQuestionsLoading}
-                                            className="mt-2 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
-                                          >
-                                            {relatedQuestionsLoading ? 'Loading...' : 'Load More Questions'}
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="text-blue-700 text-center py-8">
-                                  {relatedQuestionsLoading ? (
-                                    <div className="flex items-center justify-center gap-2">
-                                      <Loader2 className="h-5 w-5 animate-spin" />
-                                      <span>Loading questions...</span>
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <HelpCircle className="h-12 w-12 mx-auto mb-4 text-blue-400" />
-                                      <p>Enter a search term and click search to see related questions.</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {relatedQuestions.length > 0 && (
-                              <div className="mt-4 flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    const csvContent = relatedQuestions.map((q) => 
-                                      `"${q.question}","${q.snippet || ''}","${q.link || ''}"`
-                                    ).join('\n');
-                                    const blob = new Blob([`question,snippet,link\n${csvContent}`], { type: 'text/csv' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `related_questions_${relatedQuestionsQuery.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
-                                    a.click();
-                                    URL.revokeObjectURL(url);
-                                    toast.success('Exported questions to CSV');
-                                  }}
-                                  className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
-                                >
-                                  Export CSV
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setRelatedQuestions([]);
-                                    setRelatedQuestionsQuery('');
-                                    toast.success('Cleared results');
-                                  }}
-                                  className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
-                                >
-                                  Clear Results
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Usage Tips */}
-                        <div className="p-4 bg-white border border-blue-200 rounded-lg">
-                          <h3 className="font-semibold text-blue-900 mb-2">How to use Related Questions</h3>
-                          <ul className="list-disc pl-5 text-sm space-y-2 text-blue-800">
-                            <li><b>Content Ideas:</b> Use questions to create FAQ sections, blog posts, or product descriptions.</li>
-                            <li><b>SEO Optimization:</b> These are real questions people search for - perfect for targeting long-tail keywords.</li>
-                            <li><b>Product Research:</b> Understand what customers want to know about your products.</li>
-                            <li><b>Load More:</b> Click "Load More Questions" on any question to get additional related questions.</li>
-                            <li><b>Export:</b> Save questions to CSV for content planning and keyword research.</li>
-                          </ul>
-                          <div className="mt-4 text-xs text-blue-700">
-                            <p><b>Note:</b> Requires SERPAPI_KEY in environment variables. Uses Google's "People also ask" feature.</p>
-                          </div>
-                        </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                        <Sparkles className="h-4 w-4 text-indigo-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-indigo-900">SEO benefits</p>
+                        <p className="text-xs text-indigo-700/80">
+                          Answering these questions helps you rank for long-tail searches.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <Target className="h-4 w-4 text-emerald-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-emerald-900">Customer insights</p>
+                        <p className="text-xs text-emerald-700/80">
+                          See what information customers still need before buying.
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Results */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-blue-900">Related Questions</h3>
+                  <div className="flex items-center space-x-3 text-sm text-blue-700/80">
+                    <span className="flex items-center space-x-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span>New</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>Content opportunities</span>
+                    </span>
+                  </div>
+                </div>
+
+                {relatedQuestionsLoading && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center space-x-3 text-blue-700">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Fetching related questions...</span>
+                    </div>
+                  </div>
+                )}
+
+                {!relatedQuestionsLoading && relatedQuestions.length === 0 && (
+                  <div className="bg-blue-50 border border-dashed border-blue-200 rounded-xl p-6 text-center">
+                    <p className="text-blue-900 font-medium mb-2">No related questions yet</p>
+                    <p className="text-blue-700/80 text-sm">
+                      Enter a search term above to discover what customers are asking about your products and niche.
+                    </p>
+                  </div>
+                )}
+
+                {!relatedQuestionsLoading && relatedQuestions.length > 0 && (
+                  <>
+                    <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+                      {relatedQuestions.map((item, index) => (
+                        <div
+                          key={`${item.question || item.title || 'question'}-${index}`}
+                          className="bg-white rounded-xl border border-blue-100 p-4 hover:shadow-md transition-shadow duration-150"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <p className="font-medium text-blue-900">{item.question || item.title}</p>
+                              {item.snippet && <p className="text-sm text-blue-800/90">{item.snippet}</p>}
+                              {item.title && (
+                                <p className="text-xs text-blue-700/80">
+                                  Source:{' '}
+                                  <span className="font-medium">
+                                    {item.title.length > 80 ? `${item.title.substring(0, 77)}...` : item.title}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center space-x-1 text-sm text-blue-700 hover:text-blue-900"
+                              >
+                                <span>View source</span>
+                                <ArrowUpRight className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+
+                          {item.nextPageToken && (
+                            <div className="mt-3">
+                              <button
+                                onClick={() => loadMoreRelatedQuestions(item.nextPageToken!)}
+                                disabled={relatedQuestionsLoading}
+                                className="inline-flex items-center space-x-2 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 disabled:opacity-50"
+                              >
+                                {relatedQuestionsLoading ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Loading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>Load more questions like this</span>
+                                    <ChevronsDown className="h-3 w-3" />
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button
+                        onClick={() => {
+                          if (!relatedQuestions.length) return;
+                          const header = 'question,snippet,link\n';
+                          const csvContent = relatedQuestions
+                            .map((q) =>
+                              [
+                                q.question || q.title || '',
+                                q.snippet || '',
+                                q.link || '',
+                              ]
+                                .map((field) => `"${String(field).replace(/"/g, '""')}"`)
+                                .join(',')
+                            )
+                            .join('\n');
+                          const blob = new Blob([header + csvContent], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `related_questions_${relatedQuestionsQuery.replace(/[^a-zA-Z0-9]/g, '_') || 'export'}.csv`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success('Exported questions to CSV');
+                        }}
+                        className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                      >
+                        Export CSV
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRelatedQuestions([]);
+                          setRelatedQuestionsQuery('');
+                          toast.success('Cleared related questions');
+                        }}
+                        className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                      >
+                        Clear Results
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
               {activeTab === 'blogs' && (
                 <div className="bg-white rounded-lg shadow-sm border">
@@ -7497,499 +7669,462 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                      {/* Action Buttons Section */}
-                      <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t-2 border-gray-200">
-                        <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                          <button
-                            onClick={() => fetchProducts()}
-                            className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-                          >
-                            <RefreshCw className="h-5 w-5" />
-                            <span>Refresh</span>
-                          </button>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <a
-                            href="/api/admin/products/export-csv"
-                            className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-                          >
-                            <Download className="h-5 w-5" />
-                            <span>Export CSV</span>
-                          </a>
-                          <button
-                            onClick={handleShopifyExport}
-                            disabled={selectedProductIds.length === 0}
-                            className={`flex items-center justify-center space-x-2 px-5 py-3 rounded-xl transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95 ${selectedProductIds.length === 0
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800'
-                              }`}
-                            title={selectedProductIds.length === 0 ? 'Select products to export' : `Export ${selectedProductIds.length} selected product(s)`}
-                          >
-                            <Download className="h-5 w-5" />
-                            <span>Export to Shopify {selectedProductIds.length > 0 && `(${selectedProductIds.length})`}</span>
-                          </button>
-                          <a
-                            href="/api/admin/products/sample-csv"
-                            className="flex items-center justify-center px-5 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium border-2 border-gray-300 shadow-sm hover:shadow-md active:scale-95"
-                          >
-                            Sample CSV
-                          </a>
-                          <label className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all font-medium cursor-pointer shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95">
-                            <Download className="h-5 w-5" />
-                            <span>Import CSV</span>
-                            <input
-                              type="file"
-                              accept=".csv,text/csv"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  const text = await file.text();
-                                  // First do a dry-run to validate mapping
-                                  let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                      'Content-Type': 'text/csv',
-                                    },
-                                    body: text,
-                                  });
-                                  let data = await res.json();
-                                  if (!res.ok) throw new Error(data.error || 'Validation failed');
-                                  if (data.warnings?.length) {
-                                    toast((t) => (
-                                      <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
-                                    ));
-                                  }
-                                  // Proceed actual import
-                                  res = await fetch('/api/admin/products/import-csv', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                      'Content-Type': 'text/csv',
-                                    },
-                                    body: text,
-                                  });
-                                  data = await res.json();
-                                  if (!res.ok) throw new Error(data.error || 'Import failed');
-                                  toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
-                                  fetchProducts();
-                                } catch (err) {
-                                  toast.error(err instanceof Error ? err.message : 'Import failed');
-                                } finally {
-                                  e.currentTarget.value = '';
-                                }
-                              }}
-                            />
-                          </label>
-                        </div>
-                      </div>
+                {/* Action Buttons Section */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t-2 border-gray-200">
+                  <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                    <button
+                      onClick={() => fetchProducts()}
+                      className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                    >
+                      <RefreshCw className="h-5 w-5" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <a
+                      href="/api/admin/products/export-csv"
+                      className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span>Export CSV</span>
+                    </a>
+                    <a
+                      href="/api/admin/products/sample-csv"
+                      className="flex items-center justify-center px-5 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium border-2 border-gray-300 shadow-sm hover:shadow-md active:scale-95"
+                    >
+                      Sample CSV
+                    </a>
+                    <label className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium cursor-pointer shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95">
+                      <Download className="h-5 w-5" />
+                      <span>Import CSV</span>
+                      <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const token = localStorage.getItem('token');
+                              const text = await file.text();
+                              // First do a dry-run to validate mapping
+                              let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'text/csv',
+                                },
+                                body: text,
+                              });
+                              let data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Validation failed');
+                              if (data.warnings?.length) {
+                                toast((t) => (
+                                  <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
+                                ));
+                              }
+                              // Proceed actual import
+                              res = await fetch('/api/admin/products/import-csv', {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'text/csv',
+                                },
+                                body: text,
+                              });
+                              data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Import failed');
+                              toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+                              fetchProducts();
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Import failed');
+                            } finally {
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
+                </div>
+              </div>
 
-                  {/* Products Table Section */}
-                  {loading ? (
-                    <div className="p-6">
-                      <TableSkeleton rows={8} columns={6} />
-                    </div>
-                  ) : (
-                    <>
-                      {/* Desktop Table View */}
-                      <div className="hidden lg:block -mx-4 sm:mx-0">
-                        <div className="inline-block w-full align-middle">
-                          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-xl">
-                            <table className="w-full border-collapse border-spacing-0 table-fixed">
-                              <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
-                                <tr className="m-0 p-0">
-                                  <th className="w-[3%] px-4 py-0 text-left border-b border-gray-200 m-0 p-0">
-                                    <div className="flex items-center justify-center h-6 m-0">
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedProductIds.length === products.length && products.length > 0}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            handleSelectAll();
-                                          } else {
-                                            handleClearAll();
-                                          }
-                                        }}
-                                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer"
-                                        title="Select all products on this page"
-                                      />
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[30%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('name')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Product</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('name')}
-                                      </span>
-                                      {productSortBy === 'name' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('name')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('category')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Category</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('category')}
-                                      </span>
-                                      {productSortBy === 'category' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('category')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('brand')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Brand</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('brand')}
-                                      </span>
-                                      {productSortBy === 'brand' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('brand')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[10%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('price')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Price</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('price')}
-                                      </span>
-                                      {productSortBy === 'price' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('price')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[8%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('stockCount')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Stock</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('stockCount')}
-                                      </span>
-                                      {productSortBy === 'stockCount' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('stockCount')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th
-                                    className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                                    onClick={() => handleProductSort('isActive')}
-                                  >
-                                    <div className="flex items-center space-x-1.5 h-6 m-0">
-                                      <span className="m-0 leading-none">Status</span>
-                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                                        {getSortIcon('isActive')}
-                                      </span>
-                                      {productSortBy === 'isActive' && (
-                                        <span className="opacity-100 m-0">{getSortIcon('isActive')}</span>
-                                      )}
-                                    </div>
-                                  </th>
-                                  <th className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
-                                    <div className="h-6 m-0 leading-none">Actions</div>
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white m-0 p-0">
-                                {products.map((product, index) => (
-                                  <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} m-0 p-0`} onClick={() => handleEditProduct(product)}>
-                                    <td className="w-[3%] px-4 py-5 align-top m-0 p-0" onClick={(e) => e.stopPropagation()}>
-                                      <div className="flex items-center justify-center h-6 m-0 p-0">
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedProductIds.includes(product._id)}
-                                          onChange={() => handleProductSelection(product._id)}
-                                          className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer"
-                                          title="Select this product"
-                                        />
-                                      </div>
-                                    </td>
-                                    <td className="w-[30%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                                      <div className="flex items-center min-w-0 h-6 m-0 p-0">
-                                        <div className="flex-shrink-0 h-5 w-5 m-0 p-0">
-                                          <img
-                                            className="h-5 w-5 rounded object-cover border border-gray-200 m-0 p-0"
-                                            src={product.image}
-                                            alt={product.name}
-                                          />
-                                        </div>
-                                        <div className="ml-2 min-w-0 flex-1 m-0 p-0">
-                                          <div
-                                            className="text-xs font-semibold text-gray-900 truncate leading-none m-0 p-0 cursor-help"
-                                            title={product.name}
-                                          >
-                                            {product.name.length > 50 ? `${product.name.substring(0, 50)}...` : product.name}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="w-[12%] px-4 xl:px-6 py-5 align-top text-gray-700 m-0 p-0">
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200 leading-none m-0">
-                                        {product.category || 'N/A'}
-                                      </span>
-                                    </td>
-                                    <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium text-gray-700 truncate m-0 p-0 leading-none">
-                                      {product.brand || 'N/A'}
-                                    </td>
-                                    <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                                      <div className="flex items-center h-6 m-0 p-0">
-                                        <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
-                                        <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
-                                      </div>
-                                    </td>
-                                    <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                                      <div className="flex items-center h-6 m-0 p-0">
-                                        <Package className="h-3 w-3 text-indigo-500 mr-0.5 flex-shrink-0 m-0" />
-                                        <span className="font-medium text-gray-700 text-xs m-0 leading-none">{product.stockCount}</span>
-                                      </div>
-                                    </td>
-                                    <td className="w-[12%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                                      <div className="flex flex-wrap gap-0.5 items-center h-6 m-0 p-0">
-                                        <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${product.isActive
-                                          ? 'bg-green-100 text-green-800 border border-green-200'
-                                          : 'bg-red-100 text-red-800 border border-red-200'
-                                          }`}>
-                                          {product.isActive ? 'Active' : 'Inactive'}
-                                        </span>
-                                        {(() => {
-                                          const status = (product as any).status || 'draft';
-                                          const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
-                                          const isScheduled = status === 'published' && publishAt && publishAt > new Date();
-                                          const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
-                                          const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
-                                          const badgeClass = isScheduled
-                                            ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                            : isLive
-                                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                              : status === 'archived'
-                                                ? 'bg-gray-100 text-gray-700 border border-gray-200'
-                                                : 'bg-purple-100 text-purple-800 border border-purple-200';
-                                          return (
-                                            <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${badgeClass}`}>
-                                              {badgeText}
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
-                                    </td>
-                                    <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium m-0 p-0">
-                                      <div className="flex flex-wrap gap-1 items-center m-0 p-0" onClick={(e) => e.stopPropagation()}>
-                                        {/* Primary Actions */}
-                                        <Link
-                                          href={`/products/${product._id}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="View product"
-                                        >
-                                          <ExternalLink className="h-3.5 w-3.5" />
-                                        </Link>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleEditProduct(product);
-                                          }}
-                                          className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Edit product"
-                                        >
-                                          <Edit className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setEmailMarketingProduct(product);
-                                            setShowEmailMarketing(true);
-                                          }}
-                                          className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Send promotional email"
-                                        >
-                                          <Mail className="h-3.5 w-3.5" />
-                                        </button>
-
-                                        {/* Copy Actions - Quick Access */}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCopyTitle(product);
-                                          }}
-                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Copy Title"
-                                        >
-                                          <FileText className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCopyDescription(product);
-                                          }}
-                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Copy Description"
-                                        >
-                                          <FileText className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCopyTags(product);
-                                          }}
-                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Copy Tags"
-                                        >
-                                          <Tag className="h-3.5 w-3.5" />
-                                        </button>
-
-                                        {/* Copy Menu for Additional Options */}
-                                        <div className="relative group copy-menu-container flex-shrink-0">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
-                                                if (menu.id !== `copy-menu-${product._id}`) {
-                                                  menu.classList.add('hidden');
-                                                }
-                                              });
-                                              const menu = document.getElementById(`copy-menu-${product._id}`);
-                                              if (menu) {
-                                                menu.classList.toggle('hidden');
-                                              }
-                                            }}
-                                            className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
-                                            title="More copy options"
-                                          >
-                                            <Copy className="h-3.5 w-3.5" />
-                                          </button>
-                                          <div
-                                            id={`copy-menu-${product._id}`}
-                                            className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <div className="py-1">
-                                              <button
-                                                onClick={() => {
-                                                  handleCopySpecs(product);
-                                                  const menu = document.getElementById(`copy-menu-${product._id}`);
-                                                  if (menu) menu.classList.add('hidden');
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                              >
-                                                <FileText className="h-4 w-4" />
-                                                <span>Copy Specifications</span>
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  handleCopyImageUrls(product);
-                                                  const menu = document.getElementById(`copy-menu-${product._id}`);
-                                                  if (menu) menu.classList.add('hidden');
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                              >
-                                                <ImageIcon className="h-4 w-4" />
-                                                <span>Copy Image URLs</span>
-                                              </button>
-                                              {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
-                                                <button
-                                                  onClick={() => {
-                                                    handleCopyAltTexts(product);
-                                                    const menu = document.getElementById(`copy-menu-${product._id}`);
-                                                    if (menu) menu.classList.add('hidden');
-                                                  }}
-                                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                                >
-                                                  <Sparkles className="h-4 w-4" />
-                                                  <span>Copy Alt Texts</span>
-                                                </button>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        {/* Image Actions */}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleGenerateAltText(product._id, product.name);
-                                          }}
-                                          className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                            ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                            : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
-                                            }`}
-                                          title={
-                                            (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                              ? 'Alt text already generated - Click to regenerate'
-                                              : 'Generate unique alt text for all images'
-                                          }
-                                        >
-                                          <Sparkles className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOrganizeProductImages(product._id, product.name);
-                                          }}
-                                          className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${(() => {
-                                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                                            const hasCloudinary = allImages.some((url: string) =>
-                                              url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                                            );
-                                            return hasCloudinary
-                                              ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                              : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
-                                          })()
-                                            }`}
-                                          title={(() => {
-                                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                                            const hasCloudinary = allImages.some((url: string) =>
-                                              url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                                            );
-                                            return hasCloudinary
-                                              ? 'Images already organized in Cloudinary'
-                                              : 'Organize images in Cloudinary';
-                                          })()}
-                                        >
-                                          <Cloud className="h-3.5 w-3.5" />
-                                        </button>
-
-                                        {/* Delete Action */}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteProduct(product._id);
-                                          }}
-                                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150 flex-shrink-0"
-                                          title="Delete product"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+            {/* Products Table Section */}
+            {loading ? (
+              <div className="p-6">
+                <TableSkeleton rows={8} columns={6} />
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden lg:block -mx-4 sm:mx-0">
+                  <div className="inline-block w-full align-middle">
+                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-xl">
+                      <table className="w-full border-collapse border-spacing-0 table-fixed">
+                    <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
+                      <tr className="m-0 p-0">
+                        <th 
+                          className="w-[30%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('name')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Product</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('name')}
+                            </span>
+                            {productSortBy === 'name' && (
+                              <span className="opacity-100 m-0">{getSortIcon('name')}</span>
+                            )}
                           </div>
-                        </div>
-                      </div>
+                        </th>
+                        <th 
+                          className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('category')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Category</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('category')}
+                            </span>
+                            {productSortBy === 'category' && (
+                              <span className="opacity-100 m-0">{getSortIcon('category')}</span>
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('brand')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Brand</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('brand')}
+                            </span>
+                            {productSortBy === 'brand' && (
+                              <span className="opacity-100 m-0">{getSortIcon('brand')}</span>
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          className="w-[10%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('price')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Price</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('price')}
+                            </span>
+                            {productSortBy === 'price' && (
+                              <span className="opacity-100 m-0">{getSortIcon('price')}</span>
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          className="w-[8%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('stockCount')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Stock</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('stockCount')}
+                            </span>
+                            {productSortBy === 'stockCount' && (
+                              <span className="opacity-100 m-0">{getSortIcon('stockCount')}</span>
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          onClick={() => handleProductSort('isActive')}
+                        >
+                          <div className="flex items-center space-x-1.5 h-6 m-0">
+                            <span className="m-0 leading-none">Status</span>
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                              {getSortIcon('isActive')}
+                            </span>
+                            {productSortBy === 'isActive' && (
+                              <span className="opacity-100 m-0">{getSortIcon('isActive')}</span>
+                            )}
+                          </div>
+                        </th>
+                        <th className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                          <div className="h-6 m-0 leading-none">Actions</div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white m-0 p-0">
+                      {products.map((product, index) => (
+                        <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} m-0 p-0`} onClick={() => handleEditProduct(product)}>
+                          <td className="w-[30%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                            <div className="flex items-center min-w-0 h-6 m-0 p-0">
+                              <div className="flex-shrink-0 h-5 w-5 m-0 p-0">
+                                <img
+                                  className="h-5 w-5 rounded object-cover border border-gray-200 m-0 p-0"
+                                  src={product.image}
+                                  alt={product.name}
+                                />
+                              </div>
+                              <div className="ml-2 min-w-0 flex-1 m-0 p-0">
+                                <div 
+                                  className="text-xs font-semibold text-gray-900 truncate leading-none m-0 p-0 cursor-help"
+                                  title={product.name}
+                                >
+                                  {product.name.length > 50 ? `${product.name.substring(0, 50)}...` : product.name}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="w-[12%] px-4 xl:px-6 py-5 align-top text-gray-700 m-0 p-0">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200 leading-none m-0">
+                              {product.category || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium text-gray-700 truncate m-0 p-0 leading-none">
+                            {product.brand || 'N/A'}
+                          </td>
+                          <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                            <div className="flex items-center h-6 m-0 p-0">
+                              <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
+                              <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                            </div>
+                          </td>
+                          <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                            <div className="flex items-center h-6 m-0 p-0">
+                              <Package className="h-3 w-3 text-indigo-500 mr-0.5 flex-shrink-0 m-0" />
+                              <span className="font-medium text-gray-700 text-xs m-0 leading-none">{product.stockCount}</span>
+                            </div>
+                          </td>
+                          <td className="w-[12%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                            <div className="flex flex-wrap gap-0.5 items-center h-6 m-0 p-0">
+                              <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${
+                                product.isActive 
+                                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                                  : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}>
+                                {product.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                              {(() => {
+                                const status = (product as any).status || 'draft';
+                                const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
+                                const isScheduled = status === 'published' && publishAt && publishAt > new Date();
+                                const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
+                                const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
+                                const badgeClass = isScheduled
+                                  ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                  : isLive
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : status === 'archived'
+                                  ? 'bg-gray-100 text-gray-700 border border-gray-200'
+                                  : 'bg-purple-100 text-purple-800 border border-purple-200';
+                                return (
+                                  <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${badgeClass}`}>
+                                    {badgeText}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          </td>
+                          <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium m-0 p-0">
+                            <div className="flex flex-wrap gap-1 items-center m-0 p-0" onClick={(e) => e.stopPropagation()}>
+                              {/* Primary Actions */}
+                              <Link
+                                href={`/products/${product._id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="View product"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Link>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditProduct(product);
+                                }}
+                                className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Edit product"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEmailMarketingProduct(product);
+                                  setShowEmailMarketing(true);
+                                }}
+                                className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Send promotional email"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                              </button>
+                              
+                              {/* Copy Actions - Quick Access */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyTitle(product);
+                                }}
+                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Copy Title"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyDescription(product);
+                                }}
+                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Copy Description"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyTags(product);
+                                }}
+                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Copy Tags"
+                              >
+                                <Tag className="h-3.5 w-3.5" />
+                              </button>
+                              
+                              {/* Copy Menu for Additional Options */}
+                              <div className="relative group copy-menu-container flex-shrink-0">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
+                                      if (menu.id !== `copy-menu-${product._id}`) {
+                                        menu.classList.add('hidden');
+                                      }
+                                    });
+                                    const menu = document.getElementById(`copy-menu-${product._id}`);
+                                    if (menu) {
+                                      menu.classList.toggle('hidden');
+                                    }
+                                  }}
+                                  className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                  title="More copy options"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                                <div 
+                                  id={`copy-menu-${product._id}`}
+                                  className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => {
+                                        handleCopySpecs(product);
+                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        if (menu) menu.classList.add('hidden');
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                      <span>Copy Specifications</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        handleCopyImageUrls(product);
+                                        const menu = document.getElementById(`copy-menu-${product._id}`);
+                                        if (menu) menu.classList.add('hidden');
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                      <ImageIcon className="h-4 w-4" />
+                                      <span>Copy Image URLs</span>
+                                    </button>
+                                    {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
+                                      <button
+                                        onClick={() => {
+                                          handleCopyAltTexts(product);
+                                          const menu = document.getElementById(`copy-menu-${product._id}`);
+                                          if (menu) menu.classList.add('hidden');
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                      >
+                                        <Sparkles className="h-4 w-4" />
+                                        <span>Copy Alt Texts</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Image Actions */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleGenerateAltText(product._id, product.name);
+                                }}
+                                className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${
+                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                    : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                                }`}
+                                title={
+                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                    ? 'Alt text already generated - Click to regenerate'
+                                    : 'Generate unique alt text for all images'
+                                }
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOrganizeProductImages(product._id, product.name);
+                                }}
+                                className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${
+                                  (() => {
+                                    const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                    const hasCloudinary = allImages.some((url: string) => 
+                                      url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                    );
+                                    return hasCloudinary
+                                      ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                      : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+                                  })()
+                                }`}
+                                title={(() => {
+                                  const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                  const hasCloudinary = allImages.some((url: string) => 
+                                    url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                  );
+                                  return hasCloudinary
+                                    ? 'Images already organized in Cloudinary'
+                                    : 'Organize images in Cloudinary';
+                                })()}
+                              >
+                                <Cloud className="h-3.5 w-3.5" />
+                              </button>
+                              
+                              {/* Delete Action */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteProduct(product._id);
+                                }}
+                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150 flex-shrink-0"
+                                title="Delete product"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
 
                       {/* Mobile/Tablet Card View */}
                       <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4">
@@ -8878,289 +9013,8 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                </div>
-              )}
-
-              {/* Support Tickets Tab */}
-              {activeTab === 'support' && (
-                <div className="space-y-6">
-                  {/* Statistics Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-blue-600">Total Tickets</p>
-                          <p className="text-2xl font-bold text-blue-900 mt-1">{supportTickets.length}</p>
-                        </div>
-                        <MessageSquare className="h-8 w-8 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-yellow-600">Open</p>
-                          <p className="text-2xl font-bold text-yellow-900 mt-1">
-                            {supportTickets.filter(t => t.status === 'open').length}
-                          </p>
-                        </div>
-                        <AlertCircle className="h-8 w-8 text-yellow-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-orange-600">In Progress</p>
-                          <p className="text-2xl font-bold text-orange-900 mt-1">
-                            {supportTickets.filter(t => t.status === 'in_progress').length}
-                          </p>
-                        </div>
-                        <Clock className="h-8 w-8 text-orange-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-red-600">Urgent</p>
-                          <p className="text-2xl font-bold text-red-900 mt-1">
-                            {supportTickets.filter(t => t.priority === 'urgent').length}
-                          </p>
-                        </div>
-                        <AlertTriangle className="h-8 w-8 text-red-500" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Main Content */}
-                  <div className="bg-white rounded-lg shadow-sm border">
-                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                        <div>
-                          <h2 className="text-2xl font-bold text-gray-900">Support Tickets</h2>
-                          <p className="text-sm text-gray-600 mt-1">Manage and respond to customer support requests</p>
-                        </div>
-                        <button
-                          onClick={fetchSupportTickets}
-                          className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          <span>Refresh</span>
-                        </button>
-                      </div>
-
-                      {/* Search and Filters */}
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                          <input
-                            type="text"
-                            placeholder="Search by ticket number, subject, or message content..."
-                            value={supportSearchTerm}
-                            onChange={(e) => setSupportSearchTerm(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && fetchSupportTickets()}
-                            className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder:text-gray-400"
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <SelectField
-                            options={[
-                              { value: 'all', label: 'All Statuses' },
-                              { value: 'open', label: 'Open' },
-                              { value: 'in_progress', label: 'In Progress' },
-                              { value: 'waiting_customer', label: 'Waiting Customer' },
-                              { value: 'resolved', label: 'Resolved' },
-                              { value: 'closed', label: 'Closed' },
-                            ]}
-                            value={supportStatusFilter}
-                            isOpen={openSelect === 'supportStatus'}
-                            onOpenChange={(open) => setOpenSelect(open ? 'supportStatus' : null)}
-                            onSelect={(value) => setSupportStatusFilter(value)}
-                            placeholder="All Statuses"
-                            className="w-full"
-                          />
-                          <SelectField
-                            options={[
-                              { value: 'all', label: 'All Categories' },
-                              { value: 'order', label: 'Order' },
-                              { value: 'product', label: 'Product' },
-                              { value: 'payment', label: 'Payment' },
-                              { value: 'shipping', label: 'Shipping' },
-                              { value: 'technical', label: 'Technical' },
-                              { value: 'other', label: 'Other' },
-                            ]}
-                            value={supportCategoryFilter}
-                            isOpen={openSelect === 'supportCategory'}
-                            onOpenChange={(open) => setOpenSelect(open ? 'supportCategory' : null)}
-                            onSelect={(value) => setSupportCategoryFilter(value)}
-                            placeholder="All Categories"
-                            className="w-full"
-                          />
-                          <SelectField
-                            options={[
-                              { value: 'all', label: 'All Priorities' },
-                              { value: 'low', label: 'Low' },
-                              { value: 'medium', label: 'Medium' },
-                              { value: 'high', label: 'High' },
-                              { value: 'urgent', label: 'Urgent' },
-                            ]}
-                            value={supportPriorityFilter}
-                            isOpen={openSelect === 'supportPriority'}
-                            onOpenChange={(open) => setOpenSelect(open ? 'supportPriority' : null)}
-                            onSelect={(value) => setSupportPriorityFilter(value)}
-                            placeholder="All Priorities"
-                            className="w-full"
-                          />
-                          <button
-                            onClick={fetchSupportTickets}
-                            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-                          >
-                            Apply Filters
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      {supportLoading ? (
-                        <TableSkeleton rows={8} columns={8} />
-                      ) : supportTickets.length === 0 ? (
-                        <div className="p-16 text-center">
-                          <MessageSquare className="h-20 w-20 text-gray-300 mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">No tickets found</h3>
-                          <p className="text-gray-600">No support tickets match your current filters.</p>
-                        </div>
-                      ) : (
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                            <tr>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Ticket</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Subject</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Priority</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Assigned</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
-                              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-100">
-                            {supportTickets.map((ticket) => (
-                              <tr 
-                                key={ticket._id} 
-                                className="hover:bg-blue-50/50 cursor-pointer transition-colors border-l-4 border-transparent hover:border-blue-500"
-                                onClick={() => handleViewTicket(ticket)}
-                              >
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
-                                    <MessageSquare className="h-4 w-4 text-gray-400" />
-                                    <div>
-                                      <div className="text-sm font-semibold text-gray-900">{ticket.ticketNumber}</div>
-                                      <div className="text-xs text-gray-500">{ticket.messages?.length || 0} message{ticket.messages?.length !== 1 ? 's' : ''}</div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-semibold">
-                                      {(ticket.guestEmail || 'U').charAt(0).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-medium text-gray-900">{ticket.guestEmail || 'Guest User'}</div>
-                                      {ticket.userId ? (
-                                        <div className="text-xs text-blue-600 flex items-center gap-1">
-                                          <User className="h-3 w-3" />
-                                          Registered
-                                        </div>
-                                      ) : (
-                                        <div className="text-xs text-gray-500">Guest</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-sm font-medium text-gray-900 max-w-xs truncate" title={ticket.subject}>
-                                    {ticket.subject}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 capitalize border border-blue-200">
-                                    {ticket.category}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                                    ticket.priority === 'urgent' ? 'bg-red-100 text-red-800 border border-red-200' :
-                                    ticket.priority === 'high' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
-                                    ticket.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                                    'bg-gray-100 text-gray-800 border border-gray-200'
-                                  }`}>
-                                    {ticket.priority === 'urgent' && <AlertTriangle className="h-3 w-3 mr-1" />}
-                                    {ticket.priority.toUpperCase()}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <select
-                                    value={ticket.status}
-                                    onChange={(e) => handleUpdateTicket(ticket._id, { status: e.target.value })}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 focus:ring-2 focus:ring-blue-500 cursor-pointer transition-all ${
-                                      ticket.status === 'open' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
-                                      ticket.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' :
-                                      ticket.status === 'waiting_customer' ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' :
-                                      ticket.status === 'resolved' ? 'bg-green-100 text-green-800 hover:bg-green-200' :
-                                      'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                                    }`}
-                                  >
-                                    <option value="open">Open</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="waiting_customer">Waiting Customer</option>
-                                    <option value="resolved">Resolved</option>
-                                    <option value="closed">Closed</option>
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <select
-                                    value={ticket.assignedTo || 'unassigned'}
-                                    onChange={(e) => handleUpdateTicket(ticket._id, { assignedTo: e.target.value === 'unassigned' ? null : e.target.value })}
-                                    className="text-xs px-3 py-1.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors cursor-pointer"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <option value="unassigned">Unassigned</option>
-                                    {adminUsers.map(admin => (
-                                      <option key={admin._id} value={admin._id}>{admin.name || admin.email}</option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 font-medium">
-                                    {new Date(ticket.createdAt).toLocaleDateString()}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewTicket(ticket);
-                                    }}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors"
-                                    title="View ticket details"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                    View
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+          </div>
+        )}
 
               {/* Orders Tab */}
               {activeTab === 'orders' && (
@@ -9403,705 +9257,18 @@ export default function AdminDashboard() {
                 onSuccess={handleProductFormSuccess}
               />
 
-              {/* Order Detail Modal */}
-              <OrderDetailModal
-                order={viewingOrder}
-                isOpen={!!viewingOrder}
-                onClose={() => {
-                  setViewingOrder(null);
-                  updateQuery({ orderId: undefined });
-                }}
-                onUpdateStatus={handleUpdateOrderStatus}
-                onDeleteOrder={handleDeleteOrder}
-                onDownloadInvoice={handleDownloadInvoice}
-              />
-
-              {/* Support Ticket Detail Modal */}
-              {viewingTicket && (
-                <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={() => setViewingTicket(null)}></div>
-                    <div className="relative inline-block align-bottom bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full border-0">
-                      {/* Enhanced Header with Better Colors */}
-                      <div className="relative bg-gradient-to-br from-indigo-600 via-blue-600 to-purple-600 px-8 py-6 overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
-                        <div className="relative flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-lg">
-                                <MessageSquare className="h-7 w-7 text-white" />
-                              </div>
-                              <div>
-                                <h3 className="text-2xl font-bold text-white mb-1">{viewingTicket.ticketNumber}</h3>
-                                <p className="text-base text-blue-50 font-medium">{viewingTicket.subject}</p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 mt-4">
-                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
-                                viewingTicket.status === 'open' ? 'bg-blue-500 text-white border-2 border-blue-400' :
-                                viewingTicket.status === 'in_progress' ? 'bg-amber-500 text-white border-2 border-amber-400' :
-                                viewingTicket.status === 'waiting_customer' ? 'bg-orange-500 text-white border-2 border-orange-400' :
-                                viewingTicket.status === 'resolved' ? 'bg-emerald-500 text-white border-2 border-emerald-400' :
-                                'bg-slate-500 text-white border-2 border-slate-400'
-                              }`}>
-                                {viewingTicket.status === 'open' && <AlertCircle className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.status === 'in_progress' && <Clock className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.status === 'waiting_customer' && <Clock className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.status === 'resolved' && <CheckCircle className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.status === 'closed' && <XCircle className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.status.replace('_', ' ').toUpperCase()}
-                              </span>
-                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
-                                viewingTicket.priority === 'urgent' ? 'bg-red-600 text-white border-2 border-red-400 animate-pulse' :
-                                viewingTicket.priority === 'high' ? 'bg-orange-500 text-white border-2 border-orange-400' :
-                                viewingTicket.priority === 'medium' ? 'bg-yellow-500 text-white border-2 border-yellow-400' :
-                                'bg-slate-400 text-white border-2 border-slate-300'
-                              }`}>
-                                {viewingTicket.priority === 'urgent' && <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.priority === 'high' && <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />}
-                                {viewingTicket.priority.toUpperCase()}
-                              </span>
-                              <span className="inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold bg-white/25 text-white capitalize backdrop-blur-sm border border-white/30">
-                                {viewingTicket.category}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setViewingTicket(null)}
-                            className="ml-4 text-white/90 hover:text-white transition-all p-2.5 hover:bg-white/20 rounded-xl backdrop-blur-sm"
-                          >
-                            <X className="h-6 w-6" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-gray-50 to-white">
-                        {/* Enhanced Customer Info & Quick Actions */}
-                        <div className="px-8 py-6">
-                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                            {/* Customer Card */}
-                            <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-md border-2 border-gray-100">
-                              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Customer Information</label>
-                              <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-purple-500 flex items-center justify-center text-white text-xl font-bold shadow-lg border-4 border-white">
-                                  {(viewingTicket.guestEmail || 'U').charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-base font-bold text-gray-900 mb-1">{viewingTicket.guestEmail || 'Guest User'}</p>
-                                  {viewingTicket.userId ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                                        <User className="h-3 w-3 mr-1.5" />
-                                        Registered User
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                                      Guest User
-                                    </span>
-                                  )}
-                                  {viewingTicket.createdAt && (
-                                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                                      <Clock className="h-3 w-3" />
-                                      Created {new Date(viewingTicket.createdAt).toLocaleDateString()} at {new Date(viewingTicket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Quick Actions Card */}
-                            <div className="bg-white rounded-xl p-5 shadow-md border-2 border-gray-100">
-                              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Quick Actions</label>
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Status</label>
-                                  <SelectField
-                                    options={[
-                                      { value: 'open', label: 'Open' },
-                                      { value: 'in_progress', label: 'In Progress' },
-                                      { value: 'waiting_customer', label: 'Waiting Customer' },
-                                      { value: 'resolved', label: 'Resolved' },
-                                      { value: 'closed', label: 'Closed' },
-                                    ]}
-                                    value={viewingTicket.status}
-                                    isOpen={openSelect === 'ticketStatus'}
-                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketStatus' : null)}
-                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { status: value })}
-                                    placeholder="Select status"
-                                    className="w-full"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Priority</label>
-                                  <SelectField
-                                    options={[
-                                      { value: 'low', label: 'Low' },
-                                      { value: 'medium', label: 'Medium' },
-                                      { value: 'high', label: 'High' },
-                                      { value: 'urgent', label: 'Urgent' },
-                                    ]}
-                                    value={viewingTicket.priority}
-                                    isOpen={openSelect === 'ticketPriority'}
-                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketPriority' : null)}
-                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { priority: value })}
-                                    placeholder="Select priority"
-                                    className="w-full"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Assign To</label>
-                                  <SelectField
-                                    options={[
-                                      { value: 'unassigned', label: 'Unassigned' },
-                                      ...adminUsers.map(admin => ({ 
-                                        value: admin._id, 
-                                        label: admin.name || admin.email 
-                                      })),
-                                    ]}
-                                    value={viewingTicket.assignedTo || 'unassigned'}
-                                    isOpen={openSelect === 'ticketAssigned'}
-                                    onOpenChange={(open) => setOpenSelect(open ? 'ticketAssigned' : null)}
-                                    onSelect={(value) => handleUpdateTicket(viewingTicket._id, { assignedTo: value === 'unassigned' ? null : value })}
-                                    placeholder="Select admin"
-                                    className="w-full"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Enhanced Messages Section */}
-                          <div className="bg-white rounded-xl p-6 shadow-md border-2 border-gray-100 mb-6">
-                            <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-gray-100">
-                              <h4 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                                  <MessageSquare className="h-5 w-5 text-white" />
-                                </div>
-                                Conversation Thread
-                              </h4>
-                              <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
-                                {viewingTicket.messages?.length || 0} message{viewingTicket.messages?.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="space-y-5 max-h-[450px] overflow-y-auto pr-3 custom-scrollbar">
-                              {viewingTicket.messages?.map((msg: any, idx: number) => (
-                                <div
-                                  key={msg._id}
-                                  className={`flex gap-4 ${msg.senderType === 'admin' ? 'flex-row-reverse' : ''}`}
-                                >
-                                  <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border-2 ${
-                                    msg.senderType === 'admin' 
-                                      ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-blue-400' 
-                                      : 'bg-gradient-to-br from-gray-400 to-gray-500 border-gray-300'
-                                  }`}>
-                                    {msg.senderType === 'admin' ? (
-                                      <Shield className="h-6 w-6 text-white" />
-                                    ) : (
-                                      <User className="h-6 w-6 text-white" />
-                                    )}
-                                  </div>
-                                  <div className={`flex-1 ${msg.senderType === 'admin' ? 'text-right' : ''}`}>
-                                    <div className={`inline-block max-w-[80%] ${
-                                      msg.senderType === 'admin' ? 'text-right' : 'text-left'
-                                    }`}>
-                                      <div className={`flex items-center gap-2 mb-2 ${msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                                        <span className="text-sm font-bold text-gray-800">{msg.senderName}</span>
-                                        {msg.senderType === 'admin' && (
-                                          <span className="text-xs px-2.5 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-bold shadow-sm">
-                                            ADMIN
-                                          </span>
-                                        )}
-                                        <span className="text-xs text-gray-400 font-medium">
-                                          {new Date(msg.createdAt).toLocaleDateString()} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      <div className={`p-4 rounded-2xl shadow-md ${
-                                        msg.senderType === 'admin'
-                                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200'
-                                          : 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200'
-                                      }`}>
-                                        <p className={`text-sm whitespace-pre-wrap leading-relaxed ${
-                                          msg.senderType === 'admin' ? 'text-gray-800' : 'text-gray-700'
-                                        }`}>{msg.message}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Enhanced Reply Form */}
-                          {viewingTicket.status !== 'closed' && (
-                            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200 shadow-lg">
-                              <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                                  <Send className="h-4 w-4 text-white" />
-                                </div>
-                                Reply as Admin
-                              </label>
-                              <textarea
-                                value={ticketMessage}
-                                onChange={(e) => setTicketMessage(e.target.value)}
-                                rows={6}
-                                className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y mb-4 bg-white shadow-sm transition-all text-sm text-gray-900 placeholder:text-gray-400"
-                                placeholder="Type your response to the customer..."
-                                maxLength={5000}
-                              />
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-600 font-semibold">
-                                  {ticketMessage.length}/5000 characters
-                                </p>
-                                <button
-                                  onClick={() => handleSendTicketMessage(viewingTicket._id)}
-                                  disabled={sendingMessage || !ticketMessage.trim()}
-                                  className="px-8 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 disabled:transform-none"
-                                >
-                                  {sendingMessage ? (
-                                    <>
-                                      <Loader2 className="h-5 w-5 animate-spin" />
-                                      <span>Sending...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Send className="h-5 w-5" />
-                                      <span>Send Reply</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {viewingTicket.status === 'closed' && (
-                            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-8 border-2 border-gray-200 text-center shadow-md">
-                              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
-                                <XCircle className="h-8 w-8 text-gray-500" />
-                              </div>
-                              <p className="text-base font-bold text-gray-700 mb-2">This ticket is closed</p>
-                              <p className="text-sm text-gray-600">Reopen the ticket to send a reply to the customer.</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Chat Management */}
-              {activeTab === 'chat' && (
-                <div className="space-y-6">
-                  {/* Statistics Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-blue-600">Total Conversations</p>
-                          <p className="text-2xl font-bold text-blue-900 mt-1">
-                            {chatConversations.length}
-                          </p>
-                        </div>
-                        <MessageCircle className="h-8 w-8 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-green-600">Active</p>
-                          <p className="text-2xl font-bold text-green-900 mt-1">
-                            {chatConversations.filter(c => c.status === 'active').length}
-                          </p>
-                        </div>
-                        <CheckCircle className="h-8 w-8 text-green-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-orange-600">Waiting</p>
-                          <p className="text-2xl font-bold text-orange-900 mt-1">
-                            {chatConversations.filter(c => c.status === 'waiting').length}
-                          </p>
-                        </div>
-                        <Clock className="h-8 w-8 text-orange-500" />
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-red-600">Unread Messages</p>
-                          <p className="text-2xl font-bold text-red-900 mt-1">
-                            {chatConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
-                          </p>
-                        </div>
-                        <AlertCircle className="h-8 w-8 text-red-500" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Main Content */}
-                  <div className="bg-white rounded-lg shadow-sm border">
-                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                        <div>
-                          <h2 className="text-2xl font-bold text-gray-900">Live Chat Conversations</h2>
-                          <p className="text-sm text-gray-600 mt-1">Manage and respond to customer chat conversations</p>
-                        </div>
-                        <button
-                          onClick={fetchChatConversations}
-                          className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          <span>Refresh</span>
-                        </button>
-                      </div>
-
-                      {/* Search and Filters */}
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                          <input
-                            type="text"
-                            placeholder="Search by conversation ID or email..."
-                            value={chatSearchTerm}
-                            onChange={(e) => setChatSearchTerm(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && fetchChatConversations()}
-                            className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder:text-gray-400"
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <SelectField
-                            options={[
-                              { value: 'all', label: 'All Statuses' },
-                              { value: 'active', label: 'Active' },
-                              { value: 'waiting', label: 'Waiting' },
-                              { value: 'closed', label: 'Closed' },
-                            ]}
-                            value={chatStatusFilter}
-                            isOpen={openSelect === 'chatStatus'}
-                            onOpenChange={(open) => setOpenSelect(open ? 'chatStatus' : null)}
-                            onSelect={(value) => setChatStatusFilter(value)}
-                            placeholder="All Statuses"
-                            className="w-full"
-                          />
-                          <SelectField
-                            options={[
-                              { value: 'all', label: 'All Assignments' },
-                              { value: 'unassigned', label: 'Unassigned' },
-                              ...adminUsers.map(admin => ({
-                                value: admin._id,
-                                label: admin.name || admin.email
-                              })),
-                            ]}
-                            value={chatAssignedFilter}
-                            isOpen={openSelect === 'chatAssigned'}
-                            onOpenChange={(open) => setOpenSelect(open ? 'chatAssigned' : null)}
-                            onSelect={(value) => setChatAssignedFilter(value)}
-                            placeholder="All Assignments"
-                            className="w-full"
-                          />
-                          <button
-                            onClick={fetchChatConversations}
-                            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-                          >
-                            Apply Filters
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Conversations Table */}
-                    <div className="overflow-x-auto">
-                      {chatLoading ? (
-                        <TableSkeleton />
-                      ) : chatConversations.length === 0 ? (
-                        <div className="text-center py-12">
-                          <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">No conversations found</p>
-                        </div>
-                      ) : (
-                        <table className="w-full">
-                          <thead className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                            <tr>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Customer</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Last Message</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Assigned To</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Unread</th>
-                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {chatConversations.map((conv) => (
-                              <tr
-                                key={conv._id}
-                                onClick={() => handleViewConversation(conv)}
-                                className="hover:bg-blue-50 cursor-pointer transition-colors border-l-4 border-transparent hover:border-blue-500"
-                              >
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
-                                      {(conv.guestEmail || conv.userId || 'U').charAt(0).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-900">{conv.guestEmail || 'User'}</p>
-                                      <p className="text-xs text-gray-500">{conv.conversationId}</p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  {conv.lastMessage ? (
-                                    <div>
-                                      <p className="text-sm text-gray-900 truncate max-w-xs">{conv.lastMessage.message}</p>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        {new Date(conv.lastMessageAt).toLocaleString()}
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    <span className="text-sm text-gray-400">No messages</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                                    conv.status === 'active' ? 'bg-green-100 text-green-800' :
-                                    conv.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {conv.status}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {conv.assignedTo ? (
-                                    adminUsers.find(u => u._id === conv.assignedTo)?.name || 'Unknown'
-                                  ) : (
-                                    <span className="text-gray-400">Unassigned</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {conv.unreadCount > 0 ? (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                                      {conv.unreadCount}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewConversation(conv);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-900"
-                                    title="View conversation"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Chat Conversation Detail Modal */}
-              {viewingConversation && (
-                <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={() => {
-                      setViewingConversation(null);
-                      updateQuery({ conversationId: undefined });
-                    }}></div>
-                    <div className="relative inline-block align-bottom bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full border-0">
-                      {/* Header */}
-                      <div className="relative bg-gradient-to-br from-indigo-600 via-blue-600 to-purple-600 px-8 py-6 overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
-                        <div className="relative flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-lg">
-                                <MessageCircle className="h-7 w-7 text-white" />
-                              </div>
-                              <div>
-                                <h3 className="text-2xl font-bold text-white mb-1">Chat Conversation</h3>
-                                <p className="text-base text-blue-50 font-medium">
-                                  {viewingConversation.userInfo?.name || viewingConversation.guestEmail || 'User'}
-                                </p>
-                                {(viewingConversation.userInfo?.email || viewingConversation.guestEmail) && (
-                                  <p className="text-sm text-blue-100 mt-1">
-                                    {viewingConversation.userInfo?.email || viewingConversation.guestEmail}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 mt-4">
-                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-bold shadow-md ${
-                                viewingConversation.status === 'active' ? 'bg-green-500 text-white border-2 border-green-400' :
-                                viewingConversation.status === 'waiting' ? 'bg-yellow-500 text-white border-2 border-yellow-400' :
-                                'bg-gray-500 text-white border-2 border-gray-400'
-                              }`}>
-                                {viewingConversation.status.toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setViewingConversation(null);
-                              updateQuery({ conversationId: undefined });
-                            }}
-                            className="ml-4 text-white/90 hover:text-white transition-all p-2.5 hover:bg-white/20 rounded-xl backdrop-blur-sm"
-                          >
-                            <X className="h-6 w-6" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-gray-50 to-white">
-                        <div className="px-8 py-6">
-                          {/* Customer Info Card */}
-                          <div className="bg-white rounded-xl p-5 shadow-md border-2 border-gray-100 mb-6">
-                            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Customer Information</label>
-                            <div className="flex items-center gap-4">
-                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-purple-500 flex items-center justify-center text-white text-xl font-bold shadow-lg border-4 border-white">
-                                {(viewingConversation.userInfo?.name || viewingConversation.guestEmail || 'U').charAt(0).toUpperCase()}
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-base font-bold text-gray-900 mb-1">
-                                  {viewingConversation.userInfo?.name || 'Guest User'}
-                                </p>
-                                <p className="text-sm text-gray-600 mb-1">
-                                  {viewingConversation.userInfo?.email || viewingConversation.guestEmail || 'No email'}
-                                </p>
-                                {viewingConversation.userInfo?.phone && (
-                                  <p className="text-sm text-gray-600">{viewingConversation.userInfo.phone}</p>
-                                )}
-                                {viewingConversation.userId ? (
-                                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200 mt-2">
-                                    <User className="h-3 w-3 mr-1.5" />
-                                    Registered User
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 mt-2">
-                                    Guest User
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Messages */}
-                          <div className="bg-white rounded-xl p-6 shadow-md border-2 border-gray-100 mb-6">
-                            <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-gray-100">
-                              <h4 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                                  <MessageCircle className="h-5 w-5 text-white" />
-                                </div>
-                                Messages
-                              </h4>
-                              <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
-                                {chatMessages.length} message{chatMessages.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="space-y-5 max-h-[450px] overflow-y-auto pr-3">
-                              {chatMessages.map((msg: any) => (
-                                <div
-                                  key={msg._id}
-                                  className={`flex gap-4 ${msg.senderType === 'admin' ? 'flex-row-reverse' : ''}`}
-                                >
-                                  <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg border-2 ${
-                                    msg.senderType === 'admin' 
-                                      ? 'bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-blue-400' 
-                                      : 'bg-gradient-to-br from-gray-400 to-gray-500 border-gray-300'
-                                  }`}>
-                                    {msg.senderType === 'admin' ? (
-                                      <Shield className="h-6 w-6 text-white" />
-                                    ) : (
-                                      <User className="h-6 w-6 text-white" />
-                                    )}
-                                  </div>
-                                  <div className={`flex-1 ${msg.senderType === 'admin' ? 'text-right' : ''}`}>
-                                    <div className={`inline-block max-w-[80%] ${
-                                      msg.senderType === 'admin' ? 'text-right' : 'text-left'
-                                    }`}>
-                                      <div className={`flex items-center gap-2 mb-2 ${msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                                        <span className="text-sm font-bold text-gray-800">{msg.senderName}</span>
-                                        {msg.senderType === 'admin' && (
-                                          <span className="text-xs px-2.5 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-bold shadow-sm">
-                                            ADMIN
-                                          </span>
-                                        )}
-                                        <span className="text-xs text-gray-400 font-medium">
-                                          {new Date(msg.createdAt).toLocaleDateString()} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      <div className={`p-4 rounded-2xl shadow-md ${
-                                        msg.senderType === 'admin'
-                                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200'
-                                          : 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200'
-                                      }`}>
-                                        <p className={`text-sm whitespace-pre-wrap leading-relaxed ${
-                                          msg.senderType === 'admin' ? 'text-gray-800' : 'text-gray-700'
-                                        }`}>{msg.message}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Reply Form */}
-                          {viewingConversation.status !== 'closed' && (
-                            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200 shadow-lg">
-                              <label className="block text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                                  <Send className="h-4 w-4 text-white" />
-                                </div>
-                                Reply as Admin
-                              </label>
-                              <textarea
-                                value={chatMessage}
-                                onChange={(e) => setChatMessage(e.target.value)}
-                                rows={6}
-                                className="w-full px-5 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y mb-4 bg-white shadow-sm transition-all text-sm text-gray-900 placeholder:text-gray-400"
-                                placeholder="Type your response to the customer..."
-                                maxLength={2000}
-                              />
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-600 font-semibold">
-                                  {chatMessage.length}/2000 characters
-                                </p>
-                                <button
-                                  onClick={() => handleSendChatMessage(viewingConversation.conversationId)}
-                                  disabled={sendingChatMessage || !chatMessage.trim()}
-                                  className="px-8 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 disabled:transform-none"
-                                >
-                                  {sendingChatMessage ? (
-                                    <>
-                                      <Loader2 className="h-5 w-5 animate-spin" />
-                                      <span>Sending...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Send className="h-5 w-5" />
-                                      <span>Send Reply</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+        {/* Order Detail Modal */}
+        <OrderDetailModal
+          order={viewingOrder}
+          isOpen={!!viewingOrder}
+          onClose={() => {
+            setViewingOrder(null);
+            updateQuery({ orderId: undefined });
+          }}
+          onUpdateStatus={handleUpdateOrderStatus}
+          onDeleteOrder={handleDeleteOrder}
+          onDownloadInvoice={handleDownloadInvoice}
+        />
 
               {/* Product Email Marketing Modal */}
               {showEmailMarketing && (
