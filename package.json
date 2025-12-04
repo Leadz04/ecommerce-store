@@ -31,7 +31,14 @@
     "dedupe:sourced": "node scripts/dedupe-sourced-products.js",
     "dedupe:products": "node scripts/remove-product-duplicates.js --dry-run",
     "organize:images": "node scripts/organize-images-cloudinary.js",
-    "sync:cloudinary": "node scripts/sync-cloudinary-urls.js --dry-run"
+    "sync:cloudinary": "node scripts/sync-cloudinary-urls.js --dry-run",
+    "cron": "node scripts/run-cron.js",
+    "cron:cart": "node scripts/run-cron.js cart-abandonment",
+    "cron:preorders": "node scripts/run-cron.js pre-orders",
+    "cron:prices": "node scripts/run-cron.js price-alerts",
+    "cron:stock": "node scripts/run-cron.js stock-notifications",
+    "cron:subscriptions": "node scripts/run-cron.js subscriptions",
+    "cron:all": "node scripts/run-cron.js all"
   },
   "dependencies": {
     "@google/genai": "^0.6.1",

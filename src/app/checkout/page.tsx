@@ -155,6 +155,13 @@ export default function CheckoutPage() {
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent continuing if cart is empty
+    if (!items || items.length === 0) {
+      toast.error('Your cart is empty. Please add items before continuing to checkout.');
+      router.push('/cart');
+      return;
+    }
     
     if (!validateShippingForm()) {
       return;
@@ -261,6 +268,13 @@ export default function CheckoutPage() {
 
   const handleCreatePaymentIntent = useCallback(async () => {
     try {
+      // Prevent creating an order if cart is empty
+      if (!items || items.length === 0) {
+        toast.error('Your cart is empty. Please add items before checking out.');
+        router.push('/cart');
+        return;
+      }
+
       let orderToUse = createdOrder;
 
       if (!orderToUse) {
