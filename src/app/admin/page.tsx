@@ -67,7 +67,8 @@ import {
   ArrowUpRight,
   ChevronsDown,
   Target,
-  Star
+  Star,
+  TicketPercent
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -76,6 +77,7 @@ import KeywordPlanner from '@/components/KeywordPlanner';
 import EmailTrackingDashboard from '@/components/EmailTrackingDashboard';
 import AdminProductCard, { AdminProductCardBadge, AdminProductCardStat } from '@/components/AdminProductCard';
 import ProductEmailMarketing from '@/components/ProductEmailMarketing';
+import CouponManagement from '@/components/CouponManagement';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -86,7 +88,7 @@ import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 // Base allowed tabs - brand tabs will be added dynamically
-const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
+const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons'] as const;
 type BaseTabKey = typeof baseAllowedTabs[number];
 type TabKey = BaseTabKey | string; // Allow dynamic brand tabs
 
@@ -1207,6 +1209,7 @@ export default function AdminDashboard() {
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
+    { id: 'coupons', label: 'Coupons & Discounts', icon: TicketPercent, description: 'Manage discount codes and promotions' },
     { id: 'support', label: 'Support Tickets', icon: MessageSquare },
     { id: 'chat', label: 'Live Chat', icon: MessageCircle },
     {
@@ -8275,9 +8278,26 @@ export default function AdminDashboard() {
                             {product.brand || 'N/A'}
                           </td>
                           <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                            <div className="flex items-center h-6 m-0 p-0">
-                              <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
-                              <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                            <div className="flex flex-col items-start h-auto m-0 p-0">
+                              {product.originalPrice && product.originalPrice > product.price ? (
+                                <>
+                                  <div className="flex items-center h-6 m-0 p-0">
+                                    <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
+                                    <span className="font-semibold text-green-600 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex items-center h-4 m-0 p-0 mt-0.5">
+                                    <span className="text-xs text-gray-400 line-through m-0 leading-none">${(product.originalPrice ?? 0).toFixed(2)}</span>
+                                    <span className="ml-1 text-xs font-medium text-red-600 m-0 leading-none">
+                                      ({Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF)
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex items-center h-6 m-0 p-0">
+                                  <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
+                                  <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
@@ -10246,6 +10266,11 @@ export default function AdminDashboard() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Coupons & Discounts Tab */}
+              {activeTab === 'coupons' && (
+                <CouponManagement />
               )}
 
               {/* Orders Tab */}

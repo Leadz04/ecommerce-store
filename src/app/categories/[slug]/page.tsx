@@ -5,40 +5,45 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { cdnImageLoader } from '@/lib/imageLoader';
 import Link from 'next/link';
-import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search } from 'lucide-react';
+import { ArrowLeft, Filter, Grid, List, SlidersHorizontal, Star, X, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton, CategoryDetailSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
+import FilterPanel from './FilterPanel';
+import CategoryReviews from '@/components/CategoryReviews';
+import CategoryFAQ from '@/components/CategoryFAQ';
 
 // Pure, memoized header to avoid re-render during search/filter updates
 const CategoryHeader = memo(({ info, productsCount }: { info: { title: string; description: string; image: string }; productsCount: number }) => {
   return (
-    <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
+    <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 sm:py-10 md:py-12">
       <div className="absolute inset-0 bg-black bg-opacity-30" />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-center">
           <div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">{info.title}</h1>
-            <p className="text-xl text-blue-100 mb-6">{info.description}</p>
-            <div className="flex items-center space-x-4">
-              <span className="bg-white bg-opacity-20 px-4 py-2 rounded-full">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3">{info.title}</h1>
+            <p className="text-sm sm:text-base text-blue-100 mb-4">{info.description}</p>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <span className="bg-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium">
                 {productsCount} Products
               </span>
-              <div className="flex items-center">
-                <Star className="h-5 w-5 text-yellow-400 fill-current mr-1" />
-                <span>4.5 Average Rating</span>
-              </div>
+              {productsCount > 0 && (
+                <div className="flex items-center text-sm">
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 fill-current mr-1" />
+                  <span>4.5 Average Rating</span>
+                </div>
+              )}
             </div>
           </div>
-          <div className="relative">
+          <div className="relative w-full aspect-video lg:aspect-auto lg:h-full">
             <Image
               src={info.image}
               alt={info.title}
-              width={600}
-              height={300}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px"
               loader={cdnImageLoader}
-              className="rounded-lg shadow-2xl"
+              className="rounded-lg shadow-2xl object-cover"
             />
           </div>
         </div>
@@ -190,11 +195,10 @@ const SidebarFilters = memo(({
               const nextInStock = e.target.checked ? true : null;
               setFilters({ inStock: nextInStock });
               setPagination({ page: 1 });
-              updateURL({ inStock: e.target.checked ? 'true' : '', page: '1' });
+              updateURL({ inStock: e.target.checked ? 'true' : '', page: '' });
               fetchProducts({ 
                 category: categoryName, 
-                inStock: e.target.checked ? true : undefined, 
-                page: 1 
+                inStock: e.target.checked ? true : undefined
               });
             }}
             className="mr-2 text-blue-600 focus:ring-blue-500"
@@ -224,7 +228,7 @@ const SidebarFilters = memo(({
               // Set new timeout for debounced fetch
               priceDebounceRef.current = window.setTimeout(() => {
                 setPagination({ page: 1 });
-                const urlParams: Record<string, string> = { page: '1' };
+                const urlParams: Record<string, string> = { page: '' };
                 if (nextRange[0] > 0) urlParams.minPrice = nextRange[0].toString();
                 if (nextRange[1] < 1000) urlParams.maxPrice = nextRange[1].toString();
                 if (!(nextRange[0] > 0)) urlParams.minPrice = '' as any;
@@ -233,8 +237,7 @@ const SidebarFilters = memo(({
                 fetchProducts({ 
                   category: categoryName, 
                   minPrice: nextRange[0], 
-                  maxPrice: nextRange[1], 
-                  page: 1 
+                  maxPrice: nextRange[1]
                 });
               }, 250);
             }}
@@ -262,9 +265,11 @@ SidebarFilters.displayName = 'SidebarFilters';
 
 // Memoized Products Grid Component to prevent unnecessary re-renders
 const ProductsGrid = memo(({ 
-  products, 
+  products,
+  displayedProducts,
   viewMode, 
-  isLoading, 
+  isLoading,
+  isLoadingMore,
   error, 
   pagination, 
   categoryName, 
@@ -273,11 +278,14 @@ const ProductsGrid = memo(({
   setPagination,
   clearSearch, 
   clearAllFilters,
+  handleLoadMore,
   updateURL
 }: {
   products: any[];
+  displayedProducts: any[];
   viewMode: 'grid' | 'list';
   isLoading: boolean;
+  isLoadingMore: boolean;
   error: string | null;
   pagination: any;
   categoryName: string;
@@ -286,6 +294,7 @@ const ProductsGrid = memo(({
   setPagination: (pagination: any) => void;
   clearSearch: () => void;
   clearAllFilters: () => void;
+  handleLoadMore: () => void;
   updateURL: (newParams: Record<string, string>) => void;
 }) => {
   const hasActiveFilters = (
@@ -305,7 +314,18 @@ const ProductsGrid = memo(({
           {isLoading ? (
             <span className="animate-pulse">Loading products...</span>
           ) : (
-            `Showing ${products.length} of ${pagination.total} products`
+            (() => {
+              const hasActiveFilters = !!(
+                filters.search ||
+                filters.priceRange[0] > 0 ||
+                filters.priceRange[1] < 1000 ||
+                filters.inStock === true
+              );
+              if (hasActiveFilters) {
+                return `Showing all ${displayedProducts.length} matching products`;
+              }
+              return `Showing ${displayedProducts.length} of ${pagination.total} products`;
+            })()
           )}
         </p>
       </div>
@@ -325,7 +345,7 @@ const ProductsGrid = memo(({
       )}
 
       {/* Empty State */}
-      {!isLoading && !error && products.length === 0 && (
+      {!isLoading && !error && displayedProducts.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           {filters.search ? (
             <>
@@ -377,8 +397,8 @@ const ProductsGrid = memo(({
       {/* Products */}
       {!error && (
         <>
-          {isLoading ? (
-            // Show skeleton when loading
+          {isLoading && !isLoadingMore && displayedProducts.length === 0 ? (
+            // Show skeleton when loading initial products
             <div className={`grid gap-6 ${
               viewMode === 'grid' 
                 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
@@ -393,80 +413,58 @@ const ProductsGrid = memo(({
                 </div>
               ))}
             </div>
-          ) : products.length > 0 ? (
+          ) : displayedProducts.length > 0 ? (
             // Show products normally
-            <div className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                : 'grid-cols-1'
-            }`}>
-              {products.map((product) => (
-                <ProductCard key={(product as any)._id || (product as any).id} product={product as any} />
-              ))}
-            </div>
+            <>
+              <div className={`grid gap-6 ${
+                viewMode === 'grid' 
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                  : 'grid-cols-1'
+              }`}>
+                {displayedProducts.map((product) => (
+                  <ProductCard key={(product as any)._id || (product as any).id} product={product as any} />
+                ))}
+                {/* Show loading skeletons at the bottom while loading more */}
+                {isLoadingMore && (
+                  <>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <div key={`loading-${i}`} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 animate-pulse">
+                        <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
+                        <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded mb-2 w-3/4"></div>
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {/* Load More Button - only show if no filters are active */}
+              {(() => {
+                const hasActiveFilters = !!(
+                  filters.search ||
+                  filters.priceRange[0] > 0 ||
+                  filters.priceRange[1] < 1000 ||
+                  filters.inStock === true
+                );
+                
+                const hasMoreProducts = !hasActiveFilters && displayedProducts.length < pagination.total;
+                
+                return hasMoreProducts && (
+                  <div className="flex justify-center mt-8">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMore || isLoading}
+                      className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
+                    >
+                      {isLoadingMore ? 'Loading...' : 'Load More Products'}
+                    </button>
+                  </div>
+                );
+              })()}
+            </>
           ) : null}
         </>
-      )}
-
-      {/* Pagination */}
-      {pagination.pages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between mt-12 px-6 py-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-600 font-medium mb-4 sm:mb-0">
-            Showing {((pagination.page - 1) * 12) + 1} to {Math.min(pagination.page * 12, pagination.total)} of {pagination.total} products
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => {
-                const newPage = pagination.page - 1;
-                setPagination({ page: newPage });
-                fetchProducts({ category: categoryName, page: newPage });
-                updateURL({ page: newPage.toString() });
-              }}
-              disabled={pagination.page === 1 || isLoading}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
-            >
-              {isLoading ? '...' : 'Previous'}
-            </button>
-
-            <div className="flex items-center space-x-1">
-              {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                const page = i + 1;
-                return (
-                  <button
-                    key={page}
-                    onClick={() => {
-                      setPagination({ page });
-                      fetchProducts({ category: categoryName, page });
-                      updateURL({ page: page.toString() });
-                    }}
-                    disabled={isLoading}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      page === pagination.page
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-700 hover:bg-white hover:text-blue-600 border border-gray-300 bg-white'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => {
-                const newPage = pagination.page + 1;
-                setPagination({ page: newPage });
-                fetchProducts({ category: categoryName, page: newPage });
-                updateURL({ page: newPage.toString() });
-              }}
-              disabled={pagination.page === pagination.pages || isLoading}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white hover:border-blue-300 hover:text-blue-600 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm"
-            >
-              {isLoading ? '...' : 'Next'}
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );
@@ -484,6 +482,8 @@ export default function CategoryPage() {
   const categoryMap: Record<string, string> = {
     'men': 'Men',
     'women': 'Women',
+    'children': 'Children',
+    'wool': 'Wool',
     'office-travel': 'Office & Travel',
     'accessories': 'Accessories',
     'gifting': 'Gifting'
@@ -503,15 +503,33 @@ export default function CategoryPage() {
   } = useProductStore();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(false); // Start hidden, toggle with button
   const [searchInput, setSearchInput] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<'men' | 'women' | null>(null);
+  const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const priceDebounceRef = useRef<number | null>(null);
-  const initializationRef = useRef(false);
+  const initializationRef = useRef<string | false>(false);
+  const loadingMoreRef = useRef(false);
+  const prevProductsLengthRef = useRef(0);
+  const isInitialLoadRef = useRef(true);
   const [stableTotal, setStableTotal] = useState(0);
+  const urlParamsKeyRef = useRef<string>('');
 
   const isUnknownCategory = !categoryMap[categorySlug as keyof typeof categoryMap];
+  const isWoolCategory = categoryName === 'Wool';
+
+  // Reset initialization when category changes
+  useEffect(() => {
+    if (initializationRef.current !== categorySlug) {
+      initializationRef.current = false;
+      urlParamsKeyRef.current = '';
+      setIsInitialized(false);
+    }
+  }, [categorySlug]);
 
   // Initialize from URL params only once
   useEffect(() => {
@@ -521,38 +539,192 @@ export default function CategoryPage() {
     const search = searchParams.get('search') || '';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
+    const minPrice = searchParams.get('minPrice');
+    const maxPrice = searchParams.get('maxPrice');
+    const inStock = searchParams.get('inStock');
+    const style = searchParams.get('style') || '';
+    const color = searchParams.get('color') || '';
+    const subcategory = searchParams.get('subcategory') as 'men' | 'women' | null;
     
-    setSearchInput(search);
+    // Handle subcategory for Wool category
+    if (isWoolCategory && subcategory) {
+      setSelectedSubcategory(subcategory);
+    } else if (isWoolCategory) {
+      setSelectedSubcategory(null);
+    }
+    
+    // Build price range from URL or use defaults
+    const priceRange: [number, number] = minPrice || maxPrice
+      ? [
+          minPrice ? parseInt(minPrice, 10) : 0,
+          maxPrice ? parseInt(maxPrice, 10) : 1000
+        ]
+      : [0, 1000];
+    
+    const inStockValue = inStock === 'true' ? true : null;
+    
+    // If color/style is set, don't use search if it conflicts
+    let finalSearch = search;
+    
+    // For Wool category, handle subcategory-based search
+    if (isWoolCategory) {
+      if (subcategory === 'men') {
+        finalSearch = 'wool coat men';
+      } else if (subcategory === 'women') {
+        finalSearch = 'wool coat women';
+      } else {
+        finalSearch = search || 'wool coat';
+      }
+    }
+    
+    if (color && finalSearch.toLowerCase().includes(color.toLowerCase())) {
+      finalSearch = '';
+    }
+    if (style && finalSearch.toLowerCase().includes(style.toLowerCase())) {
+      finalSearch = '';
+    }
+    
+    setSearchInput(finalSearch);
     setFilters({ 
-      search, 
-      category: categoryName, 
+      search: finalSearch, 
+      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName, 
       sortBy,
-      priceRange: [0, 1000],
-      inStock: null
+      priceRange,
+      inStock: inStockValue,
+      style: style || undefined,
+      color: color || undefined
     });
+    setPagination({ page: 1 });
+    setCurrentPage(1);
+    setDisplayedProducts([]);
+    isInitialLoadRef.current = true;
+    loadingMoreRef.current = false;
+    
+    // Check if any filters are active
+    const hasActiveFilters = !!(finalSearch || minPrice || maxPrice || inStock || style || color || subcategory);
     
     fetchProducts({ 
-      search, 
-      category: categoryName, 
+      search: finalSearch, 
+      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName, 
       sortBy, 
-      page 
+      ...(hasActiveFilters ? {} : { page: 1, limit: 24 }),
+      minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
+      maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined,
+      inStock: inStockValue || undefined,
+      style: style || undefined,
+      color: color || undefined
     });
+    
+    // Set the URL params key ref to prevent duplicate fetches
+    urlParamsKeyRef.current = `${finalSearch}-${sortBy}-1-${minPrice || ''}-${maxPrice || ''}-${inStock || ''}-${style || ''}-${color || ''}`;
     
     initializationRef.current = true;
     setIsInitialized(true);
-  }, [categoryName, setFilters, fetchProducts, searchParams, isUnknownCategory]);
+  }, [categoryName, setFilters, setPagination, fetchProducts, searchParams, isUnknownCategory]);
+
+  // React to URL parameter changes after initialization
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (isUnknownCategory) return;
+    
+    const search = searchParams.get('search') || '';
+    const sortBy = searchParams.get('sortBy') || 'name';
+    const page = parseInt(searchParams.get('page') || '1');
+    const minPrice = searchParams.get('minPrice') || '';
+    const maxPrice = searchParams.get('maxPrice') || '';
+    const inStock = searchParams.get('inStock') || '';
+    const style = searchParams.get('style') || '';
+    const color = searchParams.get('color') || '';
+    
+    // Build price range from URL or use defaults
+    const priceRange: [number, number] = minPrice || maxPrice
+      ? [
+          minPrice ? parseInt(minPrice, 10) : 0,
+          maxPrice ? parseInt(maxPrice, 10) : 1000
+        ]
+      : [0, 1000];
+    
+    const inStockValue = inStock === 'true' ? true : null;
+    
+    // If color/style is set, don't use search if it conflicts
+    let finalSearch = search;
+    if (color && search.toLowerCase().includes(color.toLowerCase())) {
+      finalSearch = '';
+    }
+    if (style && search.toLowerCase().includes(style.toLowerCase())) {
+      finalSearch = '';
+    }
+    
+    // Create a key from all URL params to detect changes
+    const paramsKey = `${finalSearch}-${sortBy}-${page}-${minPrice}-${maxPrice}-${inStock}-${style}-${color}`;
+    
+    // Only proceed if params actually changed
+    if (urlParamsKeyRef.current === paramsKey) return;
+    urlParamsKeyRef.current = paramsKey;
+    
+    // Update state and fetch products
+    setSearchInput(finalSearch);
+    setFilters({ 
+      search: finalSearch, 
+      category: categoryName, 
+      sortBy,
+      priceRange,
+      inStock: inStockValue,
+      style: style || undefined,
+      color: color || undefined
+    });
+    setPagination({ page });
+    
+    // Check if any filters are active - if so, don't use pagination
+    const hasActiveFilters = !!(finalSearch || minPrice || maxPrice || inStock || style || color);
+    
+    fetchProducts({ 
+      search: finalSearch, 
+      category: categoryName, 
+      sortBy, 
+      ...(hasActiveFilters ? {} : { page, limit: 24 }),
+      minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
+      maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined,
+      inStock: inStockValue || undefined,
+      style: style || undefined,
+      color: color || undefined
+    });
+  }, [searchParams, isInitialized, isUnknownCategory, categoryName, setFilters, setPagination, fetchProducts]);
 
   // Update URL when filters change
   const updateURL = useCallback((newParams: Record<string, string>) => {
     const params = new URLSearchParams(searchParams);
     
     Object.entries(newParams).forEach(([key, value]) => {
-      if (value && value !== 'name') {
+      if (value && value !== 'name' && value !== '') {
         params.set(key, value);
       } else {
         params.delete(key);
       }
     });
+    
+    // If color or style is set, remove conflicting search terms
+    const color = params.get('color');
+    const style = params.get('style');
+    const search = params.get('search');
+    
+    if (color && search) {
+      // Check if search term matches the color (case-insensitive)
+      const colorLower = color.toLowerCase();
+      const searchLower = search.toLowerCase();
+      if (searchLower.includes(colorLower) || colorLower.includes(searchLower)) {
+        params.delete('search');
+      }
+    }
+    
+    if (style && search) {
+      // Check if search term matches the style (case-insensitive)
+      const styleLower = style.toLowerCase();
+      const searchLower = search.toLowerCase();
+      if (searchLower.includes(styleLower) || styleLower.includes(searchLower)) {
+        params.delete('search');
+      }
+    }
     
     const query = params.toString();
     const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
@@ -566,17 +738,42 @@ export default function CategoryPage() {
     
     const t = setTimeout(() => {
       if (searchInput !== filters.search) {
-        setFilters({ search: searchInput });
+        // If search input matches an active color or style filter, clear that filter
+        const activeColor = filters.color;
+        const activeStyle = filters.style;
+        const searchLower = searchInput.toLowerCase();
+        
+        let updatedFilters: any = { search: searchInput };
+        let urlParams: Record<string, string> = { search: searchInput || '', page: '' };
+        
+        // Clear color if search matches it
+        if (activeColor && searchLower.includes(activeColor.toLowerCase())) {
+          updatedFilters.color = undefined;
+          urlParams.color = '';
+        }
+        
+        // Clear style if search matches it
+        if (activeStyle && searchLower.includes(activeStyle.toLowerCase())) {
+          updatedFilters.style = undefined;
+          urlParams.style = '';
+        }
+        
+        setFilters(updatedFilters);
         setPagination({ page: 1 });
-        fetchProducts({ category: categoryName, search: searchInput, page: 1 });
+        fetchProducts({ 
+          category: categoryName, 
+          search: searchInput,
+          ...(updatedFilters.color === undefined ? { color: undefined } : {}),
+          ...(updatedFilters.style === undefined ? { style: undefined } : {})
+        });
         // Update URL after state changes to avoid triggering effects
         setTimeout(() => {
-          updateURL({ search: searchInput || '', page: '1' });
+          updateURL(urlParams);
         }, 0);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, setPagination, updateURL, isInitialized, isUnknownCategory]);
+  }, [searchInput, filters.search, filters.color, filters.style, categoryName, fetchProducts, setFilters, setPagination, updateURL, isInitialized, isUnknownCategory]);
 
   // Keep header count stable during loading; update after fetch completes
   useEffect(() => {
@@ -585,13 +782,92 @@ export default function CategoryPage() {
     }
   }, [isLoading, pagination.total]);
 
+  // Update displayed products when products from store change
+  useEffect(() => {
+    const hasActiveFilters = !!(
+      filters.search ||
+      filters.priceRange[0] > 0 ||
+      filters.priceRange[1] < 1000 ||
+      filters.inStock === true ||
+      filters.style ||
+      filters.color
+    );
+    
+    if (hasActiveFilters) {
+      // With filters, show all products directly (no pagination)
+      setDisplayedProducts(products);
+      prevProductsLengthRef.current = products.length;
+      isInitialLoadRef.current = false;
+      return;
+    }
+    
+    // For pagination mode
+    if (loadingMoreRef.current) {
+      // We're loading more - append to existing products, don't replace
+      setDisplayedProducts(prev => {
+        const existingIds = new Set(prev.map(p => (p as any)._id || (p as any).id));
+        const newProducts = products.filter(p => !existingIds.has((p as any)._id || (p as any).id));
+        return [...prev, ...newProducts];
+      });
+      loadingMoreRef.current = false;
+      prevProductsLengthRef.current = products.length;
+    } else if (isInitialLoadRef.current || products.length !== prevProductsLengthRef.current) {
+      // Initial load or filter change - replace all products
+      if (products.length > 0) {
+        setDisplayedProducts(products);
+        prevProductsLengthRef.current = products.length;
+      }
+      isInitialLoadRef.current = false;
+    }
+  }, [products, filters]);
+
+  // Load more products function
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore || isLoading) return;
+    
+    const hasActiveFilters = !!(
+      filters.search ||
+      filters.priceRange[0] > 0 ||
+      filters.priceRange[1] < 1000 ||
+      filters.inStock === true ||
+      filters.style ||
+      filters.color
+    );
+    
+    // Don't load more if filters are active (they show all results already)
+    if (hasActiveFilters) return;
+    
+    setIsLoadingMore(true);
+    loadingMoreRef.current = true;
+    const nextPage = currentPage + 1;
+    
+    try {
+      await fetchProducts({
+        category: categoryName,
+        page: nextPage,
+        limit: 24,
+        sortBy: filters.sortBy === 'name' ? undefined : filters.sortBy,
+      });
+      
+      setCurrentPage(nextPage);
+    } catch (error) {
+      console.error('Error loading more products:', error);
+      loadingMoreRef.current = false;
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, isLoading, filters, categoryName, currentPage, fetchProducts]);
+
   const handleSortChange = useCallback((sortBy: string) => {
     setFilters({ sortBy });
     setPagination({ page: 1 });
-    fetchProducts({ category: categoryName, sortBy, page: 1 });
+    setDisplayedProducts([]);
+    setCurrentPage(1);
+    isInitialLoadRef.current = true;
+    fetchProducts({ category: categoryName, sortBy, page: 1, limit: 24 });
     // Update URL after state changes to avoid triggering effects
     setTimeout(() => {
-      updateURL({ sortBy, page: '1' });
+      updateURL({ sortBy, page: '' });
     }, 0);
   }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
 
@@ -616,7 +892,10 @@ export default function CategoryPage() {
     setSearchInput('');
     setFilters({ search: '' });
     setPagination({ page: 1 });
-    fetchProducts({ category: categoryName, search: '', page: 1 });
+    setDisplayedProducts([]);
+    setCurrentPage(1);
+    isInitialLoadRef.current = true;
+    fetchProducts({ category: categoryName, search: '', page: 1, limit: 24 });
     // Update URL after state changes to avoid triggering effects
     setTimeout(() => {
       updateURL({ search: '', page: '1' });
@@ -624,15 +903,34 @@ export default function CategoryPage() {
   }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
 
   const clearAllFilters = useCallback(() => {
+    // Clear all state first
     setSearchInput('');
-    setFilters({ search: '', priceRange: [0, 1000], inStock: null, sortBy: 'name', brand: undefined, minRating: undefined, collection: undefined });
+    setFilters({ 
+      search: '', 
+      priceRange: [0, 1000], 
+      inStock: null, 
+      sortBy: 'name', 
+      brand: undefined, 
+      minRating: undefined, 
+      collection: undefined,
+      style: undefined,
+      color: undefined
+    });
     setPagination({ page: 1 });
-    fetchProducts({ category: categoryName, search: '', minPrice: 0, maxPrice: 1000, page: 1 });
-    // Update URL after state changes to avoid triggering effects
-    setTimeout(() => {
-      updateURL({ search: '', minPrice: '', maxPrice: '', inStock: '', sortBy: '', page: '' });
-    }, 0);
-  }, [setFilters, setPagination, fetchProducts, categoryName, updateURL]);
+    setDisplayedProducts([]);
+    setCurrentPage(1);
+    isInitialLoadRef.current = true;
+    
+    // Clear URL params key ref to force re-initialization
+    urlParamsKeyRef.current = '';
+    
+    // Navigate to clean URL - this will trigger the useEffect that watches searchParams
+    const cleanURL = `/categories/${categorySlug}`;
+    router.replace(cleanURL);
+    
+    // Fetch products without any filters
+    fetchProducts({ category: categoryName, search: '', minPrice: 0, maxPrice: 1000, page: 1, limit: 24 });
+  }, [setFilters, setPagination, fetchProducts, categoryName, categorySlug, router]);
 
   const categoryInfo = {
     'Electronics': {
@@ -667,13 +965,27 @@ export default function CategoryPage() {
     }
   };
 
-  const currentCategoryInfo = useMemo(() => (
-    categoryInfo[categoryName as keyof typeof categoryInfo] || {
+  const currentCategoryInfo = useMemo(() => {
+    if (categoryName === 'Gifting') {
+      return {
+        title: 'Shop Gifts',
+        description: 'Browse our collection of products in this category.',
+        image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=400&fit=crop'
+      };
+    }
+    if (categoryName === 'Wool') {
+      return {
+        title: 'Wool',
+        description: 'Discover our premium collection of wool coats and jackets for men and women. Warm, stylish, and perfect for any season.',
+        image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=400&fit=crop'
+      };
+    }
+    return categoryInfo[categoryName as keyof typeof categoryInfo] || {
       title: categoryName,
       description: 'Browse our collection of products in this category.',
       image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=400&fit=crop'
-    }
-  ), [categoryName]);
+    };
+  }, [categoryName]);
 
   // Show full-page skeleton only on the very first load
   if (!isInitialized && isLoading) {
@@ -683,17 +995,45 @@ export default function CategoryPage() {
   // Only show "Category Not Found" if the category doesn't exist in our mapping
   if (isUnknownCategory) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Category Not Found</h1>
-          <p className="text-gray-600 mb-8">The category you're looking for doesn't exist or has no products.</p>
-          <Link
-            href="/categories"
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Browse All Categories
-          </Link>
-        </div>
+      <div className="min-h-screen flex flex-col">
+        {/* Header Section - matching category page style */}
+        <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-10 sm:py-12 flex-shrink-0">
+          <div className="absolute inset-0 bg-black bg-opacity-30" />
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3">Category Not Found</h1>
+              <p className="text-base sm:text-lg text-blue-100">The category you're looking for doesn't exist or has no products.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Content Section - centered and balanced */}
+        <section className="flex-1 bg-gray-50 flex items-center justify-center py-6 sm:py-8">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 sm:p-10 text-center">
+              <div className="max-w-lg mx-auto space-y-5">
+                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                  The category may have been moved or doesn't exist yet. Browse our categories or view all products to find what you're looking for.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Link
+                    href="/categories"
+                    className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm text-sm sm:text-base"
+                  >
+                    Browse All Categories
+                  </Link>
+                  <Link
+                    href="/products"
+                    className="inline-flex items-center justify-center px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors text-sm sm:text-base"
+                  >
+                    View All Products
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
@@ -720,37 +1060,140 @@ export default function CategoryPage() {
             setOpenSelect={setOpenSelect}
           />
 
-          {/* Filter Toggle for Mobile */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="lg:hidden flex items-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 mb-4"
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-            <span>Filters</span>
-          </button>
+          {/* FILTER & SORT Button - Always visible (matching reference) */}
+          <div className="flex items-center justify-end mb-6">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2 px-5 py-3 border-2 border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold shadow-sm"
+            >
+              <SlidersHorizontal className="h-5 w-5" />
+              <span>FILTER & SORT</span>
+              <SlidersHorizontal className="h-5 w-5 rotate-180" />
+            </button>
+          </div>
 
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Sidebar Filters */}
-            <div className={`lg:w-64 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <SidebarFilters
-                filters={filters}
-                setFilters={setFilters}
-                setPagination={setPagination}
-                searchParams={searchParams}
-                categorySlug={categorySlug}
-                fetchProducts={fetchProducts}
-                categoryName={categoryName}
-                clearAllFilters={clearAllFilters}
-            priceDebounceRef={priceDebounceRef}
-            updateURL={updateURL}
+          {/* Right Side Filter Overlay */}
+          {showFilters && (
+            <>
+              {/* Backdrop */}
+              <div 
+                className="fixed inset-0 bg-black/50 z-40"
+                onClick={() => setShowFilters(false)}
               />
-            </div>
+              {/* Filter Panel */}
+              <div className="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
+                {/* White Header with Blue Close Icon */}
+                <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="p-2 hover:bg-gray-100 rounded transition-colors"
+                    aria-label="Close filters"
+                  >
+                    <X className="h-5 w-5 text-blue-600" />
+                  </button>
+                </div>
+
+                {/* Filter Content */}
+                {categoryName === 'Gifting' ? (
+                  <div className="overflow-y-auto h-[calc(100vh-64px)] px-6 py-4">
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-sm font-bold text-gray-900 uppercase mb-4 border-b border-gray-300 pb-2">
+                        Explore Collection
+                      </h3>
+                      <ul className="space-y-2">
+                        <li>
+                          <Link
+                            href="/categories/gifting"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            Gifts for All
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?search=for+him"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            For Him
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?search=for+her"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            For Her
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?search=for+mom"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            For Mom
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?search=for+dad"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            For Dad
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?maxPrice=100"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            Under $100
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/categories/gifting?search=gift+card"
+                            className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
+                          >
+                            <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
+                            Gift Cards
+                          </Link>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <FilterPanel
+                    filters={filters}
+                    setFilters={setFilters}
+                    setPagination={setPagination}
+                    categoryName={categoryName}
+                    fetchProducts={fetchProducts}
+                    clearAllFilters={clearAllFilters}
+                    priceDebounceRef={priceDebounceRef}
+                    updateURL={updateURL}
+                    setSearchInput={setSearchInput}
+                  />
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-col gap-8">
 
             {/* Products Grid */}
             <ProductsGrid
               products={products}
+              displayedProducts={displayedProducts}
               viewMode={viewMode}
               isLoading={isLoading}
+              isLoadingMore={isLoadingMore}
               error={error}
               pagination={pagination}
               categoryName={categoryName}
@@ -758,12 +1201,19 @@ export default function CategoryPage() {
               fetchProducts={fetchProducts}
               setPagination={setPagination}
               clearSearch={clearSearch}
-            clearAllFilters={clearAllFilters}
-            updateURL={updateURL}
+              clearAllFilters={clearAllFilters}
+              handleLoadMore={handleLoadMore}
+              updateURL={updateURL}
             />
           </div>
         </div>
       </section>
+
+      {/* Category Reviews Section */}
+      <CategoryReviews categorySlug={categorySlug} />
+
+      {/* Category FAQ Section */}
+      <CategoryFAQ categorySlug={categorySlug} />
     </div>
   );
 }

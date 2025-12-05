@@ -12,7 +12,7 @@ import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
 
 // Default limit for products per page
-const DEFAULT_PRODUCTS_LIMIT = 20;
+const DEFAULT_PRODUCTS_LIMIT = 24;
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -32,6 +32,9 @@ export default function ProductsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [openSelect, setOpenSelect] = useState<'sort' | null>(null);
   const [pendingFilters, setPendingFilters] = useState<any>(null);
+  const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Get the current limit from URL or use default
   const getCurrentLimit = () => {
@@ -113,12 +116,29 @@ export default function ProductsPage() {
       color: colorValue
     });
     
+    // Reset displayed products and page when filters change
+    setDisplayedProducts([]);
+    setCurrentPage(1);
+    isInitialLoadRef.current = true;
+    loadingMoreRef.current = false;
+    
+    // Check if any filters are active - if so, don't use pagination
+    const hasActiveFilters = !!(
+      search ||
+      minPrice ||
+      maxPrice ||
+      inStockValue === true ||
+      styleValue ||
+      colorValue ||
+      category !== 'all'
+    );
+    
+    // Always start with page 1 and limit 24 for initial load
     fetchProducts({ 
       search: search || undefined, 
       category: category === 'all' ? undefined : category, 
       sortBy: sortBy === 'name' ? undefined : sortBy, 
-      page,
-      limit,
+      ...(hasActiveFilters ? {} : { page: 1, limit }),
       minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
       maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
       inStock: inStockValue === true ? true : undefined,
@@ -126,6 +146,92 @@ export default function ProductsPage() {
       color: colorValue
     });
   }, [searchParams, setFilters, fetchProducts]);
+
+  // Track when we're loading more vs initial load
+  const loadingMoreRef = useRef(false);
+
+  // Track previous products length to detect when new products arrive
+  const prevProductsLengthRef = useRef(0);
+  const isInitialLoadRef = useRef(true);
+
+  // Update displayed products when products from store change
+  useEffect(() => {
+    const hasActiveFilters = !!(
+      filters.search ||
+      filters.priceRange[0] > 0 ||
+      filters.priceRange[1] < 1000 ||
+      filters.inStock === true ||
+      filters.style ||
+      filters.color ||
+      filters.category !== 'all'
+    );
+    
+    if (hasActiveFilters) {
+      // With filters, show all products directly (no pagination)
+      setDisplayedProducts(products);
+      prevProductsLengthRef.current = products.length;
+      isInitialLoadRef.current = false;
+      return;
+    }
+    
+    // For pagination mode
+    if (loadingMoreRef.current) {
+      // We're loading more - append to existing products, don't replace
+      setDisplayedProducts(prev => {
+        const existingIds = new Set(prev.map(p => (p as any)._id || (p as any).id));
+        const newProducts = products.filter(p => !existingIds.has((p as any)._id || (p as any).id));
+        return [...prev, ...newProducts];
+      });
+      loadingMoreRef.current = false;
+      prevProductsLengthRef.current = products.length;
+    } else if (isInitialLoadRef.current || products.length !== prevProductsLengthRef.current) {
+      // Initial load or filter change - replace all products
+      if (products.length > 0) {
+        setDisplayedProducts(products);
+        prevProductsLengthRef.current = products.length;
+      }
+      isInitialLoadRef.current = false;
+    }
+  }, [products, filters]);
+
+  // Load more products function
+  const handleLoadMore = async () => {
+    if (isLoadingMore || isLoading) return;
+    
+    const hasActiveFilters = !!(
+      filters.search ||
+      filters.priceRange[0] > 0 ||
+      filters.priceRange[1] < 1000 ||
+      filters.inStock === true ||
+      filters.style ||
+      filters.color ||
+      filters.category !== 'all'
+    );
+    
+    // Don't load more if filters are active (they show all results already)
+    if (hasActiveFilters) return;
+    
+    setIsLoadingMore(true);
+    loadingMoreRef.current = true;
+    const nextPage = currentPage + 1;
+    const limit = getCurrentLimit();
+    
+    try {
+      await fetchProducts({
+        page: nextPage,
+        limit,
+        category: filters.category === 'all' ? undefined : filters.category,
+        sortBy: filters.sortBy === 'name' ? undefined : filters.sortBy,
+      });
+      
+      setCurrentPage(nextPage);
+    } catch (error) {
+      console.error('Error loading more products:', error);
+      loadingMoreRef.current = false;
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   // Debounce search to avoid firing a request on every keystroke
   useEffect(() => {
@@ -1415,12 +1521,12 @@ export default function ProductsPage() {
               </div>
               <div className="mb-6 sm:mb-8">
                 <p className="text-base sm:text-lg font-semibold text-gray-900">
-                  Showing <span className="text-blue-600">{products.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
+                  Showing <span className="text-blue-600">{displayedProducts.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
                 </p>
               </div>
 
-              {/* Loading State */}
-              {isLoading && (
+              {/* Loading State - Only show skeleton on initial load, not when loading more */}
+              {isLoading && !isLoadingMore && displayedProducts.length === 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <ProductCardSkeleton key={i} />
@@ -1442,7 +1548,7 @@ export default function ProductsPage() {
               )}
 
               {/* Products Display */}
-              {!isLoading && !error && products.length === 0 && (
+              {!isLoading && !error && displayedProducts.length === 0 && (
                 <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                   {filters.search ? (
                     <>
@@ -1493,57 +1599,52 @@ export default function ProductsPage() {
                 </div>
               )}
 
-              {!isLoading && !error && products.length > 0 && (
+              {!isLoading && !error && displayedProducts.length > 0 && (
                 <>
                   <div className={`grid ${
                     viewMode === 'grid' 
                       ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6' 
                       : 'grid-cols-1 gap-6'
                   }`}>
-                    {products.map((product) => (
-                      <ProductCard key={product._id} product={product} />
+                    {displayedProducts.map((product) => (
+                      <ProductCard key={product._id || product.id} product={product} />
                     ))}
+                    {/* Show loading skeletons at the bottom while loading more */}
+                    {isLoadingMore && (
+                      <>
+                        {Array.from({ length: 8 }).map((_, i) => (
+                          <ProductCardSkeleton key={`loading-${i}`} />
+                        ))}
+                      </>
+                    )}
                   </div>
 
-                  {/* Pagination */}
-                  {pagination.pages > 1 && (
-                    <div className="flex justify-center mt-8">
-                      <div className="flex space-x-2">
+                  {/* Load More Button */}
+                  {(() => {
+                    const hasActiveFilters = !!(
+                      filters.search ||
+                      filters.priceRange[0] > 0 ||
+                      filters.priceRange[1] < 1000 ||
+                      filters.inStock === true ||
+                      filters.style ||
+                      filters.color ||
+                      filters.category !== 'all'
+                    );
+                    
+                    const hasMoreProducts = !hasActiveFilters && displayedProducts.length < pagination.total;
+                    
+                    return hasMoreProducts && (
+                      <div className="flex justify-center mt-8">
                         <button
-                          onClick={() => handlePageChange(pagination.page - 1)}
-                          disabled={pagination.page === 1}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                          onClick={handleLoadMore}
+                          disabled={isLoadingMore || isLoading}
+                          className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
                         >
-                          Previous
-                        </button>
-                        
-                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                          const page = i + 1;
-                          return (
-                            <button
-                              key={page}
-                              onClick={() => handlePageChange(page)}
-                              className={`px-4 py-2 border text-gray-700 rounded-lg ${
-                                page === pagination.page
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'border-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          );
-                        })}
-                        
-                        <button
-                          onClick={() => handlePageChange(pagination.page + 1)}
-                          disabled={pagination.page === pagination.pages}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                          Next
+                          {isLoadingMore ? 'Loading...' : 'Load More Products'}
                         </button>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </>
               )}
             </div>

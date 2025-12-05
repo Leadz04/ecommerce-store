@@ -97,9 +97,28 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       const { filters } = get();
       const searchParams = new URLSearchParams();
       
-      // Use provided params or fall back to store pagination
-      searchParams.set('page', (params.page || get().pagination.page).toString());
-      searchParams.set('limit', (params.limit || get().pagination.limit).toString());
+      // Check if any filters are active (including search)
+      const hasActiveFilters = !!(
+        (params.search || filters.search) ||
+        (params.minPrice !== undefined && params.minPrice > 0) ||
+        (params.maxPrice !== undefined && params.maxPrice < 1000) ||
+        (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000) ||
+        (params.inStock !== undefined ? params.inStock === true : filters.inStock === true) ||
+        (params.brand ?? filters.brand) ||
+        (params.style ?? filters.style) ||
+        (params.color ?? filters.color) ||
+        (typeof (params.minRating ?? filters.minRating) === 'number') ||
+        (params.collection ?? filters.collection)
+      );
+      
+      // Only add pagination if no filters are active
+      // When search or any filter is active, show all matching products
+      if (!hasActiveFilters) {
+        // Use provided params or fall back to store pagination
+        searchParams.set('page', (params.page || get().pagination.page).toString());
+        searchParams.set('limit', (params.limit || get().pagination.limit).toString());
+      }
+      // When filters are active, don't set page/limit to get all results
       
       if (params.category || filters.category !== 'all') {
         searchParams.set('category', params.category || filters.category);

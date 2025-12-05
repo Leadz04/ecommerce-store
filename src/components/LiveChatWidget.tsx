@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, Send, Minimize2, Maximize2 } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { companyInfo } from '@/data/companyInfo';
 import toast from 'react-hot-toast';
 
 interface ChatMessage {
@@ -16,8 +18,14 @@ interface ChatMessage {
 
 export default function LiveChatWidget() {
   const { isAuthenticated, user } = useAuthStore();
+  const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showGuestForm, setShowGuestForm] = useState(false);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestName, setGuestName] = useState('');
+  const [isSubmittingGuest, setIsSubmittingGuest] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +45,54 @@ export default function LiveChatWidget() {
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
+  // Handle guest form submission
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guestEmail.trim() || !guestName.trim()) {
+      toast.error('Please provide both email and name');
+      return;
+    }
+
+    setIsSubmittingGuest(true);
+    try {
+      const response = await fetch('/api/chat/guest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: guestEmail.trim(),
+          name: guestName.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to setup chat');
+      }
+
+      // Store guest info and conversation ID
+      const guestConvId = data.conversationId;
+      setConversationId(guestConvId);
+      localStorage.setItem('chatConversationId', guestConvId);
+      localStorage.setItem('guestEmail', data.guestEmail);
+      localStorage.setItem('guestName', data.guestName);
+
+      // Hide form and proceed to chat
+      setShowGuestForm(false);
+      toast.success(data.exists ? 'Welcome back!' : 'Chat started!');
+      
+      // Fetch messages
+      if (guestConvId) {
+        fetchMessages(guestConvId);
+      }
+    } catch (error) {
+      console.error('Error setting up guest chat:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to start chat');
+    } finally {
+      setIsSubmittingGuest(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       // Initialize conversation ID based on authentication status
@@ -52,20 +108,34 @@ export default function LiveChatWidget() {
           if (localStorage.getItem('chatConversationId')) {
             localStorage.removeItem('chatConversationId');
           }
+          if (localStorage.getItem('guestEmail')) {
+            localStorage.removeItem('guestEmail');
+          }
+          if (localStorage.getItem('guestName')) {
+            localStorage.removeItem('guestName');
+          }
           
           // Initialize/create conversation for logged-in user
           // This will be done by the API when fetching messages
           console.log('[LiveChatWidget] Initializing chat for authenticated user:', id);
+          setShowGuestForm(false);
         }
       } else {
-        // For guests, use localStorage to persist conversation ID
+        // For guests, check if we have stored info
         const storedId = localStorage.getItem('chatConversationId');
-        if (storedId) {
+        const storedEmail = localStorage.getItem('guestEmail');
+        const storedName = localStorage.getItem('guestName');
+        
+        if (storedId && storedEmail && storedName) {
+          // Use existing guest conversation
           id = storedId;
+          setGuestEmail(storedEmail);
+          setGuestName(storedName);
+          setShowGuestForm(false);
         } else {
-          // Generate new guest ID based on email if available, otherwise timestamp
-          id = user?.email ? `guest_${user.email.toLowerCase()}` : `guest_${Date.now()}`;
-          localStorage.setItem('chatConversationId', id);
+          // Show form to collect guest info
+          setShowGuestForm(true);
+          return; // Don't proceed until form is submitted
         }
       }
       
@@ -158,9 +228,12 @@ export default function LiveChatWidget() {
         if (convId !== userId) {
           params.set('conversationId', userId);
         }
-      } else if (!isAuthenticated && user?.email) {
-        // For guests, include email
-        params.set('guestEmail', user.email);
+      } else if (!isAuthenticated) {
+        // For guests, include email from localStorage
+        const storedEmail = localStorage.getItem('guestEmail');
+        if (storedEmail) {
+          params.set('guestEmail', storedEmail);
+        }
       }
 
       const response = await fetch(`/api/chat?${params.toString()}`, { headers });
@@ -271,13 +344,18 @@ export default function LiveChatWidget() {
       }
 
       const payload: any = {
-        message: newMessage,
+        message: newMessage.trim(),
         conversationId: convId,
       };
 
-      if (!isAuthenticated && user?.email) {
-        payload.guestEmail = user.email;
-        payload.guestName = user.name || 'Guest';
+      // For guest users, get info from localStorage
+      if (!isAuthenticated) {
+        const storedEmail = localStorage.getItem('guestEmail');
+        const storedName = localStorage.getItem('guestName');
+        if (storedEmail && storedName) {
+          payload.guestEmail = storedEmail;
+          payload.guestName = storedName;
+        }
       }
 
       const response = await fetch('/api/chat', {
@@ -309,12 +387,20 @@ export default function LiveChatWidget() {
     }
   };
 
+  const isOnSupportCenter = pathname === '/support-center';
+
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          if (isOnSupportCenter) {
+            setIsOpen(true);
+          } else {
+            router.push('/support-center');
+          }
+        }}
         className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full p-3 sm:p-4 shadow-xl hover:shadow-2xl hover:scale-110 transition-all duration-300 z-50 group"
-        aria-label="Open chat"
+        aria-label={isOnSupportCenter ? "Open chat" : "Open support center"}
       >
         <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 group-hover:rotate-12 transition-transform duration-300" />
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -376,9 +462,74 @@ export default function LiveChatWidget() {
 
       {!isMinimized && (
         <>
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gradient-to-b from-gray-50 to-gray-100 scroll-smooth">
-            {isLoading && messages.length === 0 ? (
+          {showGuestForm && !isAuthenticated ? (
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center">
+              <div className="w-full max-w-sm">
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 sm:p-8">
+                  <div className="text-center mb-6">
+                    <div className="bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <MessageCircle className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Welcome to {companyInfo.name}</h3>
+                    <p className="text-sm text-gray-600">Please provide your contact details to continue interacting with Lexi.</p>
+                  </div>
+                  
+                  <form onSubmit={handleGuestSubmit} className="space-y-4">
+                    <div>
+                      <label htmlFor="guest-email" className="block text-sm font-medium text-gray-700 mb-2">
+                        Email
+                      </label>
+                      <input
+                        id="guest-email"
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        placeholder="your.email@example.com"
+                        required
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400 text-sm sm:text-base bg-white transition-colors"
+                        disabled={isSubmittingGuest}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="guest-name" className="block text-sm font-medium text-gray-700 mb-2">
+                        Name
+                      </label>
+                      <input
+                        id="guest-name"
+                        type="text"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Your Name"
+                        required
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400 text-sm sm:text-base bg-white transition-colors"
+                        disabled={isSubmittingGuest}
+                      />
+                    </div>
+                    
+                    <button
+                      type="submit"
+                      disabled={isSubmittingGuest || !guestEmail.trim() || !guestName.trim()}
+                      className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-lg hover:shadow-xl"
+                    >
+                      {isSubmittingGuest ? (
+                        <div className="flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          <span>Setting up...</span>
+                        </div>
+                      ) : (
+                        'Submit'
+                      )}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gradient-to-b from-gray-50 to-gray-100 scroll-smooth">
+                {isLoading && messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full space-y-3">
                 <div className="relative">
                   <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -463,6 +614,8 @@ export default function LiveChatWidget() {
               </p>
             )}
           </form>
+            </>
+          )}
         </>
       )}
       </div>

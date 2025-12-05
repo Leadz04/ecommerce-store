@@ -83,7 +83,8 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
-  const discountPercentage = product.originalPrice 
+  // Calculate discount percentage only when originalPrice exists and is greater than current price
+  const discountPercentage = product.originalPrice && product.originalPrice > product.price
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
 
@@ -110,15 +111,15 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
           
-          {/* Discount Badge */}
+          {/* Discount Badge - Top Right (only shows when discount is applied) */}
           {discountPercentage > 0 && (
-            <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-pulse-slow">
-              -{discountPercentage}%
+            <div className="absolute top-3 right-3 bg-black text-white text-xs font-bold px-2.5 py-1 rounded shadow-lg z-20">
+              {discountPercentage}% OFF
             </div>
           )}
           
-          {/* Action Buttons */}
-          <div className="absolute top-3 right-3 flex flex-col space-y-2">
+          {/* Action Buttons - Positioned to avoid conflict with discount badge */}
+          <div className={`absolute ${discountPercentage > 0 ? 'top-3 left-3' : 'top-3 right-3'} flex flex-col space-y-2 z-10`}>
             <button
               onClick={handleLike}
               className="p-2 bg-white dark:bg-gray-800 rounded-full shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -162,46 +163,68 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Product Info */}
         <div className="p-4 flex-1 flex flex-col">
-          {/* Brand */}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 font-medium uppercase tracking-wide">{product.brand}</p>
+          {/* Cyber Week Deal Banner - Red ribbon-style banner (only when discount exists) */}
+          {discountPercentage > 0 && (
+            <div className="mb-2">
+              <div 
+                className="bg-red-600 text-white text-xs font-semibold px-4 py-1.5 inline-block relative"
+                style={{
+                  clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)'
+                }}
+              >
+                Cyber Week Deal
+              </div>
+            </div>
+          )}
           
           {/* Product Name */}
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors text-sm leading-tight">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors text-base leading-tight">
             {product.name}
           </h3>
           
-          {/* Rating */}
-          <div className="flex items-center mb-3">
-            <div className="flex items-center">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`h-3.5 w-3.5 ${
-                    i < Math.floor(product.rating)
-                      ? 'text-yellow-400 fill-current'
-                      : 'text-gray-300 dark:text-gray-600'
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-              ({product.reviewCount})
-            </span>
-          </div>
-          
-          {/* Price */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-lg font-bold text-gray-900 dark:text-white">
-                ${product.price}
-              </span>
-              {product.originalPrice && (
+          {/* Price, Rating, and Review Count - All on same line */}
+          <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+            <div className="flex items-baseline space-x-2">
+              {product.originalPrice && product.originalPrice > product.price && (
                 <span className="text-sm text-gray-500 dark:text-gray-400 line-through">
-                  ${product.originalPrice}
+                  ${product.originalPrice.toFixed(2)}
                 </span>
               )}
+              <span className="text-lg font-bold text-gray-900 dark:text-white">
+                ${product.price.toFixed(2)}
+              </span>
+            </div>
+            
+            {/* Rating and Review Count */}
+            <div className="flex items-center space-x-1">
+              <div className="flex items-center">
+                {[...Array(5)].map((_, i) => {
+                  const rating = product.rating || 0;
+                  const fullStars = Math.floor(rating);
+                  return (
+                    <Star
+                      key={i}
+                      className={`h-3.5 w-3.5 ${
+                        i < fullStars
+                          ? 'text-yellow-400 fill-yellow-400'
+                          : 'text-gray-300 dark:text-gray-600 fill-none'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <span className="text-sm text-gray-900 dark:text-white">
+                ({product.reviewCount || 0})
+              </span>
             </div>
           </div>
+          
+          {/* After Discount Price (if applicable) - Dark grey/black text */}
+          {discountPercentage > 0 && product.originalPrice && (
+            <p className="text-sm text-gray-900 dark:text-white mb-3">
+              After Discount ${(product.emailPromo?.discountedPrice || product.price).toFixed(0)}
+            </p>
+          )}
           
           {/* Add to Cart Button */}
           <button

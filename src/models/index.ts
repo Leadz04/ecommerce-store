@@ -36,6 +36,7 @@ import PriceAlert from './PriceAlert';
 import CustomerAnalytics from './CustomerAnalytics';
 import PurchaseAnalytics from './PurchaseAnalytics';
 import AbandonedCartAnalytics from './AbandonedCartAnalytics';
+import Coupon from './Coupon';
 
 // Export all models for easy importing
 export { default as User } from './User';
@@ -76,6 +77,7 @@ export { default as PriceAlert } from './PriceAlert';
 export { default as CustomerAnalytics } from './CustomerAnalytics';
 export { default as PurchaseAnalytics } from './PurchaseAnalytics';
 export { default as AbandonedCartAnalytics } from './AbandonedCartAnalytics';
+export { default as Coupon } from './Coupon';
 
 // Export interfaces
 export type { IUser } from './User';
@@ -112,3 +114,4 @@ export type { IPriceAlert } from './PriceAlert';
 export type { ICustomerAnalytics } from './CustomerAnalytics';
 export type { IPurchaseAnalytics } from './PurchaseAnalytics';
 export type { IAbandonedCartAnalytics } from './AbandonedCartAnalytics';
+export type { ICoupon } from './Coupon';

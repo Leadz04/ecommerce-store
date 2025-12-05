@@ -13,9 +13,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     console.log('[API /products] Search params:', searchParams.toString());
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limitParam = searchParams.get('limit');
+    // If limit is 0 or not provided when filters are active, return all results
+    const limit = limitParam ? parseInt(limitParam) : 20;
+    // Treat 0 as "no limit" - return all results
+    const hasNoLimit = limit === 0;
     const category = searchParams.get('category');
     const search = searchParams.get('search');
+    
+    // Check if search or any filters are active - if so, return all results
+    const hasActiveFilters = !!(
+      search ||
+      searchParams.get('minPrice') ||
+      searchParams.get('maxPrice') ||
+      searchParams.get('inStock') ||
+      searchParams.get('brand') ||
+      searchParams.get('style') ||
+      searchParams.get('color') ||
+      searchParams.get('minRating') ||
+      searchParams.get('collection')
+    );
+    
+    // If filters are active or limit is 0 (meaning "no limit"), don't use pagination
+    const usePagination = !hasActiveFilters && !hasNoLimit && page && limit > 0;
     const sortBy = searchParams.get('sortBy') || 'name';
     const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
@@ -140,11 +160,16 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('[API /products] Executing query:', JSON.stringify(query));
-    const productsRaw = await Product.find(query)
-      .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .lean();
+    
+    // Build query - apply pagination only if valid and enabled
+    let queryBuilder = Product.find(query).sort(sort);
+    
+    if (usePagination) {
+      queryBuilder = queryBuilder.limit(limit).skip((page - 1) * limit);
+    }
+    // Otherwise, don't apply limit - return all matching products
+    
+    const productsRaw = await queryBuilder.lean();
 
     console.log('[API /products] Found', productsRaw.length, 'products (before deduplication)');
     
@@ -164,10 +189,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       products,
       pagination: {
-        page,
-        limit,
+        page: usePagination ? page : 1,
+        limit: usePagination ? limit : (hasNoLimit ? total : products.length),
         total,
-        pages: Math.ceil(total / limit)
+        pages: usePagination ? Math.ceil(total / limit) : 1
       },
       filters: { categories, brands }
     });

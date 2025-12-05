@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import EmailPromoDiscount from '@/models/EmailPromoDiscount';
+import Coupon from '@/models/Coupon';
 import Product from '@/models/Product';
 import { checkRateLimit, promoValidationLimiter } from '@/lib/rateLimit';
 
@@ -25,13 +26,70 @@ export async function GET(request: NextRequest) {
     console.info('[PromoValidate] Validating promo token', { token, requestedProductId });
     await connectDB();
 
+    const now = new Date();
+    
+    // First check general coupons
+    const coupon = await Coupon.findOne({ code: token.toUpperCase().trim() }).lean();
+    
+    if (coupon) {
+      // Validate general coupon
+      if (!coupon.isActive || coupon.status !== 'active') {
+        return NextResponse.json({ error: 'This discount code is not active.' }, { status: 410 });
+      }
+
+      if (coupon.startDate > now || coupon.endDate < now) {
+        return NextResponse.json({ error: 'This discount code has expired.' }, { status: 410 });
+      }
+
+      if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+        return NextResponse.json({ error: 'This discount code has reached its usage limit.' }, { status: 410 });
+      }
+
+      // Check product-specific coupon
+      if (coupon.productId && requestedProductId && coupon.productId.toString() !== requestedProductId) {
+        return NextResponse.json({ error: 'This discount code is only valid for specific products.' }, { status: 409 });
+      }
+
+      // Calculate discount
+      const discountPercent = coupon.discountType === 'percentage' 
+        ? coupon.discountValue 
+        : null;
+      const discountAmount = coupon.discountType === 'fixed' 
+        ? coupon.discountValue 
+        : null;
+
+      console.info('[PromoValidate] General coupon validated', {
+        token,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+      });
+
+      return NextResponse.json({
+        success: true,
+        promo: {
+          token: coupon.code,
+          couponId: coupon._id.toString(),
+          name: coupon.name,
+          discountType: coupon.discountType,
+          discountPercent: discountPercent,
+          discountAmount: discountAmount,
+          productId: coupon.productId?.toString(),
+          category: coupon.category,
+          minimumPurchase: coupon.minimumPurchase,
+          maxDiscountAmount: coupon.maxDiscountAmount,
+          expiresAt: coupon.endDate,
+          source: 'coupon',
+        },
+      });
+    }
+
+    // Fall back to email promo discount
     const promo = await EmailPromoDiscount.findOne({ token }).lean();
     if (!promo) {
       console.warn('[PromoValidate] Promo token not found', { token });
       return NextResponse.json({ error: 'Promo not found' }, { status: 404 });
     }
 
-    const now = new Date();
     if (promo.status === 'expired' || promo.expiresAt < now) {
       if (promo.status !== 'expired') {
         await EmailPromoDiscount.updateOne({ token }, { $set: { status: 'expired' } });
