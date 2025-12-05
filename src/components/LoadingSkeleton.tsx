@@ -73,6 +73,81 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
   );
 }
 
+export function ProductTableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="hidden lg:block -mx-4 sm:mx-0">
+      <div className="inline-block w-full align-middle">
+        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-xl">
+          <table className="w-full border-collapse border-spacing-0 table-fixed">
+            <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
+              <tr className="m-0 p-0">
+                <th className="w-[30%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-20" />
+                </th>
+                <th className="w-[12%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-16" />
+                </th>
+                <th className="w-[14%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-12" />
+                </th>
+                <th className="w-[10%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-14" />
+                </th>
+                <th className="w-[8%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-12" />
+                </th>
+                <th className="w-[12%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-16" />
+                </th>
+                <th className="w-[14%] px-4 xl:px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                  <Skeleton className="h-4 w-16" />
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white m-0 p-0">
+              {Array.from({ length: rows }).map((_, i) => (
+                <tr key={i} className={`m-0 p-0 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                  <td className="w-[30%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <div className="flex items-center min-w-0 h-6 m-0 p-0">
+                      <Skeleton className="h-5 w-5 rounded flex-shrink-0 m-0" />
+                      <Skeleton className="ml-2 h-4 flex-1 m-0" />
+                    </div>
+                  </td>
+                  <td className="w-[12%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <Skeleton className="h-5 w-16 rounded m-0" />
+                  </td>
+                  <td className="w-[14%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <Skeleton className="h-4 w-20 m-0" />
+                  </td>
+                  <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <Skeleton className="h-4 w-12 m-0" />
+                  </td>
+                  <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <Skeleton className="h-4 w-8 m-0" />
+                  </td>
+                  <td className="w-[12%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <div className="flex flex-wrap gap-0.5 items-center h-6 m-0 p-0">
+                      <Skeleton className="h-5 w-14 rounded m-0" />
+                      <Skeleton className="h-5 w-12 rounded m-0" />
+                    </div>
+                  </td>
+                  <td className="w-[14%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                    <div className="flex flex-wrap gap-1 items-center m-0 p-0">
+                      <Skeleton className="h-6 w-6 rounded m-0" />
+                      <Skeleton className="h-6 w-6 rounded m-0" />
+                      <Skeleton className="h-6 w-6 rounded m-0" />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProfileSkeleton() {
   return (
     <div className="min-h-screen">

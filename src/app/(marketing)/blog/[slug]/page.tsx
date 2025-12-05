@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import connectDB from '@/lib/mongodb';
 import Blog from '@/models/Blog';
-import BlogBackButton from './BlogBackButton';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -91,7 +90,6 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         )}
         <div className="max-w-5xl mx-auto px-4 -mt-24 md:-mt-28">
           <div className="bg-white/95 backdrop-blur shadow-xl border rounded-2xl p-6 md:p-8">
-            <BlogBackButton />
             <div className="mb-3 text-xs text-purple-700">
               <Link href="/blog" className="hover:underline">Blog</Link>
               <span className="mx-2">/</span>
@@ -137,9 +135,6 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                 <div className="flex gap-3 text-sm">
                   <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL || ''}/blog/${post.slug}`)}&text=${encodeURIComponent(post.title)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Twitter</a>
                   <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${process.env.NEXT_PUBLIC_SITE_URL || ''}/blog/${post.slug}`)}`} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">Facebook</a>
-                </div>
-                <div className="mt-3">
-                  <Link href="/blog" className="text-purple-700 hover:text-purple-900">← Back to Blog</Link>
                 </div>
               </div>
             </div>

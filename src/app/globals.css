@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/**
+ * FONT SIZE CONFIGURATION
+ * ========================
+ * All font sizes are centrally managed here. To adjust sizes globally:
+ * 
+ * 1. Modify the values in the :root section (lines 25-44) for CSS variable usage
+ * 2. Modify the values in the @theme inline section (lines 60-69) to override Tailwind defaults
+ * 
+ * Current sizes are reduced by ~10-15% from Tailwind defaults:
+ * - text-xs: 10px (was 12px)
+ * - text-sm: 13px (was 14px)  
+ * - text-base: 15px (was 16px)
+ * - text-lg: 16px (was 18px)
+ * - text-xl: 18px (was 20px)
+ * - text-2xl: 22px (was 24px)
+ * - text-3xl: 28px (was 30px)
+ * - text-4xl: 32px (was 36px)
+ * - text-5xl: 40px (was 48px)
+ * 
+ * All existing Tailwind classes (text-xs, text-sm, etc.) automatically use these reduced sizes.
+ */
+
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
@@ -21,6 +43,27 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  /* Font Sizes - Centralized Management */
+  /* Reduce all sizes by ~10-15% for a more compact design */
+  --font-size-xs: 0.625rem;      /* 10px (reduced from 12px) */
+  --font-size-sm: 0.8125rem;     /* 13px (reduced from 14px) */
+  --font-size-base: 0.9375rem;   /* 15px (reduced from 16px) */
+  --font-size-lg: 1rem;          /* 16px (reduced from 18px) */
+  --font-size-xl: 1.125rem;      /* 18px (reduced from 20px) */
+  --font-size-2xl: 1.375rem;    /* 22px (reduced from 24px) */
+  --font-size-3xl: 1.75rem;     /* 28px (reduced from 30px) */
+  --font-size-4xl: 2rem;        /* 32px (reduced from 36px) */
+  --font-size-5xl: 2.5rem;      /* 40px (reduced from 48px) */
+  
+  /* Line Heights */
+  --line-height-xs: 1rem;       /* 16px */
+  --line-height-sm: 1.25rem;    /* 20px */
+  --line-height-base: 1.5rem;   /* 24px */
+  --line-height-lg: 1.625rem;   /* 26px */
+  --line-height-xl: 1.75rem;    /* 28px */
+  --line-height-2xl: 2rem;      /* 32px */
+  --line-height-3xl: 2.25rem;   /* 36px */
 }
 
 @theme inline {
@@ -33,6 +76,19 @@
   --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* Override Tailwind default font sizes with reduced sizes */
+  /* These override the default Tailwind classes: text-xs, text-sm, text-base, etc. */
+  --font-size-xs: 0.625rem;      /* 10px (reduced from 12px) */
+  --font-size-sm: 0.8125rem;     /* 13px (reduced from 14px) */
+  --font-size-base: 0.9375rem;   /* 15px (reduced from 16px) */
+  --font-size-lg: 1rem;          /* 16px (reduced from 18px) */
+  --font-size-xl: 1.125rem;      /* 18px (reduced from 20px) */
+  --font-size-2xl: 1.375rem;    /* 22px (reduced from 24px) */
+  --font-size-3xl: 1.75rem;     /* 28px (reduced from 30px) */
+  --font-size-4xl: 2rem;        /* 32px (reduced from 36px) */
+  --font-size-5xl: 2.5rem;      /* 40px (reduced from 48px) */
+  --font-size-6xl: 3rem;        /* 48px (reduced from 60px) */
 }
 
 /* Light theme (default) */
@@ -82,7 +138,54 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  line-height: 1.6;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+/* Typography Utility Classes - Use these instead of Tailwind defaults */
+.text-xs-custom {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.text-sm-custom {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+}
+
+.text-base-custom {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+.text-lg-custom {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-lg);
+}
+
+.text-xl-custom {
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-xl);
+}
+
+.text-2xl-custom {
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-2xl);
+}
+
+.text-3xl-custom {
+  font-size: var(--font-size-3xl);
+  line-height: var(--line-height-2xl);
+}
+
+.text-4xl-custom {
+  font-size: var(--font-size-4xl);
+  line-height: var(--line-height-3xl);
+}
+
+.text-5xl-custom {
+  font-size: var(--font-size-5xl);
+  line-height: var(--line-height-3xl);
 }
 
 /* Ensure proper contrast for text elements */

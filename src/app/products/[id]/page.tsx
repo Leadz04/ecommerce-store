@@ -14,7 +14,6 @@ import { useRecentlyViewedStore } from '@/store/recentlyViewedStore';
 import { useAuthStore } from '@/store/authStore';
 import { ProductDetailSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
-import BackButton from '@/components/BackButton';
 import ProductRecommendations from '@/components/ProductRecommendations';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import SalesCounter from '@/components/SalesCounter';
@@ -820,8 +819,7 @@ export default function ProductPage() {
             href="/products"
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Products
+            Browse Products
           </Link>
         </div>
       </div>
@@ -1025,11 +1023,6 @@ export default function ProductPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16 py-3 sm:py-4 lg:py-5">
-        {/* Back Button */}
-        <div className="mb-2 sm:mb-3">
-          <BackButton href="/products" variant="with-label" />
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 xl:gap-12 max-w-7xl mx-auto">
           {/* Product Images */}
           <div className="space-y-2 sm:space-y-3">

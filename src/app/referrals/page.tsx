@@ -149,15 +149,6 @@ export default function ReferralsPage() {
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center mb-4">
-            <Link
-              href="/profile"
-              className="flex items-center text-blue-100 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Back to Profile
-            </Link>
-          </div>
-          <div className="flex items-center mb-4">
             <Gift className="h-10 w-10 mr-3" />
             <h1 className="text-4xl md:text-5xl font-bold">Referral Program</h1>
           </div>

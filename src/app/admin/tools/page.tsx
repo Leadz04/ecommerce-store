@@ -30,6 +30,8 @@ export default function AdminToolsPage() {
   const [hustlenhollaScrapeResult, setHustlenhollaScrapeResult] = useState<any>(null);
   const [almasScrapeResult, setAlmasScrapeResult] = useState<any>(null);
   const [unzeScrapeResult, setUnzeScrapeResult] = useState<any>(null);
+  const [scrapedDataStats, setScrapedDataStats] = useState<Record<string, { totalProducts: number; winterProducts: number; hasProducts: boolean }> | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const faqsLogsEndRef = useRef<HTMLDivElement>(null);
 
@@ -193,9 +195,21 @@ export default function AdminToolsPage() {
         } else if (label === 'Scrape Furorjeans') {
           const summary = data.summary || {};
           successMessage = `Successfully scraped and imported ${summary.imported || 0} winter products (${summary.skipped || 0} skipped, ${summary.errors || 0} errors). JSON file saved to scraped/furorjeans-winter-products.json`;
+          // Refresh stats after successful scraping
+          const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            setScrapedDataStats(statsData.stats || {});
+          }
         } else if (label === 'Scrape 999.com.pk') {
           const summary = data.summary || {};
           successMessage = `Successfully scraped and imported ${summary.imported || 0} products (${summary.skipped || 0} skipped, ${summary.errors || 0} errors). JSON file saved to scraped/999pk-products.json`;
+          // Refresh stats after successful scraping
+          const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            setScrapedDataStats(statsData.stats || {});
+          }
         } else {
           successMessage = `${label} completed successfully`;
         }
@@ -374,6 +388,13 @@ export default function AdminToolsPage() {
       
       const summary = data.summary || {};
       toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+      
+      // Refresh stats after successful scraping
+      const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setScrapedDataStats(statsData.stats || {});
+      }
     } catch (e) {
       console.error('Error scraping Breakout products:', e);
       toast.error(e instanceof Error ? e.message : 'Scrape Breakout products failed');
@@ -407,6 +428,13 @@ export default function AdminToolsPage() {
       
       const summary = data.summary || {};
       toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+      
+      // Refresh stats after successful scraping
+      const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setScrapedDataStats(statsData.stats || {});
+      }
     } catch (e) {
       console.error('Error scraping Engine products:', e);
       toast.error(e instanceof Error ? e.message : 'Scrape Engine products failed');
@@ -440,6 +468,13 @@ export default function AdminToolsPage() {
       
       const summary = data.summary || {};
       toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+      
+      // Refresh stats after successful scraping
+      const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setScrapedDataStats(statsData.stats || {});
+      }
     } catch (e) {
       console.error('Error scraping Hustlenholla products:', e);
       toast.error(e instanceof Error ? e.message : 'Scrape Hustlenholla products failed');
@@ -473,6 +508,13 @@ export default function AdminToolsPage() {
       
       const summary = data.summary || {};
       toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+      
+      // Refresh stats after successful scraping
+      const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setScrapedDataStats(statsData.stats || {});
+      }
     } catch (e) {
       console.error('Error scraping Almas products:', e);
       toast.error(e instanceof Error ? e.message : 'Scrape Almas products failed');
@@ -506,6 +548,13 @@ export default function AdminToolsPage() {
       
       const summary = data.summary || {};
       toast.success(`Successfully scraped ${summary.totalFiltered || 0} winter products from ${summary.totalFetched || 0} total (${summary.imported || 0} imported, ${summary.updated || 0} updated, ${summary.skipped || 0} skipped, ${summary.filteredOut || 0} filtered out)`);
+      
+      // Refresh stats after successful scraping
+      const statsRes = await authorizedFetch('/api/admin/scraped-data-stats', { method: 'GET' });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setScrapedDataStats(statsData.stats || {});
+      }
     } catch (e) {
       console.error('Error scraping Unze products:', e);
       toast.error(e instanceof Error ? e.message : 'Scrape Unze products failed');
@@ -554,6 +603,29 @@ export default function AdminToolsPage() {
       isMounted = false;
     };
   }, [user]);
+
+  // Fetch scraped data stats on mount and after scraping operations
+  useEffect(() => {
+    const fetchStats = async () => {
+      setStatsLoading(true);
+      try {
+        const res = await authorizedFetch('/api/admin/scraped-data-stats', {
+          method: 'GET',
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setScrapedDataStats(data.stats || {});
+        }
+      } catch (error) {
+        console.error('Failed to fetch scraped data stats:', error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [user, breakoutScrapeResult, engineScrapeResult, hustlenhollaScrapeResult, almasScrapeResult, unzeScrapeResult]);
 
   const handleOptimizeGemini = async () => {
     try {
@@ -1182,6 +1254,56 @@ export default function AdminToolsPage() {
                 )}
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Scraped Data Stats Section */}
+        <div className="space-y-3 border-t pt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Scraped Data Statistics</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Current statistics for products in the MongoDB stage3 database from all scraped brands.
+          </p>
+          
+          {statsLoading ? (
+            <div className="text-sm text-gray-500">Loading stats...</div>
+          ) : scrapedDataStats ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(scrapedDataStats).map(([brand, stats]) => (
+                <div key={brand} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900 capitalize">{brand}</h4>
+                    {stats.hasProducts ? (
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Has Products</span>
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">No Products</span>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Products:</span>
+                      <span className="font-medium text-gray-900">{stats.totalProducts}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Winter Products:</span>
+                      <span className="font-medium text-blue-600">{stats.winterProducts}</span>
+                    </div>
+                    {stats.totalProducts > 0 && (
+                      <div className="flex justify-between pt-1 border-t border-gray-200">
+                        <span className="text-gray-600">Winter %:</span>
+                        <span className="font-medium text-purple-600">
+                          {((stats.winterProducts / stats.totalProducts) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">No stats available</div>
           )}
         </div>
 

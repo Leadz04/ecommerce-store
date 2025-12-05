@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { BookOpen, ThumbsUp, ArrowLeft, TrendingUp } from 'lucide-react';
-import BackButton from '@/components/BackButton';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 
@@ -114,9 +113,6 @@ export default function ArticlePage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="mb-4">
-            <BackButton href="/support/knowledge-base" variant="with-label" />
-          </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{article.title}</h1>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <span className="capitalize">{article.category.replace('_', ' ')}</span>

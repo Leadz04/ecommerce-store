@@ -82,15 +82,6 @@ export default function LoginPage() {
       {/* Header */}
       <section className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center mb-4">
-            <Link
-              href="/"
-              className="flex items-center text-blue-100 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Back to Home
-            </Link>
-          </div>
           <h1 className="text-4xl md:text-5xl font-bold">Welcome Back</h1>
           <p className="text-xl text-blue-100 mt-2">Sign in to your account to continue shopping</p>
         </div>

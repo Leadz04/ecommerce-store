@@ -24,7 +24,6 @@ import { useOrderStore } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
 import { OrderCardSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 interface OrderFilters {
@@ -250,7 +249,6 @@ export default function OrdersPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <BackButton href="/" variant="with-label" />
           <div className="max-w-md mx-auto mt-12">
             <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200 p-8">
               <h1 className="text-2xl font-bold text-gray-900 mb-2">View Your Orders</h1>
@@ -325,9 +323,6 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="mb-4 sm:mb-6">
-            <BackButton href="/profile" variant="with-label" />
-          </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Orders</h1>

@@ -8,7 +8,6 @@ import { Download, RotateCcw, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
 import { useCartStore } from '@/store/cartStore';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 export default function OrderDetailsPage() {
@@ -129,13 +128,6 @@ export default function OrderDetailsPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          <div className="mb-4 sm:mb-6">
-            <BackButton 
-              href="/orders" 
-              variant="with-label" 
-              className="text-white/80 hover:text-white border-white/20 hover:bg-white/10"
-            />
-          </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Order Details</h1>

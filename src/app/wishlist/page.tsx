@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWishlistStore } from '@/store/wishlistStore';
 import ProductCard from '@/components/ProductCard';
-import BackButton from '@/components/BackButton';
 
 export default function WishlistPage() {
   const { items, isLoading, error, fetchWishlist, removeFromWishlist } = useWishlistStore();
@@ -25,9 +24,6 @@ export default function WishlistPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-      <div className="mb-4 sm:mb-6">
-        <BackButton href="/" variant="with-label" />
-      </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Your Wishlist</h1>
         <div className="flex items-center gap-3">

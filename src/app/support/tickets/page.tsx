@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Filter, Clock, CheckCircle, XCircle, AlertCircle, MessageSquare, Eye } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import BackButton from '@/components/BackButton';
+import SelectField from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 interface Ticket {
@@ -26,6 +26,7 @@ export default function SupportTicketsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [openSelect, setOpenSelect] = useState<'status' | 'category' | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -125,9 +126,6 @@ export default function SupportTicketsPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="mb-4">
-            <BackButton href="/support" variant="with-label" />
-          </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Support Tickets</h1>
@@ -149,35 +147,41 @@ export default function SupportTicketsPage() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-              <select
+              <SelectField
+                label="Status"
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'open', label: 'Open' },
+                  { value: 'in_progress', label: 'In Progress' },
+                  { value: 'waiting_customer', label: 'Waiting for Customer' },
+                  { value: 'resolved', label: 'Resolved' },
+                  { value: 'closed', label: 'Closed' },
+                ]}
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Statuses</option>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="waiting_customer">Waiting for Customer</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
+                isOpen={openSelect === 'status'}
+                onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+                onSelect={(value) => setStatusFilter(value)}
+                placeholder="All Statuses"
+              />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-              <select
+              <SelectField
+                label="Category"
+                options={[
+                  { value: 'all', label: 'All Categories' },
+                  { value: 'order', label: 'Order' },
+                  { value: 'product', label: 'Product' },
+                  { value: 'payment', label: 'Payment' },
+                  { value: 'shipping', label: 'Shipping' },
+                  { value: 'technical', label: 'Technical' },
+                  { value: 'other', label: 'Other' },
+                ]}
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Categories</option>
-                <option value="order">Order</option>
-                <option value="product">Product</option>
-                <option value="payment">Payment</option>
-                <option value="shipping">Shipping</option>
-                <option value="technical">Technical</option>
-                <option value="other">Other</option>
-              </select>
+                isOpen={openSelect === 'category'}
+                onOpenChange={(open) => setOpenSelect(open ? 'category' : null)}
+                onSelect={(value) => setCategoryFilter(value)}
+                placeholder="All Categories"
+              />
             </div>
           </div>
         </div>

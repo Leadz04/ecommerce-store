@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 export default function NewTicketPage() {
@@ -66,9 +65,6 @@ export default function NewTicketPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="mb-4">
-            <BackButton href="/support/tickets" variant="with-label" />
-          </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Create Support Ticket</h1>
           <p className="text-gray-600 mt-1">Describe your issue and we'll help you resolve it</p>
         </div>

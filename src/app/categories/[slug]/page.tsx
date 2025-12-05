@@ -17,15 +17,6 @@ const CategoryHeader = memo(({ info, productsCount }: { info: { title: string; d
     <section className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
       <div className="absolute inset-0 bg-black bg-opacity-30" />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center mb-4">
-          <Link
-            href="/categories"
-            className="flex items-center text-blue-100 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            Back to Categories
-          </Link>
-        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
           <div>
             <h1 className="text-4xl md:text-5xl font-bold mb-4">{info.title}</h1>

@@ -81,7 +81,7 @@ import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
 import ProductForm from '@/components/ProductForm';
 import OrderDetailModal from '@/components/OrderDetailModal';
-import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
+import { AdminSkeleton, TableSkeleton, ProductTableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
@@ -293,6 +293,7 @@ export default function AdminDashboard() {
   const initialTab = (baseAllowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignHtml, setCampaignHtml] = useState('<p>Hello from ShopEase!</p>');
@@ -763,7 +764,7 @@ export default function AdminDashboard() {
   const [selectedIsActive, setSelectedIsActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [productSortBy, setProductSortBy] = useState<string>('createdAt');
   const [productSortOrder, setProductSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | 'reviewStatus' | 'jacketMakerCategory' | 'jacketMakerBrand' | 'jacketMakerStatus' | 'jacketMakerIsActive' | 'jacketMakerSortBy' | 'jacketMakerSortOrder' | string | null>(null);
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'conversationStatus' | 'conversationAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | 'supportAssigned' | 'reviewStatus' | 'jacketMakerCategory' | 'jacketMakerBrand' | 'jacketMakerStatus' | 'jacketMakerIsActive' | 'jacketMakerSortBy' | 'jacketMakerSortOrder' | string | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -1179,18 +1180,35 @@ export default function AdminDashboard() {
     description: `${brandCounts[brand] || 0} products (STAGE3)`
   }));
 
+  // Create STAGE3 Brand Products section with expandable children
+  const stage3BrandProductsTab: SidebarTab = {
+    id: 'stage3-brand-products',
+    label: 'Scraped Products (STAGE3)',
+    icon: Package,
+    description: 'Products from scraped brands',
+    children: [
+      { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker (STAGE3)' },
+      ...brandTabs.map(tab => ({
+        id: tab.id,
+        label: tab.label,
+        icon: tab.icon,
+        description: tab.description
+      }))
+    ]
+  };
+
   const sidebarTabs: SidebarTab[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3, description: 'Snapshot & key KPIs' },
     { id: 'sourcing', label: 'Sourcing', icon: Download, description: 'Import and curate products' },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'roles', label: 'Roles & Permissions', icon: Shield },
     { id: 'products', label: 'Products', icon: Package },
-    { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker (STAGE3)' },
-    ...brandTabs, // Add dynamic brand tabs
+    stage3BrandProductsTab, // Add expandable STAGE3 brand products section
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
     { id: 'support', label: 'Support Tickets', icon: MessageSquare },
+    { id: 'chat', label: 'Live Chat', icon: MessageCircle },
     {
       id: 'marketing',
       label: 'Growth & Insights',
@@ -1215,8 +1233,15 @@ export default function AdminDashboard() {
   const isTabActive = (tab: SidebarTab) =>
     tab.id === activeTab || tab.children?.some(child => child.id === activeTab);
 
-  const shouldShowChildren = (tab: SidebarTab) =>
-    !!tab.children && (openNestedMenu === tab.id || tab.children.some(child => child.id === activeTab));
+  const shouldShowChildren = (tab: SidebarTab) => {
+    if (!tab.children) return false;
+    // If manually collapsed, respect that
+    if (collapsedSections.has(tab.id)) return false;
+    // If manually expanded, show it
+    if (openNestedMenu === tab.id) return true;
+    // Auto-expand if a child is active (unless manually collapsed)
+    return tab.children.some(child => child.id === activeTab);
+  };
 
   // Find parent tab for nested/child tabs
   const getParentTab = (): SidebarTab | null => {
@@ -1336,6 +1361,53 @@ export default function AdminDashboard() {
     }
   }, [searchParams, activeTab, orders]);
 
+  // Memoize conversationId from URL to use as dependency
+  const urlConversationId = useMemo(() => searchParams.get('conversationId'), [searchParams]);
+
+  // Open conversation modal based on URL conversationId when data is present
+  useEffect(() => {
+    // Skip if we're in the process of closing
+    if (isClosingConversationRef.current) {
+      isClosingConversationRef.current = false;
+      lastProcessedConversationIdRef.current = null;
+      return;
+    }
+
+    // If no conversationId in URL but modal is open, close it
+    if (!urlConversationId) {
+      lastProcessedConversationIdRef.current = null;
+      if (viewingConversation) {
+        setViewingConversation(null);
+        setChatMessages([]);
+        setChatMessage('');
+      }
+      return;
+    }
+
+    // Skip if this is the same conversationId we just processed
+    if (urlConversationId === lastProcessedConversationIdRef.current) {
+      return;
+    }
+
+    // Only open if we're on chat tab, have conversations loaded, and not currently closing
+    if (activeTab === 'chat' && chatConversations.length > 0 && !isClosingConversationRef.current) {
+      // Only open if we're not already viewing this conversation
+      if (!viewingConversation || viewingConversation.conversationId !== urlConversationId) {
+        const found = chatConversations.find(c => c.conversationId === urlConversationId);
+        if (found) {
+          lastProcessedConversationIdRef.current = urlConversationId;
+          handleViewConversation(found);
+        }
+      } else {
+        // Already viewing this conversation, just update the ref
+        lastProcessedConversationIdRef.current = urlConversationId;
+      }
+    }
+    // Only depend on the memoized conversationId value and activeTab
+    // Don't depend on chatConversations to avoid reopening when list refreshes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlConversationId, activeTab]);
+
   // Fetch brands only when products tab is active or when ProductForm might be needed
   useEffect(() => {
     if ((activeTab === 'products' || activeTab === 'policy-review') && isAuthenticated) {
@@ -1362,6 +1434,24 @@ export default function AdminDashboard() {
 
   // Track the last active brand tab to prevent unnecessary refetches
   const lastActiveBrandTab = useRef<string | null>(null);
+  const isClosingConversationRef = useRef(false);
+  const lastProcessedConversationIdRef = useRef<string | null>(null);
+
+  // Auto-expand parent section when a child tab becomes active (if not manually collapsed)
+  useEffect(() => {
+    if (activeTab) {
+      // Find the parent tab for the active tab
+      const parentTab = sidebarTabs.find(tab => 
+        tab.children?.some(child => child.id === activeTab)
+      );
+      
+      if (parentTab && !collapsedSections.has(parentTab.id)) {
+        // Auto-expand if not manually collapsed
+        setOpenNestedMenu(parentTab.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Fetch brand products when a brand tab is active
   useEffect(() => {
@@ -1413,7 +1503,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!viewingConversation) return;
 
+    // Don't refresh if we're closing
+    if (isClosingConversationRef.current) return;
+
     const interval = setInterval(() => {
+      // Double-check we still have a conversation before refreshing
+      if (!viewingConversation || isClosingConversationRef.current) {
+        return;
+      }
+
       const refreshMessages = async () => {
         try {
           const token = localStorage.getItem('token');
@@ -1424,10 +1522,13 @@ export default function AdminDashboard() {
           });
           if (response.ok) {
             const data = await response.json();
-            setChatMessages(data.messages || []);
-            setViewingConversation(data.conversation);
-            // Also refresh conversation list to update unread counts
-            fetchChatConversations();
+            // Only update if we're still viewing this conversation
+            if (viewingConversation && !isClosingConversationRef.current) {
+              setChatMessages(data.messages || []);
+              setViewingConversation(data.conversation);
+              // Also refresh conversation list to update unread counts
+              fetchChatConversations();
+            }
           }
         } catch (error) {
           console.error('Error refreshing messages:', error);
@@ -2624,6 +2725,11 @@ export default function AdminDashboard() {
   };
 
   const handleViewConversation = async (conversation: any) => {
+    // Don't open if we're in the process of closing
+    if (isClosingConversationRef.current) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/admin/chat/conversations/${conversation.conversationId}`, {
@@ -2634,9 +2740,12 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        setViewingConversation(data.conversation);
-        setChatMessages(data.messages || []);
-        updateQuery({ conversationId: conversation.conversationId });
+        // Only set if we're not closing
+        if (!isClosingConversationRef.current) {
+          setViewingConversation(data.conversation);
+          setChatMessages(data.messages || []);
+          updateQuery({ conversationId: conversation.conversationId });
+        }
       } else {
         throw new Error('Failed to fetch conversation details');
       }
@@ -3620,7 +3729,27 @@ export default function AdminDashboard() {
                         >
                           <button
                             type="button"
-                            onClick={() => handleTabChange(tab.id)}
+                            onClick={() => {
+                              if (tab.children) {
+                                // For parent tabs with children, toggle expand/collapse instead of changing tab
+                                const isCurrentlyVisible = shouldShowChildren(tab);
+                                if (isCurrentlyVisible) {
+                                  // Collapse: add to collapsed set and clear openNestedMenu
+                                  setCollapsedSections(prev => new Set(prev).add(tab.id));
+                                  setOpenNestedMenu(null);
+                                } else {
+                                  // Expand: remove from collapsed set and set openNestedMenu
+                                  setCollapsedSections(prev => {
+                                    const newSet = new Set(prev);
+                                    newSet.delete(tab.id);
+                                    return newSet;
+                                  });
+                                  setOpenNestedMenu(tab.id);
+                                }
+                              } else {
+                                handleTabChange(tab.id);
+                              }
+                            }}
                             onKeyDown={(event) => handleParentKeyDown(event, tab)}
                             aria-current={tab.id === activeTab ? 'page' : undefined}
                             aria-expanded={tab.children ? childrenVisible : undefined}
@@ -3640,7 +3769,20 @@ export default function AdminDashboard() {
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setOpenNestedMenu((prev) => (prev === tab.id ? null : tab.id));
+                                const isCurrentlyVisible = shouldShowChildren(tab);
+                                if (isCurrentlyVisible) {
+                                  // Collapse: add to collapsed set and clear openNestedMenu
+                                  setCollapsedSections(prev => new Set(prev).add(tab.id));
+                                  setOpenNestedMenu(null);
+                                } else {
+                                  // Expand: remove from collapsed set and set openNestedMenu
+                                  setCollapsedSections(prev => {
+                                    const newSet = new Set(prev);
+                                    newSet.delete(tab.id);
+                                    return newSet;
+                                  });
+                                  setOpenNestedMenu(tab.id);
+                                }
                               }}
                               className="p-1 rounded-lg hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                               aria-label={`${childrenVisible ? 'Collapse' : 'Expand'} ${tab.label} submenu`}
@@ -9150,10 +9292,8 @@ export default function AdminDashboard() {
                     {/* Products List */}
                     <div className="p-4 sm:p-6 lg:p-8">
                       {isLoading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                          {[...Array(8)].map((_, i) => (
-                            <AdminSkeleton key={i} />
-                          ))}
+                        <div className="p-6">
+                          <ProductTableSkeleton rows={8} />
                         </div>
                       ) : brandProductsList.length === 0 ? (
                         <div className="text-center py-12">
@@ -10309,6 +10449,860 @@ export default function AdminDashboard() {
                         </tbody>
                       </table>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Support Tickets Tab */}
+              {activeTab === 'support' && (
+                <div className="bg-white rounded-lg shadow-sm border">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">Support Tickets</h2>
+                        <p className="text-sm text-gray-600 mt-1">Manage customer support requests</p>
+                      </div>
+                      <button
+                        onClick={fetchSupportTickets}
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Statistics */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-blue-600 font-medium">Total Tickets</p>
+                            <p className="text-2xl font-bold text-blue-900 mt-1">{supportTickets.length}</p>
+                          </div>
+                          <MessageSquare className="h-8 w-8 text-blue-600" />
+                        </div>
+                      </div>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-yellow-600 font-medium">Open</p>
+                            <p className="text-2xl font-bold text-yellow-900 mt-1">
+                              {supportTickets.filter(t => t.status === 'open').length}
+                            </p>
+                          </div>
+                          <AlertCircle className="h-8 w-8 text-yellow-600" />
+                        </div>
+                      </div>
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-orange-600 font-medium">In Progress</p>
+                            <p className="text-2xl font-bold text-orange-900 mt-1">
+                              {supportTickets.filter(t => t.status === 'in_progress').length}
+                            </p>
+                          </div>
+                          <Clock className="h-8 w-8 text-orange-600" />
+                        </div>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-red-600 font-medium">Urgent</p>
+                            <p className="text-2xl font-bold text-red-900 mt-1">
+                              {supportTickets.filter(t => t.priority === 'urgent').length}
+                            </p>
+                          </div>
+                          <AlertTriangle className="h-8 w-8 text-red-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Search and Filters */}
+                    <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search tickets by number, subject, or message..."
+                            value={supportSearchTerm}
+                            onChange={(e) => setSupportSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border text-gray-700 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Statuses' },
+                            { value: 'open', label: 'Open' },
+                            { value: 'in_progress', label: 'In Progress' },
+                            { value: 'waiting_customer', label: 'Waiting for Customer' },
+                            { value: 'resolved', label: 'Resolved' },
+                            { value: 'closed', label: 'Closed' },
+                          ]}
+                          value={supportStatusFilter}
+                          isOpen={openSelect === 'supportStatus'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'supportStatus' : null)}
+                          onSelect={(value) => setSupportStatusFilter(value)}
+                          placeholder="Filter by Status"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Categories' },
+                            { value: 'order', label: 'Order' },
+                            { value: 'product', label: 'Product' },
+                            { value: 'payment', label: 'Payment' },
+                            { value: 'shipping', label: 'Shipping' },
+                            { value: 'technical', label: 'Technical' },
+                            { value: 'other', label: 'Other' },
+                          ]}
+                          value={supportCategoryFilter}
+                          isOpen={openSelect === 'supportCategory'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'supportCategory' : null)}
+                          onSelect={(value) => setSupportCategoryFilter(value)}
+                          placeholder="Filter by Category"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Priorities' },
+                            { value: 'urgent', label: 'Urgent' },
+                            { value: 'high', label: 'High' },
+                            { value: 'medium', label: 'Medium' },
+                            { value: 'low', label: 'Low' },
+                          ]}
+                          value={supportPriorityFilter}
+                          isOpen={openSelect === 'supportPriority'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'supportPriority' : null)}
+                          onSelect={(value) => setSupportPriorityFilter(value)}
+                          placeholder="Filter by Priority"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Assignees' },
+                            ...adminUsers.map((u: any) => ({ value: u._id, label: u.name || u.email })),
+                          ]}
+                          value={supportAssignedFilter}
+                          isOpen={openSelect === 'supportAssigned'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'supportAssigned' : null)}
+                          onSelect={(value) => setSupportAssignedFilter(value)}
+                          placeholder="Filter by Assignee"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    {supportLoading ? (
+                      <TableSkeleton rows={8} columns={7} />
+                    ) : (
+                      <table className="min-w-full divide-y divide-gray-200 min-w-[1200px]">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Ticket
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Subject
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Customer
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Status
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Priority
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Assigned To
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {supportTickets
+                            .filter(ticket => {
+                              const matchesSearch = 
+                                ticket.ticketNumber?.toLowerCase().includes(supportSearchTerm.toLowerCase()) ||
+                                ticket.subject?.toLowerCase().includes(supportSearchTerm.toLowerCase()) ||
+                                ticket.messages?.some((m: any) => m.message?.toLowerCase().includes(supportSearchTerm.toLowerCase()));
+                              const matchesStatus = supportStatusFilter === 'all' || ticket.status === supportStatusFilter;
+                              const matchesCategory = supportCategoryFilter === 'all' || ticket.category === supportCategoryFilter;
+                              const matchesPriority = supportPriorityFilter === 'all' || ticket.priority === supportPriorityFilter;
+                              const matchesAssigned = supportAssignedFilter === 'all' || ticket.assignedTo === supportAssignedFilter;
+                              return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesAssigned;
+                            })
+                            .map((ticket) => (
+                              <tr key={ticket._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleViewTicket(ticket)}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">#{ticket.ticketNumber}</div>
+                                  <div className="text-xs text-gray-500 capitalize">{ticket.category}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm font-medium text-gray-900 max-w-xs truncate">{ticket.subject}</div>
+                                  {ticket.messages && ticket.messages.length > 0 && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {ticket.messages.length} message{ticket.messages.length !== 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {ticket.user?.name || ticket.guestName || 'Guest'}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {ticket.user?.email || ticket.guestEmail || 'N/A'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    ticket.status === 'open' ? 'bg-blue-100 text-blue-800' :
+                                    ticket.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                    ticket.status === 'waiting_customer' ? 'bg-orange-100 text-orange-800' :
+                                    ticket.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {ticket.status.replace('_', ' ')}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`text-xs font-medium ${
+                                    ticket.priority === 'urgent' ? 'text-red-600 font-bold' :
+                                    ticket.priority === 'high' ? 'text-orange-600 font-semibold' :
+                                    ticket.priority === 'medium' ? 'text-yellow-600' :
+                                    'text-gray-600'
+                                  }`}>
+                                    {ticket.priority.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {ticket.assignedTo ? (
+                                    adminUsers.find((u: any) => u._id === ticket.assignedTo)?.name || 'Unknown'
+                                  ) : (
+                                    <span className="text-gray-400">Unassigned</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(ticket.createdAt).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewTicket(ticket);
+                                    }}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="View ticket details"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {!supportLoading && supportTickets.length === 0 && (
+                      <div className="p-12 text-center text-gray-500">
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p className="text-lg font-medium">No support tickets found</p>
+                        <p className="text-sm mt-1">No tickets match your search criteria.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Ticket Detail Modal */}
+              {viewingTicket && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-100">
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">Ticket #{viewingTicket.ticketNumber}</h2>
+                          <p className="text-sm text-gray-600 mt-1">{viewingTicket.subject}</p>
+                        </div>
+                        <button
+                          onClick={() => setViewingTicket(null)}
+                          className="text-gray-400 hover:text-gray-700 hover:bg-white rounded-full p-1 transition-all"
+                        >
+                          <X className="h-6 w-6" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {/* Ticket Info */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <SelectField
+                            label="Status"
+                            options={[
+                              { value: 'open', label: 'Open' },
+                              { value: 'in_progress', label: 'In Progress' },
+                              { value: 'waiting_customer', label: 'Waiting for Customer' },
+                              { value: 'resolved', label: 'Resolved' },
+                              { value: 'closed', label: 'Closed' },
+                            ]}
+                            value={viewingTicket.status}
+                            isOpen={openSelect === 'ticketStatus'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'ticketStatus' : null)}
+                            onSelect={(value) => handleUpdateTicket(viewingTicket._id, { status: value })}
+                            placeholder="Select Status"
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <SelectField
+                            label="Priority"
+                            options={[
+                              { value: 'low', label: 'Low' },
+                              { value: 'medium', label: 'Medium' },
+                              { value: 'high', label: 'High' },
+                              { value: 'urgent', label: 'Urgent' },
+                            ]}
+                            value={viewingTicket.priority}
+                            isOpen={openSelect === 'ticketPriority'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'ticketPriority' : null)}
+                            onSelect={(value) => handleUpdateTicket(viewingTicket._id, { priority: value })}
+                            placeholder="Select Priority"
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Category</p>
+                          <p className="text-sm font-medium text-gray-900 capitalize">{viewingTicket.category}</p>
+                        </div>
+                        <div>
+                          <SelectField
+                            label="Assigned To"
+                            options={[
+                              { value: '', label: 'Unassigned' },
+                              ...adminUsers.map((u: any) => ({ value: u._id, label: u.name || u.email })),
+                            ]}
+                            value={viewingTicket.assignedTo || ''}
+                            isOpen={openSelect === 'ticketAssigned'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'ticketAssigned' : null)}
+                            onSelect={(value) => handleUpdateTicket(viewingTicket._id, { assignedTo: value || null })}
+                            placeholder="Select Assignee"
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Customer Info */}
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-gray-900 mb-2">Customer Information</p>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-500">Name</p>
+                            <p className="text-gray-900 font-medium">{viewingTicket.user?.name || viewingTicket.guestName || 'Guest'}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Email</p>
+                            <p className="text-gray-900 font-medium">{viewingTicket.user?.email || viewingTicket.guestEmail || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Messages */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">Messages</p>
+                        <div className="space-y-4 max-h-96 overflow-y-auto">
+                          {viewingTicket.messages && viewingTicket.messages.length > 0 ? (
+                            viewingTicket.messages.map((message: any, index: number) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {message.sender === 'admin' ? 'Admin' : (viewingTicket.user?.name || viewingTicket.guestName || 'Customer')}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(message.createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{message.message}</p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-500">No messages yet</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Reply Section */}
+                      <div className="border-t border-gray-200 pt-4">
+                        <p className="text-sm font-semibold text-gray-900 mb-2">Reply to Ticket</p>
+                        <textarea
+                          value={ticketMessage}
+                          onChange={(e) => setTicketMessage(e.target.value)}
+                          placeholder="Type your message here..."
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+                          rows={4}
+                        />
+                        <button
+                          onClick={() => handleSendTicketMessage(viewingTicket._id)}
+                          disabled={sendingMessage || !ticketMessage.trim()}
+                          className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {sendingMessage ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" />
+                              <span>Send Message</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Live Chat Tab */}
+              {activeTab === 'chat' && (
+                <div className="bg-white rounded-lg shadow-sm border">
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">Live Chat</h2>
+                        <p className="text-sm text-gray-600 mt-1">Manage customer chat conversations</p>
+                      </div>
+                      <button
+                        onClick={fetchChatConversations}
+                        className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Statistics */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-blue-600 font-medium">Total Conversations</p>
+                            <p className="text-2xl font-bold text-blue-900 mt-1">{chatConversations.length}</p>
+                          </div>
+                          <MessageCircle className="h-8 w-8 text-blue-600" />
+                        </div>
+                      </div>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-yellow-600 font-medium">Active</p>
+                            <p className="text-2xl font-bold text-yellow-900 mt-1">
+                              {chatConversations.filter(c => c.status === 'active').length}
+                            </p>
+                          </div>
+                          <Clock className="h-8 w-8 text-yellow-600" />
+                        </div>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-green-600 font-medium">Unread Messages</p>
+                            <p className="text-2xl font-bold text-green-900 mt-1">
+                              {chatConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+                            </p>
+                          </div>
+                          <AlertCircle className="h-8 w-8 text-green-600" />
+                        </div>
+                      </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-purple-600 font-medium">Assigned</p>
+                            <p className="text-2xl font-bold text-purple-900 mt-1">
+                              {chatConversations.filter(c => c.assignedTo).length}
+                            </p>
+                          </div>
+                          <User className="h-8 w-8 text-purple-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Search and Filters */}
+                    <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <input
+                            type="text"
+                            placeholder="Search conversations by ID or email..."
+                            value={chatSearchTerm}
+                            onChange={(e) => setChatSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border text-gray-700 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Statuses' },
+                            { value: 'active', label: 'Active' },
+                            { value: 'closed', label: 'Closed' },
+                            { value: 'pending', label: 'Pending' },
+                          ]}
+                          value={chatStatusFilter}
+                          isOpen={openSelect === 'chatStatus'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'chatStatus' : null)}
+                          onSelect={(value) => setChatStatusFilter(value)}
+                          placeholder="Filter by Status"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                        <SelectField
+                          options={[
+                            { value: 'all', label: 'All Assignees' },
+                            { value: 'unassigned', label: 'Unassigned' },
+                            ...adminUsers.map((u: any) => ({ value: u._id, label: u.name || u.email })),
+                          ]}
+                          value={chatAssignedFilter}
+                          isOpen={openSelect === 'chatAssigned'}
+                          onOpenChange={(open) => setOpenSelect(open ? 'chatAssigned' : null)}
+                          onSelect={(value) => setChatAssignedFilter(value)}
+                          placeholder="Filter by Assignee"
+                          className="w-full lg:w-auto min-w-[160px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    {chatLoading ? (
+                      <TableSkeleton rows={8} columns={6} />
+                    ) : (
+                      <table className="min-w-full divide-y divide-gray-200 min-w-[1000px]">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Conversation
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Customer
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Last Message
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Status
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Assigned To
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Unread
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {chatConversations
+                            .filter(conversation => {
+                              const matchesSearch = 
+                                conversation.conversationId?.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
+                                conversation.guestEmail?.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
+                                conversation.userInfo?.email?.toLowerCase().includes(chatSearchTerm.toLowerCase());
+                              const matchesStatus = chatStatusFilter === 'all' || conversation.status === chatStatusFilter;
+                              const matchesAssigned = 
+                                chatAssignedFilter === 'all' || 
+                                (chatAssignedFilter === 'unassigned' && !conversation.assignedTo) ||
+                                conversation.assignedTo === chatAssignedFilter;
+                              return matchesSearch && matchesStatus && matchesAssigned;
+                            })
+                            .map((conversation) => (
+                              <tr 
+                                key={conversation._id || conversation.conversationId} 
+                                className={`hover:bg-gray-50 cursor-pointer ${conversation.unreadCount > 0 ? 'bg-blue-50/30' : ''}`}
+                                onClick={() => handleViewConversation(conversation)}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    #{conversation.conversationId?.slice(-8) || 'N/A'}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {conversation.lastMessageAt ? new Date(conversation.lastMessageAt).toLocaleDateString() : 'N/A'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {conversation.userInfo?.name || conversation.guestName || 'Guest'}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {conversation.userInfo?.email || conversation.guestEmail || 'N/A'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  {conversation.lastMessage ? (
+                                    <div>
+                                      <p className="text-sm text-gray-900 max-w-xs truncate">
+                                        {conversation.lastMessage.message}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {new Date(conversation.lastMessage.createdAt).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-400">No messages yet</p>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    conversation.status === 'active' ? 'bg-green-100 text-green-800' :
+                                    conversation.status === 'closed' ? 'bg-gray-100 text-gray-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {conversation.status || 'pending'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {conversation.assignedTo ? (
+                                    adminUsers.find((u: any) => u._id === conversation.assignedTo)?.name || 'Unknown'
+                                  ) : (
+                                    <span className="text-gray-400">Unassigned</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {conversation.unreadCount > 0 ? (
+                                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                                      {conversation.unreadCount}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">0</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewConversation(conversation);
+                                    }}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="View conversation"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {!chatLoading && chatConversations.length === 0 && (
+                      <div className="p-12 text-center text-gray-500">
+                        <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p className="text-lg font-medium">No chat conversations found</p>
+                        <p className="text-sm mt-1">No conversations match your search criteria.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Conversation Modal */}
+              {viewingConversation && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-100">
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900">
+                            Conversation #{viewingConversation.conversationId?.slice(-8) || 'N/A'}
+                          </h2>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {viewingConversation.userInfo?.name || viewingConversation.guestName || 'Guest'}
+                            {viewingConversation.userInfo?.email || viewingConversation.guestEmail ? 
+                              ` • ${viewingConversation.userInfo?.email || viewingConversation.guestEmail}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Set flag to prevent reopening - do this FIRST
+                            isClosingConversationRef.current = true;
+                            lastProcessedConversationIdRef.current = null;
+                            // Clear state immediately
+                            setViewingConversation(null);
+                            setChatMessages([]);
+                            setChatMessage('');
+                            // Remove from URL
+                            updateQuery({ conversationId: undefined });
+                          }}
+                          className="text-gray-400 hover:text-gray-700 hover:bg-white rounded-full p-1 transition-all"
+                        >
+                          <X className="h-6 w-6" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {/* Conversation Info */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div>
+                          <SelectField
+                            label="Status"
+                            options={[
+                              { value: 'pending', label: 'Pending' },
+                              { value: 'active', label: 'Active' },
+                              { value: 'closed', label: 'Closed' },
+                            ]}
+                            value={viewingConversation.status || 'pending'}
+                            isOpen={openSelect === 'conversationStatus'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'conversationStatus' : null)}
+                            onSelect={(value) => handleUpdateConversation(viewingConversation.conversationId, { status: value })}
+                            placeholder="Select Status"
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <SelectField
+                            label="Assigned To"
+                            options={[
+                              { value: '', label: 'Unassigned' },
+                              ...adminUsers.map((u: any) => ({ value: u._id, label: u.name || u.email })),
+                            ]}
+                            value={viewingConversation.assignedTo || ''}
+                            isOpen={openSelect === 'conversationAssigned'}
+                            onOpenChange={(open) => setOpenSelect(open ? 'conversationAssigned' : null)}
+                            onSelect={(value) => handleUpdateConversation(viewingConversation.conversationId, { assignedTo: value || null })}
+                            placeholder="Select Assignee"
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Created</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {viewingConversation.createdAt ? new Date(viewingConversation.createdAt).toLocaleDateString() : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Customer Info */}
+                      {(viewingConversation.userInfo || viewingConversation.guestName || viewingConversation.guestEmail) && (
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Customer Information</p>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-500">Name</p>
+                              <p className="text-gray-900 font-medium">
+                                {viewingConversation.userInfo?.name || viewingConversation.guestName || 'Guest'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Email</p>
+                              <p className="text-gray-900 font-medium">
+                                {viewingConversation.userInfo?.email || viewingConversation.guestEmail || 'N/A'}
+                              </p>
+                            </div>
+                            {viewingConversation.userInfo?.phone && (
+                              <div>
+                                <p className="text-gray-500">Phone</p>
+                                <p className="text-gray-900 font-medium">{viewingConversation.userInfo.phone}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Messages */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">Messages</p>
+                        <div className="space-y-4 max-h-96 overflow-y-auto bg-gray-50 rounded-lg p-4">
+                          {chatMessages && chatMessages.length > 0 ? (
+                            chatMessages.map((message: any) => (
+                              <div 
+                                key={message._id} 
+                                className={`flex ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
+                              >
+                                <div
+                                  className={`max-w-[75%] rounded-2xl shadow-sm p-4 ${
+                                    message.senderType === 'admin'
+                                      ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tl-sm'
+                                      : 'bg-white text-gray-900 border border-gray-200 rounded-tr-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className={`text-xs font-semibold ${
+                                      message.senderType === 'admin' ? 'text-white/90' : 'text-gray-600'
+                                    }`}>
+                                      {message.senderType === 'admin' ? 'Admin' : (message.senderName || 'Customer')}
+                                    </p>
+                                    <p className={`text-xs ${
+                                      message.senderType === 'admin' ? 'text-white/70' : 'text-gray-500'
+                                    }`}>
+                                      {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                  <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                                    message.senderType === 'admin' ? 'text-white' : 'text-gray-900'
+                                  }`}>
+                                    {message.message}
+                                  </p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center">No messages yet</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Reply Section */}
+                      <div className="border-t border-gray-200 pt-4">
+                        <p className="text-sm font-semibold text-gray-900 mb-2">Send Message</p>
+                        <textarea
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          placeholder="Type your message here..."
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+                          rows={4}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                              e.preventDefault();
+                              if (chatMessage.trim() && !sendingChatMessage) {
+                                handleSendChatMessage(viewingConversation.conversationId);
+                              }
+                            }
+                          }}
+                        />
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-gray-500">Press Ctrl+Enter or Cmd+Enter to send</p>
+                          <button
+                            onClick={() => handleSendChatMessage(viewingConversation.conversationId)}
+                            disabled={sendingChatMessage || !chatMessage.trim()}
+                            className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {sendingChatMessage ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4" />
+                                <span>Send Message</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

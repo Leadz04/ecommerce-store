@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, BookOpen, HelpCircle, TrendingUp, Star } from 'lucide-react';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 interface Article {
@@ -81,13 +80,6 @@ export default function KnowledgeBasePage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="mb-6">
-            <BackButton 
-              href="/support" 
-              variant="with-label" 
-              className="text-white/80 hover:text-white border-white/20 hover:bg-white/10"
-            />
-          </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Knowledge Base</h1>
           <p className="text-blue-100 text-lg">Find answers to common questions</p>
         </div>

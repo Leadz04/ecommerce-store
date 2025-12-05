@@ -19,7 +19,6 @@ import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useCartStore } from '@/store/cartStore';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 import type { Order } from '@/types';
@@ -131,9 +130,6 @@ export default function CustomerDashboard() {
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-4 sm:mb-0 pt-4 sm:pt-0">
-            <BackButton href="/" variant="with-label" />
-          </div>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pb-4 sm:pb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Dashboard</h1>

@@ -12,7 +12,6 @@ import Image from 'next/image';
 import StripePaymentForm from '@/components/StripePaymentForm';
 import PaymentConfirmation from '@/components/PaymentConfirmation';
 import SelectField from '@/components/SelectField';
-import BackButton from '@/components/BackButton';
 import PromoCodeInput from '@/components/PromoCodeInput';
 import { formatDeliveryDate, getDeliveryDateRange } from '@/lib/delivery-date';
 import toast from 'react-hot-toast';
@@ -461,7 +460,6 @@ export default function CheckoutPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
-              <BackButton href="/cart" variant="icon-only" className="shrink-0" />
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Checkout</h1>
                 <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">Complete your purchase securely</p>

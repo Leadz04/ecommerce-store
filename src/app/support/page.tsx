@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { MessageSquare, BookOpen, MessageCircle, Plus, Search, Filter, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import BackButton from '@/components/BackButton';
 import toast from 'react-hot-toast';
 
 export default function SupportPage() {
@@ -16,13 +15,6 @@ export default function SupportPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-          <div className="mb-6">
-            <BackButton 
-              href="/profile" 
-              variant="with-label" 
-              className="text-white/80 hover:text-white border-white/20 hover:bg-white/10"
-            />
-          </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Customer Support</h1>
           <p className="text-blue-100 text-lg">We're here to help you with any questions or issues</p>
         </div>
