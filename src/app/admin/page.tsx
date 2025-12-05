@@ -55,6 +55,7 @@ import {
   AlignLeft,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -84,8 +85,13 @@ import { AdminSkeleton, TableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
-const allowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
-type TabKey = typeof allowedTabs[number];
+// Base allowed tabs - brand tabs will be added dynamically
+const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions'] as const;
+type BaseTabKey = typeof baseAllowedTabs[number];
+type TabKey = BaseTabKey | string; // Allow dynamic brand tabs
+
+// For backward compatibility, create allowedTabs that will be computed in component
+const allowedTabs = baseAllowedTabs;
 type SidebarTab = {
   id: TabKey;
   label: string;
@@ -282,7 +288,9 @@ export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuthStore();
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
-  const initialTab = (allowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
+  
+  // For initial tab, just use baseAllowedTabs since brands won't be loaded yet
+  const initialTab = (baseAllowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [openNestedMenu, setOpenNestedMenu] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -659,6 +667,24 @@ export default function AdminDashboard() {
   const [jacketMakerSortOrder, setJacketMakerSortOrder] = useState<'asc' | 'desc'>('desc');
   const [jacketMakerBrands, setJacketMakerBrands] = useState<string[]>([]);
   const [jacketMakerCategories, setJacketMakerCategories] = useState<string[]>([]);
+  
+  // Brand products state (dynamic for all brands)
+  const [brands, setBrands] = useState<string[]>([]);
+  const [brandCounts, setBrandCounts] = useState<Record<string, number>>({});
+  const [brandProducts, setBrandProducts] = useState<Record<string, Product[]>>({});
+  const [brandPage, setBrandPage] = useState<Record<string, number>>({});
+  const [brandPerPage, setBrandPerPage] = useState<Record<string, number>>({});
+  const [brandTotal, setBrandTotal] = useState<Record<string, number>>({});
+  const [brandTotalPages, setBrandTotalPages] = useState<Record<string, number>>({});
+  const [brandLoading, setBrandLoading] = useState<Record<string, boolean>>({});
+  const [brandSearchTerm, setBrandSearchTerm] = useState<Record<string, string>>({});
+  const [brandCategory, setBrandCategory] = useState<Record<string, string>>({});
+  const [brandStatus, setBrandStatus] = useState<Record<string, string>>({});
+  const [brandIsActive, setBrandIsActive] = useState<Record<string, 'all' | 'active' | 'inactive'>>({});
+  const [brandSortBy, setBrandSortBy] = useState<Record<string, string>>({});
+  const [brandSortOrder, setBrandSortOrder] = useState<Record<string, 'asc' | 'desc'>>({});
+  const [brandCategories, setBrandCategories] = useState<Record<string, string[]>>({});
+  
   const [productEmailStats, setProductEmailStats] = useState<Record<string, {
     totalSent: number;
     totalOpened: number;
@@ -737,7 +763,7 @@ export default function AdminDashboard() {
   const [selectedIsActive, setSelectedIsActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [productSortBy, setProductSortBy] = useState<string>('createdAt');
   const [productSortOrder, setProductSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | 'reviewStatus' | 'jacketMakerCategory' | 'jacketMakerBrand' | 'jacketMakerStatus' | 'jacketMakerIsActive' | 'jacketMakerSortBy' | 'jacketMakerSortOrder' | null>(null);
+  const [openSelect, setOpenSelect] = useState<'category' | 'brand' | 'status' | 'role' | 'orderStatus' | 'organized' | 'productStatus' | 'stockCount' | 'isActive' | 'ticketStatus' | 'ticketPriority' | 'ticketAssigned' | 'chatStatus' | 'chatAssigned' | 'supportStatus' | 'supportCategory' | 'supportPriority' | 'reviewStatus' | 'jacketMakerCategory' | 'jacketMakerBrand' | 'jacketMakerStatus' | 'jacketMakerIsActive' | 'jacketMakerSortBy' | 'jacketMakerSortOrder' | string | null>(null);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
@@ -974,545 +1000,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Product Details Modal */}
-        {showProductModal && selectedProductForModal && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-            onClick={() => setShowProductModal(false)}
-          >
-            <div 
-              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
-                <button
-                  onClick={() => setShowProductModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
-                >
-                  <XCircle className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left Column - Images */}
-                  <div className="space-y-4">
-                    {/* Main Product Image */}
-                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
-                      <img
-                        src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
-                        alt={selectedProductForModal.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/placeholder-product.svg';
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Image Gallery */}
-                    {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
-                      <div className="grid grid-cols-4 gap-2">
-                        {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
-                          <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer hover:border-blue-400 transition-colors">
-                            <img
-                              src={img}
-                              alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/placeholder-product.svg';
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Column - Product Info */}
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-3xl font-bold text-gray-900 mb-2">{selectedProductForModal.name}</h3>
-                      {selectedProductForModal.description && (
-                        <p className="text-base text-gray-600 leading-relaxed">{selectedProductForModal.description}</p>
-                      )}
-                    </div>
-
-                    {/* Price Section */}
-                    <div className="flex items-baseline space-x-4 pb-4 border-b border-gray-200">
-                      <span className="text-4xl font-bold text-green-600">
-                        ${typeof selectedProductForModal.price === 'number' ? selectedProductForModal.price.toFixed(2) : selectedProductForModal.price || '0.00'}
-                      </span>
-                      {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > (selectedProductForModal.price || 0) && (
-                        <>
-                          <span className="text-2xl text-gray-400 line-through">
-                            ${selectedProductForModal.originalPrice.toFixed(2)}
-                          </span>
-                          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
-                            {Math.round(((selectedProductForModal.originalPrice - (selectedProductForModal.price || 0)) / selectedProductForModal.originalPrice) * 100)}% OFF
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Badges */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {selectedProductForModal.category && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 border border-purple-200">
-                          <Tag className="h-3.5 w-3.5 mr-1.5" />
-                          {selectedProductForModal.category}
-                        </span>
-                      )}
-                      {selectedProductForModal.brand && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                          {selectedProductForModal.brand}
-                        </span>
-                      )}
-                      {selectedProductForModal.productType && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                          {selectedProductForModal.productType}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Rating */}
-                    {(selectedProductForModal.rating || selectedProductForModal.reviewCount) && (
-                      <div className="flex items-center space-x-2 pb-4 border-b border-gray-200">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <svg
-                              key={i}
-                              className={`h-5 w-5 ${i < Math.floor(selectedProductForModal.rating || 0)
-                                ? 'text-yellow-400'
-                                : 'text-gray-300'
-                                }`}
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">
-                          {selectedProductForModal.rating?.toFixed(1) || '0.0'}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          ({selectedProductForModal.reviewCount || 0} {selectedProductForModal.reviewCount === 1 ? 'review' : 'reviews'})
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Status Grid */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Stock Status</h4>
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold ${
-                          (selectedProductForModal.inStock || (selectedProductForModal.stockCount && selectedProductForModal.stockCount > 0))
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {(selectedProductForModal.inStock || (selectedProductForModal.stockCount && selectedProductForModal.stockCount > 0))
-                            ? `In Stock (${selectedProductForModal.stockCount || 0})`
-                            : 'Out of Stock'}
-                        </span>
-                      </div>
-                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</h4>
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold ${
-                          selectedProductForModal.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {selectedProductForModal.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Source URL */}
-                    {selectedProductForModal.sourceUrl && (
-                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                        <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Source</h4>
-                        <a
-                          href={selectedProductForModal.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-800 underline break-all flex items-center gap-2"
-                        >
-                          <span className="truncate">{selectedProductForModal.sourceUrl}</span>
-                          <ExternalLink className="h-4 w-4 flex-shrink-0" />
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Variants */}
-                    {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Variants</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {selectedProductForModal.variants.map((variant: any, idx: number) => (
-                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-900">
-                                    {variant.title || variant.name || `Variant ${idx + 1}`}
-                                  </span>
-                                  {variant.price && (
-                                    <span className="text-sm text-gray-600 ml-2">
-                                      ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
-                                    </span>
-                                  )}
-                                  {variant.originalPrice && variant.originalPrice > (variant.price || 0) && (
-                                    <span className="text-xs text-gray-400 line-through ml-1">
-                                      ${typeof variant.originalPrice === 'number' ? variant.originalPrice.toFixed(2) : variant.originalPrice}
-                                    </span>
-                                  )}
-                                </div>
-                                {(variant.available !== undefined || variant.inventory !== undefined) && (
-                                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                    (variant.available !== false && (variant.inventory === null || variant.inventory === undefined || variant.inventory > 0))
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-red-100 text-red-800'
-                                  }`}>
-                                    {(variant.available !== false && (variant.inventory === null || variant.inventory === undefined || variant.inventory > 0))
-                                      ? `In Stock${variant.inventory !== null && variant.inventory !== undefined ? ` (${variant.inventory})` : ''}`
-                                      : 'Out of Stock'}
-                                  </span>
-                                )}
-                              </div>
-                              {variant.sku && (
-                                <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {isSuperAdmin && (
-                      <div className="flex items-center justify-between p-4 border border-purple-100 rounded-lg bg-purple-50/40">
-                        <div>
-                          <h4 className="font-medium text-purple-900 mb-1">Etsy Export</h4>
-                          <p className="text-sm text-purple-700">
-                            {selectedProductForModal.etsyExported
-                              ? `Exported${selectedProductForModal.etsyExportedAt ? ` on ${new Date(selectedProductForModal.etsyExportedAt).toLocaleDateString()}` : ''}`
-                              : 'Not exported yet'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleToggleEtsyExport(selectedProductForModal._id, !selectedProductForModal.etsyExported)}
-                          disabled={!!etsyExportLoading[selectedProductForModal._id]}
-                          className={`inline-flex items-center space-x-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedProductForModal.etsyExported
-                            ? 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50'
-                            : 'bg-purple-600 text-white hover:bg-purple-700'
-                            } ${etsyExportLoading[selectedProductForModal._id] ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        >
-                          {etsyExportLoading[selectedProductForModal._id] ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <CheckCircle className="h-4 w-4" />
-                          )}
-                          <span>{selectedProductForModal.etsyExported ? 'Unmark' : 'Mark exported'}</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Description (Full) */}
-                    {selectedProductForModal.description && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Description</h4>
-                        <div className="prose prose-sm max-w-none">
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                            {selectedProductForModal.description}
-                          </p>
-                        </div>
-                        {selectedProductForModal.descriptionHtml && (
-                          <div 
-                            className="mt-3 text-sm text-gray-700 prose prose-sm max-w-none"
-                            dangerouslySetInnerHTML={{ __html: selectedProductForModal.descriptionHtml }}
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {/* Tags */}
-                    {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Tags ({selectedProductForModal.tags.length})</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedProductForModal.tags.map((tag, index) => (
-                            <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200 transition-colors">
-                              <Tag className="h-3 w-3 mr-1" />
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Specifications */}
-                    {selectedProductForModal.specifications && Object.keys(selectedProductForModal.specifications).length > 0 && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Specifications</h4>
-                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
-                          <div className="grid grid-cols-1 gap-3">
-                            {Object.entries(selectedProductForModal.specifications).map(([key, value]) => (
-                              <div key={key} className="flex justify-between items-start py-2 border-b border-gray-200 last:border-0">
-                                <span className="font-semibold text-gray-700 text-sm capitalize">{key}:</span>
-                                <span className="text-gray-900 text-sm text-right ml-4 flex-1">{String(value)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Additional Product Info */}
-                    <div className="pt-4 border-t border-gray-200 space-y-3">
-                      <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Additional Information</h4>
-                      
-                      {/* Stock Details */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Stock Count</div>
-                          <div className="text-lg font-bold text-gray-900">{selectedProductForModal.stockCount ?? 'N/A'}</div>
-                        </div>
-                        <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">In Stock</div>
-                          <div className={`text-lg font-bold ${selectedProductForModal.inStock ? 'text-green-600' : 'text-red-600'}`}>
-                            {selectedProductForModal.inStock ? 'Yes' : 'No'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Rating Details */}
-                      {(selectedProductForModal.rating || selectedProductForModal.reviewCount) && (
-                        <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">Rating</div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={`h-4 w-4 ${
-                                        i < Math.floor(selectedProductForModal.rating || 0)
-                                          ? 'fill-yellow-400 text-yellow-400'
-                                          : 'text-gray-300'
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-                                <span className="text-sm font-bold text-gray-900">
-                                  {selectedProductForModal.rating?.toFixed(1) || '0.0'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-1">Reviews</div>
-                              <div className="text-lg font-bold text-gray-900">{selectedProductForModal.reviewCount || 0}</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {isSuperAdmin && (
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-gray-900">Quick Copy for Etsy</h4>
-                        {[
-                          { label: 'Title', value: selectedProductTitle },
-                          { label: 'Description', value: selectedProductDescription },
-                          { label: 'Tags', value: selectedProductTagsText },
-                          { label: 'Specifications', value: selectedProductSpecsText },
-                        ].map(section => (
-                          <div key={section.label} className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 bg-white p-3">
-                            <div className="flex-1">
-                              <p className="text-xs uppercase tracking-wide text-gray-500">{section.label}</p>
-                              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
-                                {section.value || '—'}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => copyProductSection(section.label, section.value)}
-                              className="inline-flex items-center space-x-1 rounded-md border border-purple-200 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
-                            >
-                              <Copy className="h-4 w-4" />
-                              <span>Copy</span>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* FAQs */}
-                    {((selectedProductForModal.faqs && selectedProductForModal.faqs.length > 0) || 
-                     (selectedProductForModal.generatedFAQs && selectedProductForModal.generatedFAQs.length > 0)) && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
-                          FAQs {selectedProductForModal.generatedFAQs ? `(${selectedProductForModal.generatedFAQs.length})` : `(${selectedProductForModal.faqs?.length || 0})`}
-                        </h4>
-                        <div className="space-y-3 max-h-64 overflow-y-auto">
-                          {selectedProductForModal.generatedFAQs?.map((faq: any, idx: number) => (
-                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                              <div className="flex items-start gap-2 mb-2">
-                                <HelpCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <p className="text-sm font-semibold text-gray-900">{faq.question}</p>
-                              </div>
-                              <p className="text-sm text-gray-700 ml-6">{faq.answer}</p>
-                              {faq.source && (
-                                <div className="mt-2 ml-6">
-                                  <span className="text-xs text-gray-500">Source: {faq.source}</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          {selectedProductForModal.faqs?.map((faq: string, idx: number) => (
-                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                              <p className="text-sm text-gray-700">{faq}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Related Searches */}
-                    {selectedProductForModal.relatedSearches && selectedProductForModal.relatedSearches.length > 0 && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
-                          Related Searches ({selectedProductForModal.relatedSearches.length})
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedProductForModal.relatedSearches.map((search: string, idx: number) => (
-                            <span key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {search}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* People Also Search For */}
-                    {selectedProductForModal.peopleAlsoSearchFor && selectedProductForModal.peopleAlsoSearchFor.length > 0 && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
-                          People Also Search For ({selectedProductForModal.peopleAlsoSearchFor.length})
-                        </h4>
-                        <div className="space-y-2">
-                          {selectedProductForModal.peopleAlsoSearchFor.map((item: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg border border-gray-200 bg-gray-50">
-                              <span className="text-sm text-gray-900">{item.text}</span>
-                              {item.link && (
-                                <a
-                                  href={item.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                >
-                                  View
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Expected Release Date */}
-                    {selectedProductForModal.expectedReleaseDate && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-2 uppercase tracking-wide">Expected Release Date</h4>
-                        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-blue-600" />
-                            <span className="text-sm font-semibold text-blue-900">
-                              {new Date(selectedProductForModal.expectedReleaseDate).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Metadata */}
-                    <div className="pt-4 border-t border-gray-200">
-                      <h4 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">Metadata</h4>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Created</div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {new Date(selectedProductForModal.createdAt || new Date()).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </div>
-                        <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Last Updated</div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {new Date(selectedProductForModal.updatedAt || new Date()).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </div>
-                        {selectedProductForModal.publishAt && (
-                          <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Publish Date</div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {new Date(selectedProductForModal.publishAt).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric'
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        {selectedProductForModal._id && (
-                          <div className="p-2 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Product ID</div>
-                            <div className="text-xs font-mono text-gray-600 break-all">{selectedProductForModal._id}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end space-x-3">
-                  <button
-                    onClick={() => setShowProductModal(false)}
-                    className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleProductSelection(selectedProductForModal._id);
-                      toast.success(selectedProductIds.includes(selectedProductForModal._id) ? 'Product deselected' : 'Product selected');
-                      setShowProductModal(false);
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    {selectedProductIds.includes(selectedProductForModal._id) ? 'Deselect' : 'Select'} Product
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Product Details Modal removed from here - now at main AdminDashboard level */}
       </div>
     );
   }
@@ -1683,6 +1171,14 @@ export default function AdminDashboard() {
     updateQuery({ tab });
   };
 
+  // Create brand tabs dynamically
+  const brandTabs: SidebarTab[] = brands.map(brand => ({
+    id: `brand-${brand.toLowerCase().replace(/\s+/g, '-')}` as TabKey,
+    label: brand,
+    icon: Package,
+    description: `${brandCounts[brand] || 0} products (STAGE3)`
+  }));
+
   const sidebarTabs: SidebarTab[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3, description: 'Snapshot & key KPIs' },
     { id: 'sourcing', label: 'Sourcing', icon: Download, description: 'Import and curate products' },
@@ -1690,6 +1186,7 @@ export default function AdminDashboard() {
     { id: 'roles', label: 'Roles & Permissions', icon: Shield },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker (STAGE3)' },
+    ...brandTabs, // Add dynamic brand tabs
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
@@ -1847,6 +1344,14 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated]);
 
+  // Fetch brands from STAGE3 on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchBrandsStage3();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   // Fetch jacket maker products when tab is active
   useEffect(() => {
     if (activeTab === 'jacket-maker-products' && isAuthenticated) {
@@ -1854,6 +1359,34 @@ export default function AdminDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated, jacketMakerPage, jacketMakerSearchTerm, jacketMakerCategory, jacketMakerBrand, jacketMakerStatus, jacketMakerIsActive, jacketMakerSortBy, jacketMakerSortOrder]);
+
+  // Track the last active brand tab to prevent unnecessary refetches
+  const lastActiveBrandTab = useRef<string | null>(null);
+
+  // Fetch brand products when a brand tab is active
+  useEffect(() => {
+    if (isAuthenticated && brands.length > 0) {
+      const brandTab = brands.find(brand => activeTab === `brand-${brand.toLowerCase().replace(/\s+/g, '-')}`);
+      if (brandTab) {
+        const brandName = brandTab;
+        const brandTabId = `brand-${brandName.toLowerCase().replace(/\s+/g, '-')}`;
+        
+        // Only fetch if:
+        // 1. This is a different brand tab than last time, OR
+        // 2. We haven't loaded products for this brand yet
+        const shouldFetch = lastActiveBrandTab.current !== brandTabId || !brandProducts[brandName] || brandProducts[brandName].length === 0;
+        
+        if (shouldFetch) {
+          lastActiveBrandTab.current = brandTabId;
+          fetchBrandProducts(brandName);
+        }
+      } else {
+        // Reset when switching away from brand tabs
+        lastActiveBrandTab.current = null;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated, brands.length]);
 
   // Fetch reviews when reviews tab is active
   useEffect(() => {
@@ -2147,6 +1680,103 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to fetch jacket maker products');
     } finally {
       setJacketMakerLoading(false);
+    }
+  };
+
+  // Fetch all brands from STAGE3
+  const fetchBrandsStage3 = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/admin/brands-stage3', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch brands: ${res.status}`);
+      }
+      const json = await res.json();
+      if (json.brands && Array.isArray(json.brands)) {
+        setBrands(json.brands);
+        setBrandCounts(json.brandCounts || {});
+        // Initialize state for each brand
+        json.brands.forEach((brand: string) => {
+          if (!brandPage[brand]) setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+          if (!brandPerPage[brand]) setBrandPerPage(prev => ({ ...prev, [brand]: 20 }));
+          if (!brandTotal[brand]) setBrandTotal(prev => ({ ...prev, [brand]: 0 }));
+          if (!brandTotalPages[brand]) setBrandTotalPages(prev => ({ ...prev, [brand]: 1 }));
+          if (!brandLoading[brand]) setBrandLoading(prev => ({ ...prev, [brand]: false }));
+          if (!brandSearchTerm[brand]) setBrandSearchTerm(prev => ({ ...prev, [brand]: '' }));
+          if (!brandCategory[brand]) setBrandCategory(prev => ({ ...prev, [brand]: '' }));
+          if (!brandStatus[brand]) setBrandStatus(prev => ({ ...prev, [brand]: '' }));
+          if (!brandIsActive[brand]) setBrandIsActive(prev => ({ ...prev, [brand]: 'all' }));
+          if (!brandSortBy[brand]) setBrandSortBy(prev => ({ ...prev, [brand]: 'createdAt' }));
+          if (!brandSortOrder[brand]) setBrandSortOrder(prev => ({ ...prev, [brand]: 'desc' }));
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch brands');
+    }
+  };
+
+  // Fetch products for a specific brand
+  const fetchBrandProducts = async (brandName: string, pageToFetch?: number) => {
+    try {
+      setBrandLoading(prev => ({ ...prev, [brandName]: true }));
+      const token = localStorage.getItem('token');
+      const page = pageToFetch || brandPage[brandName] || 1;
+      const limit = brandPerPage[brandName] || 20;
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        brand: brandName,
+      });
+
+      if (brandSearchTerm[brandName]) {
+        params.append('search', brandSearchTerm[brandName]);
+      }
+      if (brandCategory[brandName]) {
+        params.append('category', brandCategory[brandName]);
+      }
+      if (brandStatus[brandName]) {
+        params.append('status', brandStatus[brandName]);
+      }
+      if (brandIsActive[brandName] && brandIsActive[brandName] !== 'all') {
+        params.append('isActive', brandIsActive[brandName]);
+      }
+      if (brandSortBy[brandName]) {
+        params.append('sortBy', brandSortBy[brandName]);
+      }
+      if (brandSortOrder[brandName]) {
+        params.append('sortOrder', brandSortOrder[brandName]);
+      }
+
+      const res = await fetch(`/api/admin/brand-products?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => '');
+        throw new Error(`Failed to fetch ${brandName} products: ${res.status} ${err}`);
+      }
+      const json = await res.json();
+      const items = Array.isArray(json.products) ? json.products : [];
+      setBrandProducts(prev => ({ ...prev, [brandName]: items }));
+
+      const total = Number(json.pagination?.total ?? 0);
+      const pages = Number(json.pagination?.pages ?? 1);
+
+      setBrandTotal(prev => ({ ...prev, [brandName]: total }));
+      setBrandTotalPages(prev => ({ ...prev, [brandName]: pages }));
+      setBrandPage(prev => ({ ...prev, [brandName]: page }));
+
+      if (json.filters?.categories) {
+        setBrandCategories(prev => ({ ...prev, [brandName]: json.filters.categories }));
+      }
+    } catch (error) {
+      console.error(`Error fetching ${brandName} products:`, error);
+      toast.error(error instanceof Error ? error.message : `Failed to fetch ${brandName} products`);
+    } finally {
+      setBrandLoading(prev => ({ ...prev, [brandName]: false }));
     }
   };
 
@@ -9323,6 +8953,284 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+              {/* Brand Products Tabs - Dynamic for each brand */}
+              {brands.map(brand => {
+                const brandTabId = `brand-${brand.toLowerCase().replace(/\s+/g, '-')}`;
+                const brandProductsList = brandProducts[brand] || [];
+                const isLoading = brandLoading[brand] || false;
+                const currentPage = brandPage[brand] || 1;
+                const perPage = brandPerPage[brand] || 20;
+                const total = brandTotal[brand] || 0;
+                const totalPages = brandTotalPages[brand] || 1;
+                const searchTerm = brandSearchTerm[brand] || '';
+                const category = brandCategory[brand] || '';
+                const status = brandStatus[brand] || '';
+                const isActive = brandIsActive[brand] || 'all';
+                const sortBy = brandSortBy[brand] || 'createdAt';
+                const sortOrder = brandSortOrder[brand] || 'desc';
+                const categories = brandCategories[brand] || [];
+
+                if (activeTab !== brandTabId) return null;
+
+                return (
+                  <div key={brandTabId} className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
+                    <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{brand} Products</h2>
+                          <p className="text-xs sm:text-sm text-gray-600">Products from {brand} (STAGE3 Database) - {total} total products</p>
+                        </div>
+                        <button
+                          onClick={() => fetchBrandProducts(brand)}
+                          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
+                        >
+                          <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+
+                      {/* Search and Filters */}
+                      <div className="flex flex-col gap-4 sm:gap-5">
+                        {/* Search Section */}
+                        <div className="w-full">
+                          <label className="block text-sm font-semibold text-gray-700 mb-2.5">Search Products</label>
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                            <input
+                              type="text"
+                              placeholder="Search by name, description, or brand..."
+                              value={searchTerm}
+                              onChange={(e) => {
+                                setBrandSearchTerm(prev => ({ ...prev, [brand]: e.target.value }));
+                                setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  fetchBrandProducts(brand, 1);
+                                }
+                              }}
+                              onBlur={() => {
+                                // Fetch when user leaves the search field
+                                fetchBrandProducts(brand, 1);
+                              }}
+                              className="w-full pl-12 pr-4 py-3.5 text-base border-2 border-gray-300 text-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all shadow-sm hover:shadow-md bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Filters Section */}
+                        <div className="flex flex-col gap-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filters</h3>
+                            <button
+                              onClick={() => {
+                                setBrandCategory(prev => ({ ...prev, [brand]: '' }));
+                                setBrandStatus(prev => ({ ...prev, [brand]: '' }));
+                                setBrandIsActive(prev => ({ ...prev, [brand]: 'all' }));
+                                setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                fetchBrandProducts(brand, 1);
+                              }}
+                              className="text-xs text-purple-600 hover:text-purple-800 font-medium underline"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+
+                          {/* Filter Groups */}
+                          <div className="flex flex-col gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                              <div className="flex flex-col">
+                                <label className="text-sm font-medium text-gray-700 mb-2">Category</label>
+                                <SelectField
+                                  options={[
+                                    { value: '', label: 'All Categories' },
+                                    ...categories.map(cat => ({ value: cat, label: cat })),
+                                  ]}
+                                  value={category}
+                                  isOpen={openSelect === `brandCategory-${brand}`}
+                                  onOpenChange={(open) => setOpenSelect(open ? `brandCategory-${brand}` : null)}
+                                  onSelect={(value) => {
+                                    setBrandCategory(prev => ({ ...prev, [brand]: value }));
+                                    setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                    fetchBrandProducts(brand, 1);
+                                  }}
+                                  className="w-full"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-sm font-medium text-gray-700 mb-2">Status</label>
+                                <SelectField
+                                  options={[
+                                    { value: '', label: 'All Statuses' },
+                                    { value: 'draft', label: 'Draft' },
+                                    { value: 'published', label: 'Published' },
+                                    { value: 'archived', label: 'Archived' },
+                                  ]}
+                                  value={status}
+                                  isOpen={openSelect === `brandStatus-${brand}`}
+                                  onOpenChange={(open) => setOpenSelect(open ? `brandStatus-${brand}` : null)}
+                                  onSelect={(value) => {
+                                    setBrandStatus(prev => ({ ...prev, [brand]: value }));
+                                    setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                    fetchBrandProducts(brand, 1);
+                                  }}
+                                  className="w-full"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-sm font-medium text-gray-700 mb-2">Active Status</label>
+                                <SelectField
+                                  options={[
+                                    { value: 'all', label: 'All' },
+                                    { value: 'active', label: 'Active' },
+                                    { value: 'inactive', label: 'Inactive' },
+                                  ]}
+                                  value={isActive}
+                                  isOpen={openSelect === `brandIsActive-${brand}`}
+                                  onOpenChange={(open) => setOpenSelect(open ? `brandIsActive-${brand}` : null)}
+                                  onSelect={(value) => {
+                                    setBrandIsActive(prev => ({ ...prev, [brand]: value as 'all' | 'active' | 'inactive' }));
+                                    setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                    fetchBrandProducts(brand, 1);
+                                  }}
+                                  className="w-full"
+                                />
+                              </div>
+
+                              <div className="flex flex-col">
+                                <label className="text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                                <SelectField
+                                  options={[
+                                    { value: 'createdAt', label: 'Created Date' },
+                                    { value: 'updatedAt', label: 'Updated Date' },
+                                    { value: 'name', label: 'Name' },
+                                    { value: 'price', label: 'Price' },
+                                  ]}
+                                  value={sortBy}
+                                  isOpen={openSelect === `brandSortBy-${brand}`}
+                                  onOpenChange={(open) => setOpenSelect(open ? `brandSortBy-${brand}` : null)}
+                                  onSelect={(value) => {
+                                    setBrandSortBy(prev => ({ ...prev, [brand]: value }));
+                                    setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                    fetchBrandProducts(brand, 1);
+                                  }}
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Sort Order */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="flex flex-col">
+                                <label className="text-sm font-medium text-gray-700 mb-2">Sort Order</label>
+                                <SelectField
+                                  options={[
+                                    { value: 'desc', label: 'Descending' },
+                                    { value: 'asc', label: 'Ascending' },
+                                  ]}
+                                  value={sortOrder}
+                                  isOpen={openSelect === `brandSortOrder-${brand}`}
+                                  onOpenChange={(open) => setOpenSelect(open ? `brandSortOrder-${brand}` : null)}
+                                  onSelect={(value) => {
+                                    setBrandSortOrder(prev => ({ ...prev, [brand]: value as 'asc' | 'desc' }));
+                                    setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                    fetchBrandProducts(brand, 1);
+                                  }}
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Products List */}
+                    <div className="p-4 sm:p-6 lg:p-8">
+                      {isLoading ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                          {[...Array(8)].map((_, i) => (
+                            <AdminSkeleton key={i} />
+                          ))}
+                        </div>
+                      ) : brandProductsList.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-600">No products found</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                            {brandProductsList.map((product) => (
+                              <AdminProductCard
+                                key={product._id}
+                                product={product}
+                                clickable={true}
+                                onClick={() => {
+                                  setSelectedProductForModal(product);
+                                  setShowProductModal(true);
+                                }}
+                                highlightTone="violet"
+                              />
+                            ))}
+                          </div>
+
+                          {/* Pagination Controls */}
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 py-5 sm:py-6 bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50 border-t-2 border-gray-200 mt-6">
+                            <div className="text-sm sm:text-base text-gray-700 font-semibold text-center sm:text-left">
+                              {(() => {
+                                const start = (currentPage - 1) * perPage + 1;
+                                const end = Math.min(currentPage * perPage, total);
+                                return (
+                                  <span>
+                                    Showing <span className="text-purple-700 font-bold">{start}</span> to <span className="text-purple-700 font-bold">{end}</span> of <span className="text-purple-700 font-bold">{total}</span> products
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <div className="flex items-center gap-3 sm:gap-4">
+                              <button
+                                onClick={() => {
+                                  const prevPage = currentPage - 1;
+                                  setBrandPage(prev => ({ ...prev, [brand]: prevPage }));
+                                  fetchBrandProducts(brand, prevPage);
+                                }}
+                                className="px-4 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm hover:shadow-md"
+                                disabled={currentPage <= 1}
+                              >
+                                <span className="flex items-center space-x-1.5">
+                                  <ChevronLeft className="h-4 w-4" />
+                                  <span>Previous</span>
+                                </span>
+                              </button>
+                              <span className="text-sm text-gray-600 font-medium px-3">
+                                Page {currentPage} of {totalPages}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  const nextPage = currentPage + 1;
+                                  setBrandPage(prev => ({ ...prev, [brand]: nextPage }));
+                                  fetchBrandProducts(brand, nextPage);
+                                }}
+                                className="px-4 py-2.5 text-sm font-medium border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm hover:shadow-md"
+                                disabled={currentPage >= totalPages}
+                              >
+                                <span className="flex items-center space-x-1.5">
+                                  <span>Next</span>
+                                  <ChevronRight className="h-4 w-4" />
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
               {/* Policy Review Tab */}
               {activeTab === 'policy-review' && (
                 <div className="space-y-6 max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -10689,6 +10597,166 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               )}
+
+        {/* Product Details Modal - Available for all tabs including brand products */}
+        {showProductModal && selectedProductForModal && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+            onClick={() => setShowProductModal(false)}
+          >
+            <div 
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
+                <button
+                  onClick={() => setShowProductModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column - Images */}
+                  <div className="space-y-4">
+                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
+                      <img
+                        src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
+                        alt={selectedProductForModal.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+                        }}
+                      />
+                    </div>
+                    {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
+                          <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                            <img
+                              src={img}
+                              alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column - Product Info */}
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-3xl font-bold text-gray-900 mb-2">{selectedProductForModal.name}</h3>
+                      {selectedProductForModal.description && (
+                        <p className="text-base text-gray-600 leading-relaxed">{selectedProductForModal.description}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-baseline space-x-4 pb-4 border-b border-gray-200">
+                      <span className="text-4xl font-bold text-green-600">
+                        ${typeof selectedProductForModal.price === 'number' ? selectedProductForModal.price.toFixed(2) : selectedProductForModal.price || '0.00'}
+                      </span>
+                      {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > (selectedProductForModal.price || 0) && (
+                        <>
+                          <span className="text-2xl text-gray-400 line-through">
+                            ${selectedProductForModal.originalPrice.toFixed(2)}
+                          </span>
+                          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
+                            {Math.round(((selectedProductForModal.originalPrice - (selectedProductForModal.price || 0)) / selectedProductForModal.originalPrice) * 100)}% OFF
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedProductForModal.category && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                          <Tag className="h-3.5 w-3.5 mr-1.5" />
+                          {selectedProductForModal.category}
+                        </span>
+                      )}
+                      {selectedProductForModal.brand && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          {selectedProductForModal.brand}
+                        </span>
+                      )}
+                    </div>
+
+                    {selectedProductForModal.sourceUrl && (
+                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                        <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Source</h4>
+                        <a
+                          href={selectedProductForModal.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 underline break-all flex items-center gap-2"
+                        >
+                          <span className="truncate">{selectedProductForModal.sourceUrl}</span>
+                          <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                        </a>
+                      </div>
+                    )}
+
+                    {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Variants</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {selectedProductForModal.variants.map((variant: any, idx: number) => (
+                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-900">
+                                  {variant.title || variant.name || `Variant ${idx + 1}`}
+                                </span>
+                                {variant.price && (
+                                  <span className="text-sm text-gray-600">
+                                    ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
+                                  </span>
+                                )}
+                              </div>
+                              {variant.sku && (
+                                <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Tags</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProductForModal.tags.map((tag, index) => (
+                            <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                              <Tag className="h-3 w-3 mr-1" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end space-x-3 mt-6">
+                  <button
+                    onClick={() => setShowProductModal(false)}
+                    className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
             </div>
           </div>
         </div>
