@@ -114,6 +114,8 @@ export default function CouponManagement() {
   const [deletingCoupon, setDeletingCoupon] = useState<string | null>(null);
   const [stats, setStats] = useState<CouponStats | null>(null);
   const [showStats, setShowStats] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [openSelect, setOpenSelect] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CouponFormData>({
@@ -163,6 +165,8 @@ export default function CouponManagement() {
   };
 
   const fetchStats = async () => {
+    setStatsLoading(true);
+    setStatsError(null);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/admin/coupons/stats', {
@@ -173,8 +177,12 @@ export default function CouponManagement() {
 
       const data = await response.json();
       setStats(data.stats);
+      setStatsError(null);
     } catch (error: any) {
       console.error('Error fetching stats:', error);
+      setStatsError(error.message || 'Failed to load statistics');
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -338,74 +346,119 @@ export default function CouponManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Stats Section */}
-      {stats && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Coupon Statistics</h3>
+      {/* Stats Section - Always show header, content is conditional */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Coupon Statistics</h3>
+          <div className="flex items-center space-x-2">
+            {statsLoading && (
+              <span className="text-sm text-gray-500">Loading...</span>
+            )}
             <button
               onClick={() => setShowStats(!showStats)}
-              className="px-4 py-2 text-sm font-medium border-2 border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+              disabled={statsLoading || !stats}
+              className="px-4 py-2 text-sm font-medium border-2 border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {showStats ? 'Hide' : 'Show'}
             </button>
           </div>
+        </div>
 
-          {showStats && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-lg p-4">
-              <div className="text-sm text-blue-600 font-medium">Total Discount Given</div>
-              <div className="text-2xl font-bold text-blue-900">
-                ${stats.overall.totalDiscountGiven.toFixed(2)}
+        {/* Error State */}
+        {statsError && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="text-sm text-red-700">{statsError}</span>
               </div>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="text-sm text-green-600 font-medium">Total Revenue</div>
-              <div className="text-2xl font-bold text-green-900">
-                ${stats.overall.totalRevenue.toFixed(2)}
-              </div>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-4">
-              <div className="text-sm text-purple-600 font-medium">Total Usage</div>
-              <div className="text-2xl font-bold text-purple-900">
-                {stats.overall.totalCouponsUsed}
-              </div>
-            </div>
-            <div className="bg-orange-50 rounded-lg p-4">
-              <div className="text-sm text-orange-600 font-medium">Active Coupons</div>
-              <div className="text-2xl font-bold text-orange-900">
-                {stats.generalCoupons.activeCoupons}
-              </div>
+              <button
+                onClick={fetchStats}
+                className="text-sm text-red-600 hover:text-red-800 font-medium"
+              >
+                Retry
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Top Coupons */}
-          {stats.topCoupons && stats.topCoupons.length > 0 && (
-            <div className="mt-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Top Performing Coupons</h4>
-              <div className="space-y-2">
-                {stats.topCoupons.slice(0, 5).map((coupon, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <span className="font-mono text-sm font-semibold">{coupon.code}</span>
-                      {coupon.name && <span className="text-sm text-gray-600">{coupon.name}</span>}
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-gray-600">{coupon.usageCount} uses</span>
-                      <span className="text-green-600 font-semibold">
-                        ${coupon.totalRevenue.toFixed(2)} revenue
-                      </span>
-                    </div>
-                  </div>
-                ))}
+        {/* Loading State */}
+        {statsLoading && !stats && (
+          <div className="py-8 text-center text-gray-500">
+            <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin text-blue-600" />
+            <p className="text-sm">Loading statistics...</p>
+          </div>
+        )}
+
+        {/* Stats Content - Only show when stats exist and showStats is true */}
+        {showStats && stats && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="text-sm text-blue-600 font-medium">Total Discount Given</div>
+                <div className="text-2xl font-bold text-blue-900">
+                  ${stats.overall.totalDiscountGiven.toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <div className="text-sm text-green-600 font-medium">Total Revenue</div>
+                <div className="text-2xl font-bold text-green-900">
+                  ${stats.overall.totalRevenue.toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4">
+                <div className="text-sm text-purple-600 font-medium">Total Usage</div>
+                <div className="text-2xl font-bold text-purple-900">
+                  {stats.overall.totalCouponsUsed}
+                </div>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-4">
+                <div className="text-sm text-orange-600 font-medium">Active Coupons</div>
+                <div className="text-2xl font-bold text-orange-900">
+                  {stats.generalCoupons.activeCoupons}
+                </div>
               </div>
             </div>
-          )}
-            </>
-          )}
-        </div>
-      )}
+
+            {/* Top Coupons */}
+            {stats.topCoupons && stats.topCoupons.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Top Performing Coupons</h4>
+                <div className="space-y-2">
+                  {stats.topCoupons.slice(0, 5).map((coupon, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <span className="font-mono text-sm font-semibold">{coupon.code}</span>
+                        {coupon.name && <span className="text-sm text-gray-600">{coupon.name}</span>}
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <span className="text-gray-600">{coupon.usageCount} uses</span>
+                        <span className="text-green-600 font-semibold">
+                          ${coupon.totalRevenue.toFixed(2)} revenue
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty State - When stats are hidden */}
+        {!showStats && stats && (
+          <div className="py-4 text-center text-gray-500 text-sm">
+            Statistics are hidden. Click "Show" to display them.
+          </div>
+        )}
+
+        {/* Empty State - When no stats loaded yet and not loading */}
+        {!statsLoading && !stats && !statsError && (
+          <div className="py-4 text-center text-gray-500 text-sm">
+            No statistics available yet.
+          </div>
+        )}
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
