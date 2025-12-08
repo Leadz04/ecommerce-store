@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, Link2, RefreshCw, Code, Copy, Check, ChevronDown, ChevronUp, ExternalLink, ShoppingCart, BarChart3, Settings, Cloud, Shield, ShieldCheck, Activity, Package } from 'lucide-react';
+import { Download, Link2, RefreshCw, Code, Copy, Check, ChevronDown, ChevronUp, ExternalLink, ShoppingCart, BarChart3, Settings, Cloud, Shield, ShieldCheck, Activity, Package, Edit } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SelectField from '@/components/SelectField';
+import ImageEditor from '@/components/ImageEditor';
+import { useAuthStore } from '@/store/authStore';
 
 interface ScrapedItem {
   _id: string;
@@ -127,6 +129,12 @@ export default function SourcingPanel() {
   const [savedZoomIdx, setSavedZoomIdx] = useState<number | null>(null);
   const [savedSelectedIds, setSavedSelectedIds] = useState<Record<string, boolean>>({});
   const [savedViewMode, setSavedViewMode] = useState<'list' | 'brands'>('list');
+  
+  // Image editing state
+  const [editingImage, setEditingImage] = useState<{ url: string; itemId: string; imageIndex: number; type: 'saved' | 'sourced' } | null>(null);
+  const roleName = useAuthStore((state) => state.user?.role?.name);
+  const normalizedRoleName = roleName?.toUpperCase?.();
+  const isAdminUser = normalizedRoleName === 'ADMIN' || normalizedRoleName === 'SUPER_ADMIN';
   const [savedViewModeOpen, setSavedViewModeOpen] = useState(false);
   const [savedBrandFilter, setSavedBrandFilter] = useState<string>('');
   const [savedSectionExpanded, setSavedSectionExpanded] = useState(true);
@@ -1003,14 +1011,33 @@ export default function SourcingPanel() {
                                 className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                               >
                                 {item.images && item.images[0] && (
-                                  <img
-                                    src={item.images[0]}
-                                    alt={item.title}
-                                    className="mb-3 h-40 w-full rounded-lg object-cover"
-                                    onError={(e) => {
-                                      e.currentTarget.src = '/placeholder-product.svg';
-                                    }}
-                                  />
+                                  <div className="relative group/image mb-3">
+                                    <img
+                                      src={item.images[0]}
+                                      alt={item.title}
+                                      className="h-40 w-full rounded-lg object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.src = '/placeholder-product.svg';
+                                      }}
+                                    />
+                                    {isAdminUser && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingImage({
+                                            url: item.images[0],
+                                            itemId: item._id,
+                                            imageIndex: 0,
+                                            type: 'saved'
+                                          });
+                                        }}
+                                        className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 z-10"
+                                        title="Edit image (crop & background)"
+                                      >
+                                        <Edit className="h-4 w-4 text-blue-600" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                                 <h5 className="mb-2 line-clamp-2 text-sm font-medium text-gray-900">
                                   {item.title}
@@ -1046,14 +1073,33 @@ export default function SourcingPanel() {
                   className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                 >
                   {item.images && item.images[0] && (
-                    <img
-                      src={item.images[0]}
-                      alt={item.title}
-                      className="mb-3 h-40 w-full rounded-lg object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = '/placeholder-product.svg';
-                      }}
-                    />
+                    <div className="relative group/image mb-3">
+                      <img
+                        src={item.images[0]}
+                        alt={item.title}
+                        className="h-40 w-full rounded-lg object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = '/placeholder-product.svg';
+                        }}
+                      />
+                      {isAdminUser && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingImage({
+                              url: item.images[0],
+                              itemId: item._id,
+                              imageIndex: 0,
+                              type: 'saved'
+                            });
+                          }}
+                          className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 z-10"
+                          title="Edit image (crop & background)"
+                        >
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </button>
+                      )}
+                    </div>
                   )}
                   <h5 className="mb-2 line-clamp-2 text-sm font-medium text-gray-900">{item.title}</h5>
                   {item.price && <p className="text-sm font-semibold text-blue-600">${item.price}</p>}
@@ -1642,6 +1688,65 @@ export default function SourcingPanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Image Editor Modal */}
+      {isAdminUser && editingImage && (
+        <ImageEditor
+          imageUrl={editingImage.url}
+          isOpen={!!editingImage}
+          onClose={() => setEditingImage(null)}
+          onSave={async (processedUrl) => {
+            if (editingImage.type === 'saved') {
+              // Update the saved item's image
+              setSavedItems(prev => prev.map(item => {
+                if (item._id === editingImage.itemId) {
+                  const newImages = [...(item.images || [])];
+                  newImages[editingImage.imageIndex] = processedUrl;
+                  return { ...item, images: newImages };
+                }
+                return item;
+              }));
+              
+              // Also update selected item if it's the same
+              if (savedSelected?._id === editingImage.itemId) {
+                const newImages = [...(savedSelected.images || [])];
+                newImages[editingImage.imageIndex] = processedUrl;
+                setSavedSelected({ ...savedSelected, images: newImages });
+              }
+              
+              // Update grouped by brand if applicable
+              if (savedGroupedByBrand) {
+                setSavedGroupedByBrand(prev => {
+                  const updated = { ...prev };
+                  Object.keys(updated).forEach(brand => {
+                    updated[brand] = updated[brand].map(item => {
+                      if (item._id === editingImage.itemId) {
+                        const newImages = [...(item.images || [])];
+                        newImages[editingImage.imageIndex] = processedUrl;
+                        return { ...item, images: newImages };
+                      }
+                      return item;
+                    });
+                  });
+                  return updated;
+                });
+              }
+              
+              toast.success('Image updated successfully!');
+            }
+            setEditingImage(null);
+          }}
+          productName={editingImage.type === 'saved' 
+            ? savedItems.find(i => i._id === editingImage.itemId)?.title || 
+              Object.values(savedGroupedByBrand).flat().find(i => i._id === editingImage.itemId)?.title
+            : 'Product'}
+          folder={editingImage.type === 'saved'
+            ? `EverStyleCrafts/${savedItems.find(i => i._id === editingImage.itemId)?.brand || 
+                Object.values(savedGroupedByBrand).flat().find(i => i._id === editingImage.itemId)?.brand || 
+                'products'}`
+            : 'EverStyleCrafts'}
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Crop, ImageOff, Download, Loader2, Check, RotateCw } from 'lucide-react';
+import clsx from 'clsx';
 import ReactCrop, { Crop as CropType, PixelCrop, makeAspectCrop, centerCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { processImageClientSide, generateCloudinaryTransformUrl } from '@/lib/imageProcessing';
@@ -31,7 +32,25 @@ export default function ImageEditor({
   const [removeBg, setRemoveBg] = useState(false);
   const [bgColor, setBgColor] = useState('#ffffff');
   const [fineEdges, setFineEdges] = useState(false);
+  const [bgPreset, setBgPreset] = useState<string | null>(null);
+  
+  // Studio background presets
+  const studioBackgrounds = [
+    { name: 'White', color: '#ffffff', label: 'Pure White' },
+    { name: 'Light Gray', color: '#f5f5f5', label: 'Light Gray' },
+    { name: 'Gray', color: '#e5e5e5', label: 'Medium Gray' },
+    { name: 'Dark Gray', color: '#4a4a4a', label: 'Dark Gray' },
+    { name: 'Black', color: '#000000', label: 'Pure Black' },
+    { name: 'Cream', color: '#faf8f3', label: 'Cream' },
+    { name: 'Beige', color: '#f5f5dc', label: 'Beige' },
+    { name: 'Light Blue', color: '#e6f3ff', label: 'Light Blue' },
+    { name: 'Light Pink', color: '#fff0f5', label: 'Light Pink' },
+    { name: 'Light Green', color: '#f0fff4', label: 'Light Green' },
+    { name: 'Warm White', color: '#fffef7', label: 'Warm White' },
+    { name: 'Cool White', color: '#f8f9fa', label: 'Cool White' },
+  ];
   const [processing, setProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // Client-side processing only (free, no paid APIs)
   
@@ -144,6 +163,7 @@ export default function ImageEditor({
     }
 
     setProcessing(true);
+    setProcessingStage('Preparing image...');
 
     try {
       // Use client-side processing (free, no paid APIs)
@@ -151,12 +171,22 @@ export default function ImageEditor({
       if (!canvas) throw new Error('Canvas not available');
 
       // Convert canvas to blob
+      setProcessingStage('Cropping image...');
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((b) => {
           if (b) resolve(b);
           else reject(new Error('Failed to convert canvas to blob'));
         }, 'image/png');
       });
+
+      // Process image (with background removal if requested)
+      if (removeBg) {
+        setProcessingStage(fineEdges 
+          ? 'Removing background (high quality mode)...' 
+          : 'Removing background (fast mode)...');
+      } else {
+        setProcessingStage('Processing image...');
+      }
 
       const processedBlob = await processImageClientSide(blob, {
         removeBackground: removeBg ? {
@@ -167,6 +197,7 @@ export default function ImageEditor({
       });
 
       // Upload processed blob to Cloudinary (storage only, no paid processing)
+      setProcessingStage('Uploading to Cloudinary...');
       const formData = new FormData();
       formData.append('file', processedBlob);
       formData.append('product_name', productName || 'product');
@@ -192,6 +223,7 @@ export default function ImageEditor({
       toast.error(error.message || 'Failed to process image');
     } finally {
       setProcessing(false);
+      setProcessingStage('');
     }
   };
 
@@ -204,6 +236,7 @@ export default function ImageEditor({
     setCompletedCrop(undefined);
     setRemoveBg(false);
     setProcessing(false);
+    setProcessingStage('');
     onClose();
   };
 
@@ -329,24 +362,64 @@ export default function ImageEditor({
                           onChange={(e) => setFineEdges(e.target.checked)}
                           className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />
-                        <span className="text-sm text-gray-700">Fine edges (for detailed images)</span>
+                        <div className="flex-1">
+                          <span className="text-sm text-gray-700">Fine edges (for detailed images)</span>
+                          <span className="text-xs text-amber-600 ml-2">⚠️ Slower (2-3x)</span>
+                        </div>
                       </label>
 
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm text-gray-700">Background color:</label>
-                        <input
-                          type="color"
-                          value={bgColor}
-                          onChange={(e) => setBgColor(e.target.value)}
-                          className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={bgColor}
-                          onChange={(e) => setBgColor(e.target.value)}
-                          className="px-2 py-1 text-sm border border-gray-300 rounded w-24"
-                          placeholder="#ffffff"
-                        />
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-2 block">Studio Backgrounds</label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {studioBackgrounds.map((preset) => (
+                              <button
+                                key={preset.name}
+                                type="button"
+                                onClick={() => {
+                                  setBgPreset(preset.name);
+                                  setBgColor(preset.color);
+                                }}
+                                className={clsx(
+                                  'relative h-10 rounded border-2 transition-all hover:scale-110',
+                                  bgPreset === preset.name
+                                    ? 'border-blue-500 ring-2 ring-blue-200'
+                                    : 'border-gray-300 hover:border-gray-400'
+                                )}
+                                style={{ backgroundColor: preset.color }}
+                                title={preset.label}
+                              >
+                                {bgPreset === preset.name && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <Check className="h-4 w-4 text-blue-600 bg-white rounded-full p-0.5" />
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm text-gray-700">Custom color:</label>
+                          <input
+                            type="color"
+                            value={bgColor}
+                            onChange={(e) => {
+                              setBgColor(e.target.value);
+                              setBgPreset(null);
+                            }}
+                            className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={bgColor}
+                            onChange={(e) => {
+                              setBgColor(e.target.value);
+                              setBgPreset(null);
+                            }}
+                            className="px-2 py-1 text-sm border border-gray-300 rounded w-24"
+                            placeholder="#ffffff"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -359,9 +432,17 @@ export default function ImageEditor({
                 <p className="text-sm text-gray-600 mb-2">
                   ✓ <strong>Client-Side Processing</strong> (Free, runs in your browser)
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 mb-2">
                   All image processing happens locally in your browser. No API costs or paid services required.
                 </p>
+                <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                  <strong>⚡ Speed Tips:</strong>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Images are automatically resized to max 1200px for faster processing</li>
+                    <li>Disable "Fine edges" for faster background removal (2-3x faster)</li>
+                    <li>Processing time: 3-8 seconds (without fine edges) or 8-15 seconds (with fine edges)</li>
+                  </ul>
+                </div>
               </div>
             </div>
 
