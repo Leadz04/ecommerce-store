@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { EtsyShop, EtsyListing, EtsyOrder, Product } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
+import { needsEtsyDataRefresh } from '@/lib/etsy-compliance';
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,9 +67,13 @@ async function syncListings(etsyAPI: EtsyAPI, shop: any) {
   let synced = 0;
   let created = 0;
   let updated = 0;
+  let refreshed = 0;
 
   for (const listing of listings) {
     const existingListing = await EtsyListing.findOne({ etsyListingId: listing.listing_id.toString() });
+    
+    // Check if data needs refresh per Etsy API Terms (6 hours for listings)
+    const needsRefresh = !existingListing || needsEtsyDataRefresh(existingListing.lastSyncedAt, 'listing');
     
     const listingData = {
       etsyListingId: listing.listing_id.toString(),
@@ -84,7 +89,7 @@ async function syncListings(etsyAPI: EtsyAPI, shop: any) {
       inventory: {
         quantity: listing.quantity,
       },
-      lastSyncedAt: new Date(),
+      lastSyncedAt: new Date(), // Always update sync timestamp
     };
 
     if (existingListing) {
@@ -93,6 +98,7 @@ async function syncListings(etsyAPI: EtsyAPI, shop: any) {
         { $set: listingData }
       );
       updated++;
+      if (needsRefresh) refreshed++;
     } else {
       await EtsyListing.create(listingData);
       created++;
@@ -100,7 +106,7 @@ async function syncListings(etsyAPI: EtsyAPI, shop: any) {
     synced++;
   }
 
-  return { synced, created, updated };
+  return { synced, created, updated, refreshed };
 }
 
 async function syncOrders(etsyAPI: EtsyAPI, shop: any) {

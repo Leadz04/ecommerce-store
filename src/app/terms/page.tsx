@@ -1,5 +1,6 @@
 import { FileText, Scale, AlertTriangle, Shield, CreditCard, Truck, Mail, Phone, MapPin, Globe, Users, Settings, Lock } from 'lucide-react';
 import { companyInfo } from '@/data/companyInfo';
+import { ETSY_WARRANTY_DISCLAIMER } from '@/lib/etsy-compliance';
 
 export default function TermsPage() {
   const lastUpdated = "December 1, 2024";
@@ -168,6 +169,15 @@ export default function TermsPage() {
             'We may offer new services and features through the website',
             'New features and services are subject to these Terms of Service',
             'We are not responsible for third-party tool functionality or availability'
+          ]
+        },
+        {
+          subtitle: 'Etsy API Integration',
+          details: [
+            'This application may integrate with Etsy through the Etsy API',
+            ETSY_WARRANTY_DISCLAIMER(companyInfo.name || 'EverStyleCrafts'),
+            'Etsy, Inc. and its affiliates are not the application developer and make no warranties regarding the application',
+            'The Etsy integration is provided as-is without any warranties from Etsy'
           ]
         }
       ]

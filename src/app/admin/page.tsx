@@ -85,6 +85,8 @@ import ProductForm from '@/components/ProductForm';
 import OrderDetailModal from '@/components/OrderDetailModal';
 import { AdminSkeleton, TableSkeleton, ProductTableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
+import EtsyTrademarkDisclaimer from '@/components/EtsyTrademarkDisclaimer';
+import { ETSY_SUPPORT_EMAIL } from '@/lib/etsy-compliance';
 import toast from 'react-hot-toast';
 
 // Base allowed tabs - brand tabs will be added dynamically
@@ -4463,6 +4465,44 @@ export default function AdminDashboard() {
               {/* Etsy Integration Tab */}
               {(activeTab as any) === 'etsy' && (
                 <div className="space-y-8">
+                  {/* Etsy API Terms Compliance Notice */}
+                  <EtsyTrademarkDisclaimer variant="full" className="mb-6" />
+                  
+                  {/* Support Information */}
+                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                      <h2 className="text-xl font-semibold text-purple-900">Support & Information</h2>
+                      <p className="text-purple-700/80 mt-1 text-sm">Contact information and compliance details for Etsy integration.</p>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Support Email</h3>
+                          <p className="text-sm text-gray-600 mb-2">
+                            For support related to this Etsy integration, Etsy sellers can contact us at:
+                          </p>
+                          <a 
+                            href={`mailto:${ETSY_SUPPORT_EMAIL}`}
+                            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            <Mail className="h-4 w-4" />
+                            {ETSY_SUPPORT_EMAIL}
+                          </a>
+                          <p className="text-xs text-gray-500 mt-2">
+                            This email is monitored and we respond to all Etsy seller inquiries in a timely manner per Etsy API Terms.
+                          </p>
+                        </div>
+                        <div className="border-t pt-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Data Freshness</h3>
+                          <p className="text-sm text-gray-600">
+                            Per Etsy API Terms, listing content is automatically refreshed every 6 hours, 
+                            and other Etsy content is refreshed every 24 hours to ensure compliance.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* How It Works - Info Section */}
                   <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-lg border-2 border-blue-200 p-6 mb-8">
                     <div className="flex items-start gap-4">

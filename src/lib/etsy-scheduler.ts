@@ -1,243 +1,206 @@
-import { EtsyShop, EtsyListing, EtsyOrder } from '@/models';
-import { EtsyAPI } from './etsy';
+/**
+ * Etsy Scheduler with Compliance Features
+ * 
+ * Automatically syncs Etsy data while respecting:
+ * - Data freshness requirements (6 hours for listings, 24 hours for other content)
+ * - Rate limits
+ * - API Terms of Use
+ */
+
 import connectDB from './mongodb';
+import { EtsyShop, EtsyListing, EtsyOrder } from '@/models';
+import { EtsyAPI, refreshAccessToken } from './etsy';
+import { needsEtsyDataRefresh, EtsyRateLimiter } from './etsy-compliance';
 
 export class EtsyScheduler {
-  private static instance: EtsyScheduler;
-  private intervalId: NodeJS.Timeout | null = null;
+  private intervalId?: NodeJS.Timeout;
   private isRunning = false;
 
-  private constructor() {}
-
-  public static getInstance(): EtsyScheduler {
-    if (!EtsyScheduler.instance) {
-      EtsyScheduler.instance = new EtsyScheduler();
-    }
-    return EtsyScheduler.instance;
-  }
-
-  public start() {
+  /**
+   * Start the scheduler
+   * @param intervalMinutes - How often to check for sync needs (default: 5 minutes)
+   */
+  start(intervalMinutes = 5) {
     if (this.isRunning) {
       console.log('Etsy scheduler is already running');
       return;
     }
 
+    console.log(`Starting Etsy scheduler (checking every ${intervalMinutes} minutes)`);
     this.isRunning = true;
-    console.log('Starting Etsy scheduler...');
 
     // Run immediately on start
-    this.runSync();
+    this.checkAndSync();
 
-    // Set up interval
+    // Then run on interval
     this.intervalId = setInterval(() => {
-      this.runSync();
-    }, 5 * 60 * 1000); // Run every 5 minutes
+      this.checkAndSync();
+    }, intervalMinutes * 60 * 1000);
   }
 
-  public stop() {
+  /**
+   * Stop the scheduler
+   */
+  stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
-      this.intervalId = null;
+      this.intervalId = undefined;
     }
     this.isRunning = false;
     console.log('Etsy scheduler stopped');
   }
 
-  private async runSync() {
+  /**
+   * Check shops and sync data that needs refresh per API Terms
+   */
+  private async checkAndSync() {
     try {
       await connectDB();
 
-      const shops = await EtsyShop.find({ 
-        isActive: true,
-        syncSettings: { $exists: true }
-      });
+      const shops = await EtsyShop.find({ isActive: true });
+      console.log(`Checking ${shops.length} active Etsy shop(s) for sync needs`);
 
       for (const shop of shops) {
-        const { syncSettings } = shop;
-        
-        // Check if it's time to sync based on shop settings
-        const now = new Date();
-        const lastSync = shop.lastSyncAt || new Date(0);
-        const syncInterval = (syncSettings.syncInterval || 60) * 60 * 1000; // Convert minutes to milliseconds
+        try {
+          // Check if token needs refresh
+          if (shop.tokenExpiresAt && shop.tokenExpiresAt <= new Date()) {
+            if (shop.refreshToken) {
+              console.log(`Refreshing token for shop ${shop.shopName}`);
+              const tokenResponse = await refreshAccessToken(shop.refreshToken);
+              shop.accessToken = tokenResponse.access_token;
+              if (tokenResponse.refresh_token) {
+                shop.refreshToken = tokenResponse.refresh_token;
+              }
+              shop.tokenExpiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
+              await shop.save();
+            }
+          }
 
-        if (now.getTime() - lastSync.getTime() < syncInterval) {
-          continue; // Skip this shop, not time to sync yet
-        }
-
-        console.log(`Running sync for shop: ${shop.shopName}`);
-
-        const etsyAPI = new EtsyAPI(shop.accessToken, shop.shopId);
-
-        // Sync based on shop settings
-        if (syncSettings.autoSyncProducts) {
-          await this.syncListings(etsyAPI, shop);
-        }
-
-        if (syncSettings.autoSyncOrders) {
-          await this.syncOrders(etsyAPI, shop);
-        }
-
-        if (syncSettings.autoSyncInventory) {
-          await this.syncInventory(etsyAPI, shop);
-        }
-
-        // Update last sync time
-        shop.lastSyncAt = new Date();
-        await shop.save();
-      }
-
-    } catch (error) {
-      console.error('Etsy scheduler error:', error);
-    }
-  }
-
-  private async syncListings(etsyAPI: EtsyAPI, shop: any) {
-    try {
-      const listings = await etsyAPI.getListings(shop.shopId);
-      
-      for (const listing of listings) {
-        const existingListing = await EtsyListing.findOne({ 
-          etsyListingId: listing.listing_id.toString() 
-        });
-        
-        const listingData = {
-          etsyListingId: listing.listing_id.toString(),
-          shopId: shop.shopId,
-          title: listing.title,
-          description: listing.description,
-          price: listing.price.amount / listing.price.divisor,
-          currency: listing.price.currency_code,
-          state: listing.state,
-          tags: listing.tags,
-          materials: listing.materials,
-          categoryPath: listing.category_path,
-          inventory: {
-            quantity: listing.quantity,
-          },
-          lastSyncedAt: new Date(),
-        };
-
-        if (existingListing) {
-          await EtsyListing.updateOne(
-            { etsyListingId: listing.listing_id.toString() },
-            { $set: listingData }
+          // Check listings that need refresh (6 hours per API Terms)
+          const listings = await EtsyListing.find({ shopId: shop.shopId });
+          const staleListings = listings.filter(listing => 
+            needsEtsyDataRefresh(listing.lastSyncedAt, 'listing')
           );
-        } else {
-          await EtsyListing.create(listingData);
+
+          // Check other content that needs refresh (24 hours per API Terms)
+          const orders = await EtsyOrder.find({ shopId: shop.shopId });
+          const staleOrders = orders.filter(order => 
+            needsEtsyDataRefresh(order.lastSyncedAt, 'other')
+          );
+
+          // Sync if any data is stale
+          if (staleListings.length > 0 || staleOrders.length > 0) {
+            console.log(`Syncing stale data for shop ${shop.shopName}: ${staleListings.length} listings, ${staleOrders.length} orders`);
+            await this.syncShop(shop);
+          } else {
+            console.log(`All data fresh for shop ${shop.shopName}`);
+          }
+
+        } catch (error) {
+          console.error(`Error syncing shop ${shop.shopName}:`, error);
         }
       }
-
-      console.log(`Synced ${listings.length} listings for shop ${shop.shopName}`);
     } catch (error) {
-      console.error(`Failed to sync listings for shop ${shop.shopName}:`, error);
+      console.error('Error in Etsy scheduler:', error);
     }
   }
 
-  private async syncOrders(etsyAPI: EtsyAPI, shop: any) {
+  /**
+   * Sync data for a specific shop
+   */
+  private async syncShop(shop: any) {
+    const rateLimiter = EtsyRateLimiter.getInstance();
+    const etsyAPI = new EtsyAPI(shop.accessToken, shop.shopId);
+
     try {
-      const orders = await etsyAPI.getOrders(shop.shopId);
-      
-      for (const order of orders) {
-        const existingOrder = await EtsyOrder.findOne({ 
-          etsyOrderId: order.receipt_id.toString() 
-        });
-        
-        if (existingOrder) {
-          // Update existing order
-          const orderData = {
-            status: order.status,
-            paymentStatus: order.payment_status,
-            shippingStatus: order.shipping_status,
-            total: order.grandtotal.amount / order.grandtotal.divisor,
-            currency: order.grandtotal.currency_code,
-            shippingCost: order.total_shipping_cost.amount / order.total_shipping_cost.divisor,
-            taxCost: order.total_tax_cost.amount / order.total_tax_cost.divisor,
+      // Sync listings if needed
+      const listings = await EtsyListing.find({ shopId: shop.shopId });
+      const needsListingsRefresh = listings.some(listing => 
+        needsEtsyDataRefresh(listing.lastSyncedAt, 'listing')
+      );
+
+      if (needsListingsRefresh) {
+        await rateLimiter.waitIfNeeded();
+        const freshListings = await etsyAPI.getListings(shop.shopId);
+
+        for (const listing of freshListings) {
+          await rateLimiter.waitIfNeeded();
+          const listingData = {
+            etsyListingId: listing.listing_id.toString(),
+            shopId: shop.shopId,
+            title: listing.title,
+            description: listing.description,
+            price: listing.price.amount / listing.price.divisor,
+            currency: listing.price.currency_code,
+            state: listing.state,
+            tags: listing.tags,
+            materials: listing.materials,
+            categoryPath: listing.category_path,
+            inventory: {
+              quantity: listing.quantity,
+            },
             lastSyncedAt: new Date(),
           };
 
-          await EtsyOrder.updateOne(
-            { etsyOrderId: order.receipt_id.toString() },
-            { $set: orderData }
+          await EtsyListing.findOneAndUpdate(
+            { etsyListingId: listing.listing_id.toString() },
+            listingData,
+            { upsert: true }
           );
-        } else {
-          // Create new order
+        }
+      }
+
+      // Sync orders if needed
+      const orders = await EtsyOrder.find({ shopId: shop.shopId });
+      const needsOrdersRefresh = orders.some(order => 
+        needsEtsyDataRefresh(order.lastSyncedAt, 'other')
+      );
+
+      if (needsOrdersRefresh) {
+        await rateLimiter.waitIfNeeded();
+        const freshOrders = await etsyAPI.getOrders(shop.shopId);
+
+        for (const order of freshOrders) {
+          await rateLimiter.waitIfNeeded();
           const orderData = {
             etsyOrderId: order.receipt_id.toString(),
             shopId: shop.shopId,
             receiptId: order.receipt_id.toString(),
             buyerUserId: order.buyer.user_id.toString(),
-            buyerEmail: order.buyer.login_name,
             status: order.status,
             paymentStatus: order.payment_status,
             shippingStatus: order.shipping_status,
             total: order.grandtotal.amount / order.grandtotal.divisor,
             currency: order.grandtotal.currency_code,
-            shippingCost: order.total_shipping_cost.amount / order.total_shipping_cost.divisor,
-            taxCost: order.total_tax_cost.amount / order.total_tax_cost.divisor,
-            items: order.transactions.map((tx: any) => ({
-              listingId: tx.listing_id.toString(),
-              title: tx.title,
-              quantity: tx.quantity,
-              price: tx.price.amount / tx.price.divisor,
-              variations: tx.selected_variations || [],
-            })),
-            shippingAddress: {
-              name: `${order.buyer.first_name} ${order.buyer.last_name}`,
-              address1: order.shipping_address?.first_line || '',
-              address2: order.shipping_address?.second_line || '',
-              city: order.shipping_address?.city || '',
-              state: order.shipping_address?.state || '',
-              zip: order.shipping_address?.zip || '',
-              country: order.shipping_address?.country_iso || '',
-              phone: order.shipping_address?.phone || '',
-            },
-            messageFromBuyer: order.message_from_buyer,
-            messageFromSeller: order.message_from_seller,
             lastSyncedAt: new Date(),
           };
 
-          await EtsyOrder.create(orderData);
-        }
-      }
-
-      console.log(`Synced ${orders.length} orders for shop ${shop.shopName}`);
-    } catch (error) {
-      console.error(`Failed to sync orders for shop ${shop.shopName}:`, error);
-    }
-  }
-
-  private async syncInventory(etsyAPI: EtsyAPI, shop: any) {
-    try {
-      const listings = await EtsyListing.find({ shopId: shop.shopId });
-      
-      for (const listing of listings) {
-        try {
-          const inventory = await etsyAPI.getListingInventory(listing.etsyListingId);
-          const quantity = inventory.products[0]?.offerings[0]?.quantity || 0;
-          
-          await EtsyListing.updateOne(
-            { etsyListingId: listing.etsyListingId },
-            { 
-              $set: { 
-                'inventory.quantity': quantity,
-                lastSyncedAt: new Date(),
-              }
-            }
+          await EtsyOrder.findOneAndUpdate(
+            { etsyOrderId: order.receipt_id.toString() },
+            orderData,
+            { upsert: true }
           );
-        } catch (error) {
-          console.error(`Failed to sync inventory for listing ${listing.etsyListingId}:`, error);
         }
       }
 
-      console.log(`Synced inventory for ${listings.length} listings in shop ${shop.shopName}`);
+      // Update shop last sync time
+      shop.lastSyncAt = new Date();
+      await shop.save();
+
+      console.log(`Successfully synced shop ${shop.shopName}`);
     } catch (error) {
-      console.error(`Failed to sync inventory for shop ${shop.shopName}:`, error);
+      console.error(`Error syncing shop ${shop.shopName}:`, error);
+      throw error;
     }
   }
 }
 
-// Auto-start the scheduler if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-  const scheduler = EtsyScheduler.getInstance();
-  scheduler.start();
+// Singleton instance
+let schedulerInstance: EtsyScheduler | null = null;
+
+export function getEtsyScheduler(): EtsyScheduler {
+  if (!schedulerInstance) {
+    schedulerInstance = new EtsyScheduler();
+  }
+  return schedulerInstance;
 }

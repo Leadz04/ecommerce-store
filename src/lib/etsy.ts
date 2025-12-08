@@ -1,4 +1,5 @@
 import { EtsyShop, EtsyListing, EtsyOrder } from '@/models';
+import { EtsyRateLimiter, needsEtsyDataRefresh } from './etsy-compliance';
 
 const ETSY_API_BASE = 'https://openapi.etsy.com/v3';
 
@@ -196,6 +197,14 @@ export class EtsyAPI {
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
+    // Respect rate limits per Etsy API Terms
+    const rateLimiter = EtsyRateLimiter.getInstance();
+    await rateLimiter.waitIfNeeded();
+    
+    if (!rateLimiter.canMakeRequest()) {
+      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
+    }
+
     const url = `${ETSY_API_BASE}${endpoint}`;
     const response = await fetch(url, {
       ...options,
@@ -205,6 +214,9 @@ export class EtsyAPI {
         ...options.headers,
       },
     });
+
+    // Record the API call for rate limiting
+    rateLimiter.recordCall();
 
     if (!response.ok) {
       const error = await response.text();
