@@ -2,6 +2,8 @@
 
 This document explains how to set up and use the Etsy integration with your e-commerce store.
 
+> **⚠️ IMPORTANT**: Before using the Etsy API, review the [Etsy API Terms of Use Compliance Guide](./ETSY_API_TERMS_COMPLIANCE.md) to ensure your implementation meets all requirements.
+
 ## Overview
 
 The Etsy integration allows you to:
@@ -17,8 +19,10 @@ The Etsy integration allows you to:
 
 1. Go to [Etsy Developers](https://www.etsy.com/developers/)
 2. Create a new application
-3. Note down your `Client ID` and `Client Secret`
-4. Set your redirect URI to: `http://localhost:3000/api/etsy/auth` (or your domain)
+3. **Submit Application Purpose**: You must submit and get approval for your Application Purpose before using the API
+4. Note down your `Client ID` and `Client Secret`
+5. Set your redirect URI to: `http://localhost:3000/api/etsy/auth` (or your domain)
+6. Review and accept the [Etsy API Terms of Use](https://www.etsy.com/legal/api-terms-of-use)
 
 ### 2. Environment Variables
 
@@ -205,10 +209,37 @@ For technical support:
 
 ## API Limits
 
-Etsy has API rate limits:
-- 10 requests per second
-- 10,000 requests per day
-- The integration respects these limits automatically
+**⚠️ IMPORTANT**: Rate limits are set per API key and per application. Check the [Etsy API documentation](https://developers.etsy.com/documentation/reference) for current limits.
+
+- Default limits vary by tier (check current documentation)
+- Enterprise Tier available for >3 million API calls per day
+- Each API key may only be used for a single Application
+- Creating multiple API keys to circumvent limits is prohibited
+- The integration should respect rate limits automatically
+
+## Compliance Requirements
+
+### Data Freshness Requirements
+
+Per Etsy API Terms:
+- **Listing Content**: Must not display listing content more than **6 hours** older than Etsy Site/Etsy Apps
+- **Other Content**: Must not display any other Etsy content more than **24 hours** older than Etsy Site/Etsy Apps
+- **Caching**: Must not cache Etsy content longer than reasonably necessary
+
+### Required Disclaimers
+
+Your application must prominently display:
+
+> *"The term 'Etsy' is a trademark of Etsy, Inc. This Application uses Etsy's API, but is not endorsed or certified by Etsy."*
+
+### Application Requirements
+
+- **Support Email**: Must provide monitored email address for Etsy sellers to contact for support
+- **Privacy Policy**: Must have comprehensive privacy policy covering Etsy data processing
+- **Application Terms**: Must include warranty disclaimer per Etsy requirements
+- **Service Support**: Must respond to seller inquiries in reasonable and timely manner
+
+See [ETSY_API_TERMS_COMPLIANCE.md](./ETSY_API_TERMS_COMPLIANCE.md) for complete compliance checklist.
 
 ## Future Enhancements
 

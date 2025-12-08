@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Product } from '@/models';
+import { verifyToken, requirePermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/lib/permissions';
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requirePermission(PERMISSIONS.PRODUCT_VIEW)(request);
     await connectDB();
 
     // Get query parameters
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
         'Production partners': '',
         Section: 'Real leather jacket',
         Price: product.price?.toString() || '0',
-        Quantity: product.stock?.toString() || '1',
+        Quantity: (product.stockCount || product.stock || '1').toString(),
         SKU: product.sku || '',
         'Variation 1': product.variants?.length ? 'Size' : '',
         'V1 Option': product.variants?.map((v: any) => v.name).join('|') || '',
@@ -86,7 +89,7 @@ export async function GET(request: NextRequest) {
         Width: '8',
         Height: '2',
         'Return policy': '14 days',
-        'Photo 1': product.images?.[0] || '',
+        'Photo 1': product.image || product.images?.[0] || '',
         'Photo 2': product.images?.[1] || '',
         'Photo 3': product.images?.[2] || '',
         'Photo 4': product.images?.[3] || '',

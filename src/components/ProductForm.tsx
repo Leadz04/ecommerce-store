@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Calendar as CalendarIcon, Cloud, Loader2, UploadCloud, ShieldAlert, GripVertical } from 'lucide-react';
+import { X, Package, DollarSign, Tag, Image, Plus, Trash2, Calendar as CalendarIcon, Cloud, Loader2, UploadCloud, ShieldAlert, GripVertical, Edit } from 'lucide-react';
 import SelectField from '@/components/SelectField';
+import ImageEditor from '@/components/ImageEditor';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 
@@ -86,6 +87,7 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
   const [uploadQueueStatus, setUploadQueueStatus] = useState({ completed: 0, total: 0 });
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [editingImage, setEditingImage] = useState<{ url: string; type: 'main' | 'additional'; index?: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const roleName = useAuthStore((state) => state.user?.role?.name);
   const normalizedRoleName = roleName?.toUpperCase?.();
@@ -927,12 +929,22 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                     placeholder="Enter main image URL"
                   />
                   {formData.image && (
-                    <img
-                      src={formData.image}
-                      alt="preview"
-                      className="w-12 h-12 rounded border object-cover"
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                    />
+                    <div className="relative group">
+                      <img
+                        src={formData.image}
+                        alt="preview"
+                        className="w-12 h-12 rounded border object-cover"
+                        onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditingImage({ url: formData.image, type: 'main' })}
+                        className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded border flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                        title="Edit image (crop & remove background)"
+                      >
+                        <Edit className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
                   )}
                   <button
                     type="button"
@@ -988,12 +1000,22 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
                             onClick={(e) => e.stopPropagation()}
                           />
                           {image && (
-                            <img
-                              src={image}
-                              alt={`preview-${index}`}
-                              className="w-12 h-12 rounded border object-cover flex-shrink-0"
-                              onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                            />
+                            <div className="relative group">
+                              <img
+                                src={image}
+                                alt={`preview-${index}`}
+                                className="w-12 h-12 rounded border object-cover flex-shrink-0"
+                                onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditingImage({ url: image, type: 'additional', index })}
+                                className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded border flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                                title="Edit image (crop & remove background)"
+                              >
+                                <Edit className="w-3 h-3 text-white" />
+                              </button>
+                            </div>
                           )}
                         </div>
                         <div className="flex items-center space-x-1">
@@ -1156,6 +1178,29 @@ export default function ProductForm({ product, isOpen, onClose, onSuccess }: Pro
           </form>
         </div>
       </div>
+
+      {/* Image Editor Modal */}
+      {editingImage && (
+        <ImageEditor
+          imageUrl={editingImage.url}
+          isOpen={!!editingImage}
+          onClose={() => setEditingImage(null)}
+          onSave={(processedUrl) => {
+            if (editingImage.type === 'main') {
+              handleInputChange('image', processedUrl);
+              toast.success('Main image updated!');
+            } else if (editingImage.type === 'additional' && editingImage.index !== undefined) {
+              const newImages = [...formData.images];
+              newImages[editingImage.index] = processedUrl;
+              handleInputChange('images', newImages);
+              toast.success('Image updated!');
+            }
+            setEditingImage(null);
+          }}
+          productName={formData.name || product?.name}
+          folder={product?._id ? `EverStyleCrafts/${sanitizeFilename(formData.name || product?.name)}` : undefined}
+        />
+      )}
     </div>
   );
 }

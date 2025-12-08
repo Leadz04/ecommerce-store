@@ -44,6 +44,7 @@
     "restore:images": "node scripts/restore-product-images.js"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.2.0",
     "@google/genai": "^0.6.1",
     "@google/generative-ai": "^0.20.0",
     "@huggingface/inference": "^4.11.0",
@@ -75,7 +76,9 @@
     "react": "^19.1.2",
     "react-dom": "^19.1.2",
     "react-hot-toast": "^2.4.1",
+    "react-image-crop": "^10.1.7",
     "replicate": "^1.2.0",
+    "smartcrop": "^2.0.3",
     "stripe": "^18.5.0",
     "uuid": "^11.1.0",
     "zustand": "^5.0.8"

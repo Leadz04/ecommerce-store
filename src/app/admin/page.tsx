@@ -88,7 +88,7 @@ import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
 
 // Base allowed tabs - brand tabs will be added dynamically
-const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons'] as const;
+const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons','selected-products'] as const;
 type BaseTabKey = typeof baseAllowedTabs[number];
 type TabKey = BaseTabKey | string; // Allow dynamic brand tabs
 
@@ -328,6 +328,15 @@ export default function AdminDashboard() {
   const [analysisSelectedMeta, setAnalysisSelectedMeta] = useState<Record<string, { name: string; price?: number }>>({});
   const [etsyExportLoading, setEtsyExportLoading] = useState<Record<string, boolean>>({});
   const [etsyProductSearch, setEtsyProductSearch] = useState('');
+  
+  // Product selection for export
+  const [selectedProductsForExport, setSelectedProductsForExport] = useState<Set<string>>(new Set());
+  const [selectedProductsDetails, setSelectedProductsDetails] = useState<Record<string, Product>>({});
+  const [exportSelectionLoading, setExportSelectionLoading] = useState(false);
+  const [loadingStoredSelections, setLoadingStoredSelections] = useState(true);
+  
+  // LocalStorage key for selected products
+  const SELECTED_PRODUCTS_STORAGE_KEY = 'admin_selected_products_for_export';
 
   const ETSY_SYNC_ACTION_OPTIONS: SelectOption[] = [
     { value: 'create', label: 'Create' },
@@ -1206,6 +1215,7 @@ export default function AdminDashboard() {
     { id: 'roles', label: 'Roles & Permissions', icon: Shield },
     { id: 'products', label: 'Products', icon: Package },
     stage3BrandProductsTab, // Add expandable STAGE3 brand products section
+    { id: 'selected-products', label: 'Selected Products', icon: ListChecks, description: 'View and export selected products' },
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
@@ -1426,6 +1436,231 @@ export default function AdminDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  // Save selected products to localStorage whenever they change (store minimal product info too)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const idsArray = Array.from(selectedProductsForExport);
+        // Also store minimal product info for immediate display
+        const minimalProductInfo: Record<string, { name: string; brand?: string; image?: string; price?: number }> = {};
+        Object.entries(selectedProductsDetails).forEach(([id, product]) => {
+          minimalProductInfo[id] = {
+            name: product.name,
+            brand: product.brand,
+            image: product.image,
+            price: product.price
+          };
+        });
+        
+        localStorage.setItem(SELECTED_PRODUCTS_STORAGE_KEY, JSON.stringify({
+          ids: idsArray,
+          productInfo: minimalProductInfo
+        }));
+      } catch (error) {
+        console.error('Failed to save selected products to localStorage:', error);
+      }
+    }
+  }, [selectedProductsForExport, selectedProductsDetails]);
+
+  // Load selected products from localStorage on mount and fetch full details
+  useEffect(() => {
+    if (!isAuthenticated || typeof window === 'undefined') {
+      setLoadingStoredSelections(false);
+      return;
+    }
+
+    const loadAndFetchSelections = async () => {
+      try {
+        setLoadingStoredSelections(true);
+        const stored = localStorage.getItem(SELECTED_PRODUCTS_STORAGE_KEY);
+        if (!stored) {
+          setLoadingStoredSelections(false);
+          return;
+        }
+
+        const storedData = JSON.parse(stored);
+        
+        // Handle both old format (array of IDs) and new format (object with ids and productInfo)
+        let storedIds: string[] = [];
+        let storedProductInfo: Record<string, any> = {};
+        
+        if (Array.isArray(storedData)) {
+          // Old format - just array of IDs
+          storedIds = storedData;
+        } else if (storedData && Array.isArray(storedData.ids)) {
+          // New format
+          storedIds = storedData.ids;
+          storedProductInfo = storedData.productInfo || {};
+        } else {
+          setLoadingStoredSelections(false);
+          return;
+        }
+
+        if (storedIds.length === 0) {
+          setLoadingStoredSelections(false);
+          return;
+        }
+
+        // Set the IDs immediately
+        setSelectedProductsForExport(new Set(storedIds));
+
+        // Restore minimal product info immediately for display
+        if (Object.keys(storedProductInfo).length > 0) {
+          const restoredDetails: Record<string, Product> = {};
+          storedIds.forEach(id => {
+            if (storedProductInfo[id]) {
+              const info = storedProductInfo[id];
+              restoredDetails[id] = {
+                _id: id,
+                name: info.name || 'Loading...',
+                description: '',
+                price: info.price || 0,
+                image: info.image || '',
+                images: [],
+                category: '',
+                brand: info.brand || '',
+                rating: 0,
+                reviewCount: 0,
+                inStock: false,
+                stockCount: 0,
+                tags: [],
+                specifications: {},
+                isActive: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              } as Product;
+            }
+          });
+          if (Object.keys(restoredDetails).length > 0) {
+            setSelectedProductsDetails(restoredDetails);
+          }
+        }
+
+        // Fetch full product details from both databases
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            // Try main products database first
+            const mainResponse = await fetch('/api/admin/products/by-ids', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ ids: storedIds }),
+            });
+
+            if (mainResponse.ok) {
+              const mainData = await mainResponse.json();
+              if (mainData.products && Array.isArray(mainData.products)) {
+                const foundMainProducts: Record<string, Product> = {};
+                mainData.products.forEach((product: Product) => {
+                  foundMainProducts[product._id] = product;
+                });
+
+                // Find IDs not found in main database
+                const notFoundIds = storedIds.filter(id => !foundMainProducts[id]);
+                
+                // Update with main products found
+                if (Object.keys(foundMainProducts).length > 0) {
+                  setSelectedProductsDetails(prev => ({
+                    ...prev,
+                    ...foundMainProducts
+                  }));
+                }
+
+                // Try STAGE3 database for remaining IDs
+                if (notFoundIds.length > 0) {
+                  try {
+                    const stage3Response = await fetch('/api/admin/products/by-ids-stage3', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ ids: notFoundIds }),
+                    });
+
+                    if (stage3Response.ok) {
+                      const stage3Data = await stage3Response.json();
+                      if (stage3Data.products && Array.isArray(stage3Data.products)) {
+                        const foundStage3Products: Record<string, Product> = {};
+                        stage3Data.products.forEach((product: Product) => {
+                          foundStage3Products[product._id] = product;
+                        });
+
+                        if (Object.keys(foundStage3Products).length > 0) {
+                          setSelectedProductsDetails(prev => ({
+                            ...prev,
+                            ...foundStage3Products
+                          }));
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error fetching STAGE3 products:', err);
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching product details:', err);
+          }
+        }
+
+        if (storedIds.length > 0) {
+          toast.success(`Restored ${storedIds.length} previously selected product${storedIds.length !== 1 ? 's' : ''}`, {
+            duration: 2000,
+          });
+        }
+        setLoadingStoredSelections(false);
+      } catch (error) {
+        console.error('Failed to load stored selections:', error);
+        setLoadingStoredSelections(false);
+      }
+    };
+
+    loadAndFetchSelections();
+  }, [isAuthenticated]);
+
+  // Update product details when products are loaded in any view
+  useEffect(() => {
+    if (selectedProductsForExport.size === 0) return;
+
+    const updateProductDetails = (productList: Product[]) => {
+      const newDetails: Record<string, Product> = { ...selectedProductsDetails };
+      let updated = false;
+
+      productList.forEach(product => {
+        if (selectedProductsForExport.has(product._id) && !newDetails[product._id]) {
+          newDetails[product._id] = product;
+          updated = true;
+        }
+      });
+
+      if (updated) {
+        setSelectedProductsDetails(newDetails);
+      }
+    };
+
+    // Update from main products
+    if (products.length > 0) {
+      updateProductDetails(products);
+    }
+
+    // Update from jacket maker products
+    if (jacketMakerProducts.length > 0) {
+      updateProductDetails(jacketMakerProducts);
+    }
+
+    // Update from brand products
+    Object.values(brandProducts).forEach(brandProductList => {
+      if (brandProductList.length > 0) {
+        updateProductDetails(brandProductList);
+      }
+    });
+  }, [products, jacketMakerProducts, brandProducts, selectedProductsForExport]);
 
   // Fetch jacket maker products when tab is active
   useEffect(() => {
@@ -7894,7 +8129,18 @@ export default function AdminDashboard() {
                   <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                       <div className="flex-1 min-w-0">
-                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Product Management</h2>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Product Management</h2>
+                          {selectedProductsForExport.size > 0 && (
+                            <button
+                              onClick={() => setActiveTab('selected-products')}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
+                            >
+                              <ListChecks className="h-4 w-4" />
+                              <span>{selectedProductsForExport.size} Selected</span>
+                            </button>
+                          )}
+                        </div>
                         <p className="text-xs sm:text-sm text-gray-600">Manage and filter your product inventory</p>
                       </div>
                       <button
@@ -8158,8 +8404,41 @@ export default function AdminDashboard() {
                       <table className="w-full border-collapse border-spacing-0 table-fixed">
                     <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
                       <tr className="m-0 p-0">
+                        <th className="w-[3%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                          <input
+                            type="checkbox"
+                            checked={products.length > 0 && products.every(p => selectedProductsForExport.has(p._id))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const allIds = new Set(products.map(p => p._id));
+                                setSelectedProductsForExport(new Set([...selectedProductsForExport, ...allIds]));
+                                const newDetails: Record<string, Product> = { ...selectedProductsDetails };
+                                products.forEach(p => {
+                                  if (!newDetails[p._id]) {
+                                    newDetails[p._id] = p;
+                                  }
+                                });
+                                setSelectedProductsDetails(newDetails);
+                              } else {
+                                const idsToRemove = new Set(products.map(p => p._id));
+                                const newSet = new Set([...selectedProductsForExport].filter(id => !idsToRemove.has(id)));
+                                setSelectedProductsForExport(newSet);
+                                const newDetails: Record<string, Product> = {};
+                                Object.entries(selectedProductsDetails).forEach(([id, product]) => {
+                                  if (!idsToRemove.has(id)) {
+                                    newDetails[id] = product;
+                                  }
+                                });
+                                setSelectedProductsDetails(newDetails);
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Select all products on this page"
+                          />
+                        </th>
                         <th 
-                          className="w-[30%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                          className="w-[27%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
                           onClick={() => handleProductSort('name')}
                         >
                           <div className="flex items-center space-x-1.5 h-6 m-0">
@@ -8250,7 +8529,37 @@ export default function AdminDashboard() {
                     <tbody className="bg-white m-0 p-0">
                       {products.map((product, index) => (
                         <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} m-0 p-0`} onClick={() => handleEditProduct(product)}>
-                          <td className="w-[30%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                          <td className="w-[3%] px-4 xl:px-6 py-5 align-top m-0 p-0" onClick={(e) => e.stopPropagation()}>
+                            <div className="relative flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedProductsForExport.has(product._id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  const newSet = new Set(selectedProductsForExport);
+                                  if (e.target.checked) {
+                                    newSet.add(product._id);
+                                    setSelectedProductsDetails({
+                                      ...selectedProductsDetails,
+                                      [product._id]: product
+                                    });
+                                  } else {
+                                    newSet.delete(product._id);
+                                    const newDetails = { ...selectedProductsDetails };
+                                    delete newDetails[product._id];
+                                    setSelectedProductsDetails(newDetails);
+                                  }
+                                  setSelectedProductsForExport(newSet);
+                                }}
+                                className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
+                                title="Select for export"
+                              />
+                              {selectedProductsForExport.has(product._id) && (
+                                <CheckCircle2 className="absolute left-0 top-0 w-4 h-4 text-blue-600 pointer-events-none" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="w-[27%] px-4 xl:px-6 py-5 align-top m-0 p-0">
                             <div className="flex items-center min-w-0 h-6 m-0 p-0">
                               <div className="flex-shrink-0 h-5 w-5 m-0 p-0">
                                 <img
@@ -8542,9 +8851,34 @@ export default function AdminDashboard() {
                         {products.map((product) => (
                           <div
                             key={product._id}
-                            className="bg-white rounded-xl shadow-md border-2 border-gray-200 hover:shadow-xl transition-all duration-200 overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-xl shadow-md border-2 border-gray-200 hover:shadow-xl transition-all duration-200 overflow-hidden active:scale-[0.98] relative"
                             onClick={() => handleEditProduct(product)}
                           >
+                            {/* Selection Checkbox */}
+                            <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedProductsForExport.has(product._id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  const newSet = new Set(selectedProductsForExport);
+                                  if (e.target.checked) {
+                                    newSet.add(product._id);
+                                    setSelectedProductsDetails({
+                                      ...selectedProductsDetails,
+                                      [product._id]: product
+                                    });
+                                  } else {
+                                    newSet.delete(product._id);
+                                    const newDetails = { ...selectedProductsDetails };
+                                    delete newDetails[product._id];
+                                    setSelectedProductsDetails(newDetails);
+                                  }
+                                  setSelectedProductsForExport(newSet);
+                                }}
+                                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                            </div>
                             {/* Card Header */}
                             <div className="flex items-start p-3 sm:p-4 space-x-3 sm:space-x-4">
                               <div className="flex-shrink-0">
@@ -8871,15 +9205,325 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+              {/* Selected Products Tab */}
+              {activeTab === 'selected-products' && (
+                <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
+                  <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Selected Products</h2>
+                        <p className="text-xs sm:text-sm text-gray-600">
+                          {selectedProductsForExport.size} product{selectedProductsForExport.size !== 1 ? 's' : ''} selected for export
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedProductsForExport.size > 0 && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setExportSelectionLoading(true);
+                                  const token = localStorage.getItem('token');
+                                  const productIds = Array.from(selectedProductsForExport);
+                                  
+                                  const response = await fetch(
+                                    `/api/admin/etsy-export?productIds=${productIds.join(',')}`,
+                                    {
+                                      headers: { 'Authorization': `Bearer ${token}` },
+                                    }
+                                  );
+
+                                  if (!response.ok) {
+                                    const error = await response.json().catch(() => ({ error: 'Export failed' }));
+                                    throw new Error(error.error || 'Export failed');
+                                  }
+
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `etsy-selected-products-${new Date().toISOString().split('T')[0]}.csv`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  window.URL.revokeObjectURL(url);
+
+                                  toast.success(`Exported ${selectedProductsForExport.size} products to Etsy CSV format`);
+                                } catch (error) {
+                                  console.error('Export error:', error);
+                                  toast.error(error instanceof Error ? error.message : 'Failed to export products');
+                                } finally {
+                                  setExportSelectionLoading(false);
+                                }
+                              }}
+                              disabled={exportSelectionLoading || selectedProductsForExport.size === 0}
+                              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                            >
+                              {exportSelectionLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                                  <span>Exporting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  <span>Export to Etsy CSV</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedProductsForExport(new Set());
+                                setSelectedProductsDetails({});
+                                toast.success('All selections cleared');
+                              }}
+                              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
+                            >
+                              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                              <span>Clear All</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Selected Products List */}
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    {loadingStoredSelections ? (
+                      <div className="text-center py-12">
+                        <Loader2 className="h-8 w-8 mx-auto mb-4 text-gray-400 animate-spin" />
+                        <p className="text-sm text-gray-500">Loading selected products...</p>
+                      </div>
+                    ) : selectedProductsForExport.size === 0 ? (
+                      <div className="text-center py-12">
+                        <ListChecks className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-2">No Products Selected</h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Go to the Products tab and select products using the checkboxes to add them here.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('products')}
+                          className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          <Package className="h-4 w-4" />
+                          <span>Go to Products</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {/* Show products with missing details */}
+                        {Array.from(selectedProductsForExport).filter(id => !selectedProductsDetails[id]).length > 0 && (
+                          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p className="text-sm text-yellow-800">
+                              <AlertCircle className="h-4 w-4 inline mr-2" />
+                              {Array.from(selectedProductsForExport).filter(id => !selectedProductsDetails[id]).length} product(s) will be loaded when you visit their respective brand pages.
+                            </p>
+                          </div>
+                        )}
+                        {/* Summary Cards by Brand */}
+                        {(() => {
+                          const brands: Record<string, Product[]> = {};
+                          Object.values(selectedProductsDetails).forEach(product => {
+                            const brand = product.brand || 'Unbranded';
+                            if (!brands[brand]) brands[brand] = [];
+                            brands[brand].push(product);
+                          });
+                          
+                          // Also show IDs without details - use stored minimal info if available
+                          const idsWithoutDetails = Array.from(selectedProductsForExport).filter(id => !selectedProductsDetails[id]);
+                          if (idsWithoutDetails.length > 0) {
+                            // Try to get minimal info from localStorage
+                            try {
+                              const stored = localStorage.getItem(SELECTED_PRODUCTS_STORAGE_KEY);
+                              if (stored) {
+                                const storedData = JSON.parse(stored);
+                                const storedProductInfo = storedData?.productInfo || {};
+                                
+                                idsWithoutDetails.forEach(id => {
+                                  const info = storedProductInfo[id];
+                                  const brand = info?.brand || 'Unknown Brand';
+                                  if (!brands[brand]) brands[brand] = [];
+                                  brands[brand].push({
+                                    _id: id,
+                                    name: info?.name || `Product ${id.substring(0, 8)}...`,
+                                    description: 'Full details loading...',
+                                    price: info?.price || 0,
+                                    image: info?.image || '',
+                                    images: [],
+                                    category: '',
+                                    brand: brand,
+                                    rating: 0,
+                                    reviewCount: 0,
+                                    inStock: false,
+                                    stockCount: 0,
+                                    tags: [],
+                                    specifications: {},
+                                    isActive: false,
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                  } as Product);
+                                });
+                              } else {
+                                // Fallback if no stored info
+                                const brand = 'Loading...';
+                                if (!brands[brand]) brands[brand] = [];
+                                idsWithoutDetails.forEach(id => {
+                                  brands[brand].push({
+                                    _id: id,
+                                    name: `Product ${id.substring(0, 8)}...`,
+                                    description: 'Product details will load when you visit its brand page',
+                                    price: 0,
+                                    image: '',
+                                    images: [],
+                                    category: '',
+                                    brand: '',
+                                    rating: 0,
+                                    reviewCount: 0,
+                                    inStock: false,
+                                    stockCount: 0,
+                                    tags: [],
+                                    specifications: {},
+                                    isActive: false,
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                  } as Product);
+                                });
+                              }
+                            } catch (err) {
+                              // Fallback on error
+                              const brand = 'Loading...';
+                              if (!brands[brand]) brands[brand] = [];
+                              idsWithoutDetails.forEach(id => {
+                                brands[brand].push({
+                                  _id: id,
+                                  name: `Product ${id.substring(0, 8)}...`,
+                                  description: 'Product details loading...',
+                                  price: 0,
+                                  image: '',
+                                  images: [],
+                                  category: '',
+                                  brand: '',
+                                  rating: 0,
+                                  reviewCount: 0,
+                                  inStock: false,
+                                  stockCount: 0,
+                                  tags: [],
+                                  specifications: {},
+                                  isActive: false,
+                                  createdAt: new Date().toISOString(),
+                                  updatedAt: new Date().toISOString(),
+                                } as Product);
+                              });
+                            }
+                          }
+                          
+                          return Object.entries(brands).map(([brand, brandProducts]) => (
+                            <div key={brand} className="border border-gray-200 rounded-lg overflow-hidden">
+                              <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
+                                <h3 className="font-semibold text-gray-900">
+                                  {brand} <span className="text-sm font-normal text-gray-600">({brandProducts.length} products)</span>
+                                </h3>
+                              </div>
+                              <div className="p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {brandProducts.map((product) => (
+                                    <div
+                                      key={product._id}
+                                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
+                                    >
+                                        <div className="flex items-start space-x-4">
+                                        {product.image ? (
+                                          <img
+                                            src={product.image}
+                                            alt={product.name}
+                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                                          />
+                                        ) : (
+                                          <div className="w-20 h-20 bg-gray-200 rounded-lg border border-gray-300 flex-shrink-0 flex items-center justify-center">
+                                            <Package className="h-8 w-8 text-gray-400" />
+                                          </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-start justify-between">
+                                            <h4 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">
+                                              {product.name}
+                                            </h4>
+                                            <button
+                                              onClick={() => {
+                                                const newSet = new Set(selectedProductsForExport);
+                                                newSet.delete(product._id);
+                                                setSelectedProductsForExport(newSet);
+                                                const newDetails = { ...selectedProductsDetails };
+                                                delete newDetails[product._id];
+                                                setSelectedProductsDetails(newDetails);
+                                                toast.success('Product removed from selection');
+                                              }}
+                                              className="ml-2 text-red-600 hover:text-red-800 flex-shrink-0"
+                                              title="Remove from selection"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                                            {product.description}
+                                          </p>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-sm font-bold text-green-600">
+                                              ${product.price?.toFixed(2) || '0.00'}
+                                            </span>
+                                            {product.category && (
+                                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                                                {product.category}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="mt-2 pt-2 border-t border-gray-100">
+                                            <button
+                                              onClick={() => {
+                                                setSelectedProductForModal(product);
+                                                setShowProductModal(true);
+                                              }}
+                                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                              View Full Details →
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Jacket Maker Products Tab */}
               {activeTab === 'jacket-maker-products' && (
                 <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
-                  <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                      <div className="flex-1 min-w-0">
-                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Jacket Maker Products</h2>
-                        <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker (STAGE3 Database) - {jacketMakerTotal} total products</p>
-                      </div>
+                    <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Jacket Maker Products</h2>
+                            {selectedProductsForExport.size > 0 && (
+                              <button
+                                onClick={() => setActiveTab('selected-products')}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
+                              >
+                                <ListChecks className="h-4 w-4" />
+                                <span>{selectedProductsForExport.size} Selected</span>
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker (STAGE3 Database) - {jacketMakerTotal} total products</p>
+                        </div>
                       <button
                         onClick={() => fetchJacketMakerProducts()}
                         className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
@@ -9047,16 +9691,47 @@ export default function AdminDashboard() {
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                           {jacketMakerProducts.map((product) => (
-                            <AdminProductCard
-                              key={product._id}
-                              product={product}
-                              clickable={true}
-                              onClick={() => {
-                                setSelectedProductForModal(product);
-                                setShowProductModal(true);
-                              }}
-                              highlightTone="violet"
-                            />
+                            <div key={product._id} className="relative group">
+                              <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProductsForExport.has(product._id)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    const newSet = new Set(selectedProductsForExport);
+                                    if (e.target.checked) {
+                                      newSet.add(product._id);
+                                      setSelectedProductsDetails({
+                                        ...selectedProductsDetails,
+                                        [product._id]: product
+                                      });
+                                    } else {
+                                      newSet.delete(product._id);
+                                      const newDetails = { ...selectedProductsDetails };
+                                      delete newDetails[product._id];
+                                      setSelectedProductsDetails(newDetails);
+                                    }
+                                    setSelectedProductsForExport(newSet);
+                                  }}
+                                  className="w-5 h-5 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 bg-white shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                  title="Select for export"
+                                />
+                              </div>
+                              {selectedProductsForExport.has(product._id) && (
+                                <div className="absolute top-1.5 left-1.5 z-10 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                                  <CheckCircle2 className="h-4 w-4 text-white" />
+                                </div>
+                              )}
+                              <AdminProductCard
+                                product={product}
+                                clickable={true}
+                                onClick={() => {
+                                  setSelectedProductForModal(product);
+                                  setShowProductModal(true);
+                                }}
+                                highlightTone="violet"
+                              />
+                            </div>
                           ))}
                         </div>
 
@@ -9136,12 +9811,23 @@ export default function AdminDashboard() {
 
                 return (
                   <div key={brandTabId} className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
-                    <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                        <div className="flex-1 min-w-0">
-                          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{brand} Products</h2>
-                          <p className="text-xs sm:text-sm text-gray-600">Products from {brand} (STAGE3 Database) - {total} total products</p>
-                        </div>
+                      <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-1">
+                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{brand} Products</h2>
+                              {selectedProductsForExport.size > 0 && (
+                                <button
+                                  onClick={() => setActiveTab('selected-products')}
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
+                                >
+                                  <ListChecks className="h-4 w-4" />
+                                  <span>{selectedProductsForExport.size} Selected</span>
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs sm:text-sm text-gray-600">Products from {brand} (STAGE3 Database) - {total} total products</p>
+                          </div>
                         <button
                           onClick={() => fetchBrandProducts(brand)}
                           className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
@@ -9324,16 +10010,47 @@ export default function AdminDashboard() {
                         <>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                             {brandProductsList.map((product) => (
-                              <AdminProductCard
-                                key={product._id}
-                                product={product}
-                                clickable={true}
-                                onClick={() => {
-                                  setSelectedProductForModal(product);
-                                  setShowProductModal(true);
-                                }}
-                                highlightTone="violet"
-                              />
+                              <div key={product._id} className="relative group">
+                                <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedProductsForExport.has(product._id)}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      const newSet = new Set(selectedProductsForExport);
+                                      if (e.target.checked) {
+                                        newSet.add(product._id);
+                                        setSelectedProductsDetails({
+                                          ...selectedProductsDetails,
+                                          [product._id]: product
+                                        });
+                                      } else {
+                                        newSet.delete(product._id);
+                                        const newDetails = { ...selectedProductsDetails };
+                                        delete newDetails[product._id];
+                                        setSelectedProductsDetails(newDetails);
+                                      }
+                                      setSelectedProductsForExport(newSet);
+                                    }}
+                                    className="w-5 h-5 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 bg-white shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                    title="Select for export"
+                                  />
+                                </div>
+                                {selectedProductsForExport.has(product._id) && (
+                                  <div className="absolute top-1.5 left-1.5 z-10 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                  </div>
+                                )}
+                                <AdminProductCard
+                                  product={product}
+                                  clickable={true}
+                                  onClick={() => {
+                                    setSelectedProductForModal(product);
+                                    setShowProductModal(true);
+                                  }}
+                                  highlightTone="violet"
+                                />
+                              </div>
                             ))}
                           </div>
 
