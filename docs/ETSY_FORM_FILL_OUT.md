@@ -13,7 +13,7 @@ EverStyleCrafts Store Manager
 
 **Copy this EXACT text:**
 ```
-Personal e-commerce store management application for my own Etsy shop. Integrates with Etsy API to synchronize product listings, manage inventory levels, and import orders between my independent store and Etsy. Features: bidirectional product sync (create/update/delete listings), real-time inventory management, order import/tracking, automated scheduled sync, OAuth 2.0 authentication. Personal-use only - I am the sole user accessing only my own shop data. Built with Next.js on Vercel. Compliant with Etsy API Terms including data freshness requirements (6h/24h) and rate limiting.
+Personal e-commerce store management application for my own Etsy shop. Integrates with Etsy API to synchronize product listings, manage inventory levels, and import orders between my independent store and Etsy. Features: bidirectional product sync (create/update/delete listings), real-time inventory management, order import/tracking, automated scheduled sync, OAuth 2.0 authentication. Personal-use only - I am the sole user accessing Etsy APIs. Built with Next.js on Vercel. Compliant with Etsy API Terms including data freshness requirements (6h/24h) and rate limiting.
 ```
 
 **Character count: 499** ✅
