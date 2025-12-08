@@ -24,6 +24,52 @@ export interface ProcessImageOptions {
 }
 
 /**
+ * Resize image if too large to speed up processing
+ */
+async function resizeImageIfNeeded(image: HTMLImageElement, maxDimension: number = 1200): Promise<HTMLImageElement> {
+  if (image.width <= maxDimension && image.height <= maxDimension) {
+    return image; // No resize needed
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return image;
+
+  // Calculate new dimensions maintaining aspect ratio
+  let newWidth = image.width;
+  let newHeight = image.height;
+
+  if (image.width > image.height) {
+    if (image.width > maxDimension) {
+      newWidth = maxDimension;
+      newHeight = Math.round((image.height / image.width) * maxDimension);
+    }
+  } else {
+    if (image.height > maxDimension) {
+      newHeight = maxDimension;
+      newWidth = Math.round((image.width / image.height) * maxDimension);
+    }
+  }
+
+  canvas.width = newWidth;
+  canvas.height = newHeight;
+  
+  // Use high-quality scaling
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, 0, 0, newWidth, newHeight);
+
+  // Convert back to image (use JPEG for faster processing, PNG only if transparency needed)
+  return new Promise((resolve, reject) => {
+    const resizedImg = new Image();
+    resizedImg.onload = () => resolve(resizedImg);
+    resizedImg.onerror = reject;
+    // Use JPEG for faster processing (smaller file, faster background removal)
+    resizedImg.src = canvas.toDataURL('image/jpeg', 0.92);
+  });
+}
+
+/**
  * Process image using client-side libraries
  */
 export async function processImageClientSide(
@@ -40,6 +86,17 @@ export async function processImageClientSide(
   } else {
     imageUrl = URL.createObjectURL(imageSource);
     image = await loadImage(imageUrl);
+  }
+
+  // Resize image if too large to speed up processing (max 1200px on longest side)
+  // This significantly reduces processing time for large images (can be 3-5x faster)
+  // Only resize if background removal is needed (cropping doesn't need resize)
+  if (image instanceof HTMLImageElement && options.removeBackground) {
+    image = await resizeImageIfNeeded(image, 1200);
+    // Update imageUrl if we resized
+    if (image.src.startsWith('data:')) {
+      imageUrl = image.src;
+    }
   }
 
   let processedImage = image;
@@ -62,7 +119,29 @@ export async function processImageClientSide(
       : {};
     
     // Use @imgly/background-removal
-    const blob = await removeBackground(imageUrl);
+    // Optimize for speed: use 'small' model by default, 'medium' only when fineEdges is needed
+    const config: any = {};
+    
+    if (bgOptions.fineEdges) {
+      // Use medium model for better fine edge detection (slower but better quality)
+      // Medium model (~80MB) provides better quality for detailed images
+      config.model = 'medium';
+      // Use PNG format to preserve transparency and fine details
+      config.output = {
+        format: 'image/png',
+        type: 'foreground'
+      };
+    } else {
+      // Use small model for faster processing (~40MB, faster but may have minor artifacts)
+      // Small model is significantly faster while still providing good results
+      config.model = 'small';
+      config.output = {
+        format: 'image/png',
+        type: 'foreground'
+      };
+    }
+    
+    const blob = await removeBackground(imageUrl, config);
     
     // If background color replacement is requested
     if (bgOptions.backgroundColor) {

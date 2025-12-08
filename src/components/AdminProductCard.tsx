@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import clsx from 'clsx';
 import {
   DollarSign,
@@ -11,7 +11,11 @@ import {
   Sparkles,
   Activity,
   Eye,
+  Edit,
 } from 'lucide-react';
+import ImageEditor from './ImageEditor';
+import { useAuthStore } from '@/store/authStore';
+import toast from 'react-hot-toast';
 
 type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 type StatTone = 'default' | 'info' | 'success' | 'warning' | 'danger';
@@ -71,6 +75,7 @@ export interface AdminProductCardProps {
   showTags?: boolean;
   onClick?: () => void;
   clickable?: boolean;
+  disableImageEdit?: boolean; // Disable image editing (e.g., for brands products list)
 }
 
 const badgeToneClasses: Record<BadgeTone, string> = {
@@ -119,7 +124,14 @@ const AdminProductCard = ({
   showTags = true,
   onClick,
   clickable = false,
+  disableImageEdit = false,
 }: AdminProductCardProps) => {
+  const [editingImage, setEditingImage] = useState(false);
+  const [currentImage, setCurrentImage] = useState(product.image);
+  const roleName = useAuthStore((state) => state.user?.role?.name);
+  const normalizedRoleName = roleName?.toUpperCase?.();
+  const isAdminUser = normalizedRoleName === 'ADMIN' || normalizedRoleName === 'SUPER_ADMIN';
+
   const {
     name,
     description,
@@ -239,16 +251,16 @@ const AdminProductCard = ({
       }}
     >
       {/* Product Image */}
-      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+      <div className="relative aspect-square bg-gray-100 overflow-hidden group/image">
         <img
-          src={image || defaultImage}
+          src={currentImage || image || defaultImage}
           alt={name}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
           loading="lazy"
         />
         {/* Status Badge Overlay */}
         {isActive !== undefined && (
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 z-10">
             <span className={clsx(
               'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase shadow-md',
               isActive ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'
@@ -256,6 +268,19 @@ const AdminProductCard = ({
               {isActive ? 'Active' : 'Inactive'}
             </span>
           </div>
+        )}
+        {/* Edit Image Button (Admin Only) */}
+        {isAdminUser && !disableImageEdit && (currentImage || image) && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingImage(true);
+            }}
+            className="absolute top-3 left-3 z-10 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 transition-all"
+            title="Edit image (crop & background)"
+          >
+            <Edit className="h-4 w-4 text-blue-600" />
+          </button>
         )}
         {/* Click Indicator */}
         {isClickable && (
@@ -348,6 +373,57 @@ const AdminProductCard = ({
           </div>
           {footer && <div className="mt-3 border-t border-gray-100 pt-3">{footer}</div>}
         </div>
+      )}
+
+      {/* Image Editor Modal */}
+      {isAdminUser && editingImage && (currentImage || image) && (
+        <ImageEditor
+          imageUrl={currentImage || image || ''}
+          isOpen={editingImage}
+          onClose={() => setEditingImage(false)}
+          onSave={async (processedUrl) => {
+            setCurrentImage(processedUrl);
+            // Update product in database
+            try {
+              const token = localStorage.getItem('token');
+              if (!token) {
+                toast.error('Authentication required');
+                return;
+              }
+
+              const response = await fetch(`/api/admin/products/${product._id}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  image: processedUrl,
+                }),
+              });
+
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to update product');
+              }
+
+              toast.success('Product image updated successfully!');
+              // Optionally trigger a refresh callback if provided
+              if (onClick) {
+                // Small delay to allow state to update
+                setTimeout(() => {
+                  window.location.reload();
+                }, 500);
+              }
+            } catch (error: any) {
+              console.error('Failed to update product image:', error);
+              toast.error(error.message || 'Failed to update product image');
+            }
+            setEditingImage(false);
+          }}
+          productName={name}
+          folder={brand ? `EverStyleCrafts/${brand}` : 'EverStyleCrafts'}
+        />
       )}
     </div>
   );

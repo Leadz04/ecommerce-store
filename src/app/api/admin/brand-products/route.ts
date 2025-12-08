@@ -141,8 +141,8 @@ export async function GET(request: NextRequest) {
     const Product = conn.model('Product', ProductSchema);
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 1000);
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const brand = searchParams.get('brand') || '';
@@ -150,6 +150,15 @@ export async function GET(request: NextRequest) {
     const isActive = searchParams.get('isActive') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+
+    // Check if any filters are active
+    const hasActiveFilters = !!(search || category || status || isActive);
+    
+    // If filters are active and no page/limit provided, return all results
+    // Otherwise, use pagination
+    const usePagination = !hasActiveFilters && pageParam && limitParam;
+    const page = usePagination ? parseInt(pageParam) : 1;
+    const limit = usePagination ? Math.min(parseInt(limitParam), 1000) : 1000; // Default to 1000 when no limit
 
     // Build query - filter by brand if provided
     const query: any = {};
@@ -212,10 +221,12 @@ export async function GET(request: NextRequest) {
       sort.createdAt = -1;
     }
 
-    const skip = (page - 1) * limit;
+    const skip = usePagination ? (page - 1) * limit : 0;
 
     const [items, total] = await Promise.all([
-      Product.find(query).sort(sort).skip(skip).limit(limit).lean(),
+      usePagination 
+        ? Product.find(query).sort(sort).skip(skip).limit(limit).lean()
+        : Product.find(query).sort(sort).lean(),
       Product.countDocuments(query)
     ]);
 
@@ -228,10 +239,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       products: items,
       pagination: {
-        page,
-        limit,
+        page: usePagination ? page : 1,
+        limit: usePagination ? limit : items.length,
         total,
-        pages: Math.ceil(total / limit)
+        pages: usePagination ? Math.ceil(total / limit) : 1
       },
       filters: {
         brands: brands.filter((b): b is string => Boolean(b) && typeof b === 'string').sort(),

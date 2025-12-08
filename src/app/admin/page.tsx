@@ -5,6 +5,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import { requestDeduplicator } from '@/lib/requestDeduplication';
 import {
   Users,
   Package,
@@ -86,6 +87,7 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 import { AdminSkeleton, TableSkeleton, ProductTableSkeleton } from '@/components/LoadingSkeleton';
 import SelectField, { SelectOption } from '@/components/SelectField';
 import toast from 'react-hot-toast';
+import ImageEditor from '@/components/ImageEditor';
 
 // Base allowed tabs - brand tabs will be added dynamically
 const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons','selected-products'] as const;
@@ -288,6 +290,9 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuthStore();
+  const roleName = user?.role?.name;
+  const normalizedRoleName = roleName?.toUpperCase?.();
+  const isAdminUser = normalizedRoleName === 'ADMIN' || normalizedRoleName === 'SUPER_ADMIN';
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
   
@@ -322,6 +327,7 @@ export default function AdminDashboard() {
   // Product modal state
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [editingImage, setEditingImage] = useState<{ url: string; imageIndex: number; isMain: boolean } | null>(null);
   const productsFetchedRef = useRef(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [analysisSelectedIds, setAnalysisSelectedIds] = useState<string[]>([]);
@@ -1674,6 +1680,8 @@ export default function AdminDashboard() {
   const lastActiveBrandTab = useRef<string | null>(null);
   const isClosingConversationRef = useRef(false);
   const lastProcessedConversationIdRef = useRef<string | null>(null);
+  const brandProductsFetchingRef = useRef<Record<string, boolean>>({});
+  const brandSearchDebounceRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   // Auto-expand parent section when a child tab becomes active (if not manually collapsed)
   useEffect(() => {
@@ -2059,17 +2067,40 @@ export default function AdminDashboard() {
 
   // Fetch products for a specific brand
   const fetchBrandProducts = async (brandName: string, pageToFetch?: number) => {
+    // Prevent concurrent calls for the same brand
+    if (brandProductsFetchingRef.current[brandName]) {
+      console.log(`[fetchBrandProducts] Already fetching for ${brandName}, skipping duplicate call`);
+      return;
+    }
+
     try {
+      brandProductsFetchingRef.current[brandName] = true;
       setBrandLoading(prev => ({ ...prev, [brandName]: true }));
       const token = localStorage.getItem('token');
       const page = pageToFetch || brandPage[brandName] || 1;
       const limit = brandPerPage[brandName] || 20;
 
+      // Check if any filters are active
+      const hasActiveFilters = !!(
+        brandSearchTerm[brandName] ||
+        brandCategory[brandName] ||
+        brandStatus[brandName] ||
+        (brandIsActive[brandName] && brandIsActive[brandName] !== 'all')
+      );
+
+      // Only include page/limit when no filters are active
+      // When filters are active, return all matching results
+      const shouldUsePagination = !hasActiveFilters;
+
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
         brand: brandName,
       });
+
+      // Only add page/limit when pagination should be used
+      if (shouldUsePagination) {
+        params.append('page', page.toString());
+        params.append('limit', limit.toString());
+      }
 
       if (brandSearchTerm[brandName]) {
         params.append('search', brandSearchTerm[brandName]);
@@ -2090,9 +2121,16 @@ export default function AdminDashboard() {
         params.append('sortOrder', brandSortOrder[brandName]);
       }
 
-      const res = await fetch(`/api/admin/brand-products?${params.toString()}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      // Create unique key for deduplication
+      const dedupeKey = `brand-products-${params.toString()}`;
+
+      const res = await requestDeduplicator.deduplicate(
+        dedupeKey,
+        () => fetch(`/api/admin/brand-products?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+      );
+
       if (!res.ok) {
         const err = await res.text().catch(() => '');
         throw new Error(`Failed to fetch ${brandName} products: ${res.status} ${err}`);
@@ -2116,6 +2154,7 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : `Failed to fetch ${brandName} products`);
     } finally {
       setBrandLoading(prev => ({ ...prev, [brandName]: false }));
+      brandProductsFetchingRef.current[brandName] = false;
     }
   };
 
@@ -9730,6 +9769,7 @@ export default function AdminDashboard() {
                                   setShowProductModal(true);
                                 }}
                                 highlightTone="violet"
+                                disableImageEdit={activeTab === 'jacket-maker-products' || activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products'}
                               />
                             </div>
                           ))}
@@ -9849,17 +9889,29 @@ export default function AdminDashboard() {
                               placeholder="Search by name, description, or brand..."
                               value={searchTerm}
                               onChange={(e) => {
-                                setBrandSearchTerm(prev => ({ ...prev, [brand]: e.target.value }));
+                                const value = e.target.value;
+                                setBrandSearchTerm(prev => ({ ...prev, [brand]: value }));
                                 setBrandPage(prev => ({ ...prev, [brand]: 1 }));
+                                
+                                // Clear existing debounce timer
+                                if (brandSearchDebounceRef.current[brand]) {
+                                  clearTimeout(brandSearchDebounceRef.current[brand]);
+                                }
+                                
+                                // Debounce search - wait 500ms after user stops typing
+                                brandSearchDebounceRef.current[brand] = setTimeout(() => {
+                                  fetchBrandProducts(brand, 1);
+                                }, 500);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
+                                  // Clear debounce and fetch immediately
+                                  if (brandSearchDebounceRef.current[brand]) {
+                                    clearTimeout(brandSearchDebounceRef.current[brand]);
+                                    delete brandSearchDebounceRef.current[brand];
+                                  }
                                   fetchBrandProducts(brand, 1);
                                 }
-                              }}
-                              onBlur={() => {
-                                // Fetch when user leaves the search field
-                                fetchBrandProducts(brand, 1);
                               }}
                               className="w-full pl-12 pr-4 py-3.5 text-base border-2 border-gray-300 text-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all shadow-sm hover:shadow-md bg-white"
                             />
@@ -10049,6 +10101,7 @@ export default function AdminDashboard() {
                                     setShowProductModal(true);
                                   }}
                                   highlightTone="violet"
+                                  disableImageEdit={activeTab === 'jacket-maker-products' || activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products'}
                                 />
                               </div>
                             ))}
@@ -12358,7 +12411,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Left Column - Images */}
                   <div className="space-y-4">
-                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50">
+                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50 group/image">
                       <img
                         src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
                         alt={selectedProductForModal.name}
@@ -12367,11 +12420,27 @@ export default function AdminDashboard() {
                           (e.target as HTMLImageElement).src = '/placeholder-product.svg';
                         }}
                       />
+                      {isAdminUser && (selectedProductForModal.image || selectedProductForModal.images?.[0]) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingImage({
+                              url: selectedProductForModal.image || selectedProductForModal.images?.[0] || '',
+                              imageIndex: 0,
+                              isMain: true
+                            });
+                          }}
+                          className="absolute top-3 left-3 z-10 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110"
+                          title="Edit image (crop & background)"
+                        >
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </button>
+                      )}
                     </div>
                     {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
                       <div className="grid grid-cols-4 gap-2">
                         {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
-                          <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group/thumb">
                             <img
                               src={img}
                               alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
@@ -12380,6 +12449,22 @@ export default function AdminDashboard() {
                                 (e.target as HTMLImageElement).src = '/placeholder-product.svg';
                               }}
                             />
+                            {isAdminUser && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingImage({
+                                    url: img,
+                                    imageIndex: idx + 1,
+                                    isMain: false
+                                  });
+                                }}
+                                className="absolute top-1 right-1 z-10 opacity-0 group-hover/thumb:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-lg hover:bg-white hover:scale-110"
+                                title="Edit image (crop & background)"
+                              >
+                                <Edit className="h-3 w-3 text-blue-600" />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -12492,6 +12577,115 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Image Editor Modal */}
+        {isAdminUser && editingImage && selectedProductForModal && (
+          <ImageEditor
+            imageUrl={editingImage.url}
+            isOpen={!!editingImage}
+            onClose={() => setEditingImage(null)}
+            onSave={async (processedUrl) => {
+              try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                  toast.error('Authentication required');
+                  return;
+                }
+
+                // Check if product is from STAGE3 (brands products tab)
+                const isStage3Product = activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products' || activeTab === 'jacket-maker-products';
+                
+                if (isStage3Product) {
+                  // Update STAGE3 product
+                  const response = await fetch(`/api/admin/products/stage3/${selectedProductForModal._id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      ...(editingImage.isMain 
+                        ? { image: processedUrl }
+                        : { 
+                            images: selectedProductForModal.images?.map((img, idx) => 
+                              idx === editingImage.imageIndex - 1 ? processedUrl : img
+                            ) || []
+                          }
+                      ),
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to update product');
+                  }
+
+                  // Update local state
+                  if (editingImage.isMain) {
+                    setSelectedProductForModal({
+                      ...selectedProductForModal,
+                      image: processedUrl
+                    });
+                  } else {
+                    const newImages = [...(selectedProductForModal.images || [])];
+                    newImages[editingImage.imageIndex - 1] = processedUrl;
+                    setSelectedProductForModal({
+                      ...selectedProductForModal,
+                      images: newImages
+                    });
+                  }
+                } else {
+                  // Update regular product
+                  const response = await fetch(`/api/admin/products/${selectedProductForModal._id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      ...(editingImage.isMain 
+                        ? { image: processedUrl }
+                        : { 
+                            images: selectedProductForModal.images?.map((img, idx) => 
+                              idx === editingImage.imageIndex - 1 ? processedUrl : img
+                            ) || []
+                          }
+                      ),
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to update product');
+                  }
+
+                  // Update local state
+                  if (editingImage.isMain) {
+                    setSelectedProductForModal({
+                      ...selectedProductForModal,
+                      image: processedUrl
+                    });
+                  } else {
+                    const newImages = [...(selectedProductForModal.images || [])];
+                    newImages[editingImage.imageIndex - 1] = processedUrl;
+                    setSelectedProductForModal({
+                      ...selectedProductForModal,
+                      images: newImages
+                    });
+                  }
+                }
+
+                toast.success('Product image updated successfully!');
+              } catch (error: any) {
+                console.error('Failed to update product image:', error);
+                toast.error(error.message || 'Failed to update product image');
+              }
+              setEditingImage(null);
+            }}
+            productName={selectedProductForModal.name}
+            folder={selectedProductForModal.brand ? `EverStyleCrafts/${selectedProductForModal.brand}` : 'EverStyleCrafts'}
+          />
         )}
             </div>
           </div>
