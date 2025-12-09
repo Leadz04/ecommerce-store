@@ -119,20 +119,20 @@ const ProductSchema = new mongoose.Schema({
   timestamps: true
 });
 
-let stage3Connection: mongoose.Connection | null = null;
+let mainConnection: mongoose.Connection | null = null;
 
-async function getStage3Connection() {
-  if (stage3Connection && stage3Connection.readyState === 1) {
-    return stage3Connection;
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
   }
 
-  const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3;
-  if (!MONGODB_URI_STAGE3) {
-    throw new Error('MONGODB_URI_STAGE3 is not configured');
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
   }
-
-  stage3Connection = await mongoose.createConnection(MONGODB_URI_STAGE3).asPromise();
-  return stage3Connection;
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
 }
 
 interface NineNineNineProduct {
@@ -363,7 +363,7 @@ export async function POST(request: NextRequest) {
     console.log(`[999.com.pk Scraper] Fetched ${products.length} winter-related products (after filtering)`);
     
     // Connect to STAGE3 database
-    const conn = await getStage3Connection();
+    const conn = await getMainConnection();
     const Product = conn.model('Product', ProductSchema);
     
     let importedCount = 0;

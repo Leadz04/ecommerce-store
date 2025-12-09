@@ -102,7 +102,7 @@ const CouponSchema = new Schema<ICoupon>(
     },
     category: {
       type: String,
-      enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
+      enum: ['Men', 'Women', 'Children', 'Office & Travel', 'Accessories', 'Gifting', 'Wool', 'Footwear'],
       required: false,
     },
     startDate: {

@@ -93,6 +93,10 @@ export const useProductStore = create<ProductStore>((set, get) => ({
   fetchProducts: async (params = {}) => {
     set({ isLoading: true, error: null });
     
+    // Determine if this request intends to append (so we can preserve items on failure)
+    const intendedPage = parseInt((params as any).page || get().pagination.page || 1, 10);
+    const isAppendRequest = intendedPage > 1;
+
     try {
       const { filters } = get();
       const searchParams = new URLSearchParams();
@@ -204,17 +208,41 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       
       console.log('[ProductStore] Successfully fetched', data.products?.length, 'products');
 
-      set({
-        products: Array.isArray(data.products)
-          ? data.products.map((product: Product) => normalizeProductStock(product) as Product)
-          : [],
-        pagination: data.pagination,
-        isLoading: false,
-        error: null
+      const normalizedIncoming = Array.isArray(data.products)
+        ? data.products.map((product: Product) => normalizeProductStock(product) as Product)
+        : [];
+
+      const incomingPage = parseInt(searchParams.get('page') || '1', 10);
+      const shouldAppend = !hasActiveFilters && incomingPage > 1;
+
+      set((state) => {
+        if (shouldAppend) {
+          // Append while keeping existing items visible
+          const existingIds = new Set(state.products.map((p) => (p as any)._id || (p as any).id));
+          const newOnes = normalizedIncoming.filter(
+            (p) => !existingIds.has((p as any)._id || (p as any).id)
+          );
+          return {
+            products: [...state.products, ...newOnes],
+            pagination: data.pagination,
+            isLoading: false,
+            error: null,
+          };
+        }
+
+        // Replace for first page or when filters are active
+        return {
+          products: normalizedIncoming,
+          pagination: data.pagination,
+          isLoading: false,
+          error: null,
+        };
       });
     } catch (error) {
+      // Preserve already-loaded items when a "load more" request fails
+      const { products: existingProducts } = get();
       set({
-        products: [],
+        products: isAppendRequest ? existingProducts : [],
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to fetch products'
       });

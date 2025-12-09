@@ -486,7 +486,8 @@ export default function CategoryPage() {
     'wool': 'Wool',
     'office-travel': 'Office & Travel',
     'accessories': 'Accessories',
-    'gifting': 'Gifting'
+    'gifting': 'Gifting',
+    'footwear': 'Footwear'
   };
 
   const categoryName = categoryMap[categorySlug as keyof typeof categoryMap] || 'Unknown Category';

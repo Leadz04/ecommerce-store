@@ -1,16 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import { AuditLog } from '@/models';
 import { applyDeduplication } from '@/lib/deduplication';
 
-// GET /api/admin/products - Get all products with pagination and filtering
+let mainConnection: mongoose.Connection | null = null;
+
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
+  }
+
+  // Use the main database connection (same as users)
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
+}
+
+// Product Schema (same as in src/models/Product.ts)
+const ProductSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Product name is required'],
+    trim: true,
+    maxlength: [200, 'Product name cannot be more than 200 characters']
+  },
+  description: {
+    type: String,
+    required: [true, 'Product description is required'],
+    trim: true,
+    maxlength: [5000, 'Description cannot be more than 5000 characters']
+  },
+  descriptionHtml: {
+    type: String,
+    required: false,
+    maxlength: [20000, 'HTML description too long']
+  },
+  price: {
+    type: Number,
+    required: [true, 'Price is required'],
+    min: [0, 'Price cannot be negative']
+  },
+  originalPrice: {
+    type: Number,
+    min: [0, 'Original price cannot be negative']
+  },
+  image: {
+    type: String,
+    required: [true, 'Product image is required']
+  },
+  images: [{
+    type: String
+  }],
+  imageAltTexts: [{
+    type: String,
+    trim: true
+  }],
+  category: {
+    type: String,
+    enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
+    default: 'Accessories'
+  },
+  brand: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  rating: {
+    type: Number,
+    default: 0,
+    min: [0, 'Rating cannot be less than 0'],
+    max: [5, 'Rating cannot be more than 5']
+  },
+  reviewCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Review count cannot be negative']
+  },
+  inStock: {
+    type: Boolean,
+    default: true
+  },
+  stockCount: {
+    type: Number,
+    required: false,
+    default: 0,
+    min: [0, 'Stock count cannot be negative']
+  },
+  tags: [{
+    type: String,
+    trim: true
+  }],
+  specifications: {
+    type: Map,
+    of: String
+  },
+  sourceUrl: {
+    type: String,
+    index: true,
+    sparse: true,
+  },
+  productType: {
+    type: String,
+  },
+  status: {
+    type: String,
+    enum: ['draft', 'published', 'archived'],
+    default: 'draft',
+    index: true,
+  },
+  publishAt: {
+    type: Date,
+    default: null,
+    index: true,
+  },
+  variants: [{
+    title: { type: String },
+    sku: { type: String },
+    price: { type: Number, min: 0 },
+    originalPrice: { type: Number, min: 0 },
+    available: { type: Boolean },
+    inventory: { type: Number, min: 0, required: false },
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
+});
+
+// GET /api/admin/products - Get all products with pagination and filtering (from STAGE3 database)
 export async function GET(request: NextRequest) {
   try {
     const user = await requirePermission(PERMISSIONS.PRODUCT_VIEW)(request);
-    await connectDB();
+    
+    const conn = await getMainConnection();
+    const Product = conn.model('Product', ProductSchema);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -198,10 +330,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/products - Create new product
+// POST /api/admin/products - Create new product (in STAGE3 database)
 export async function POST(request: NextRequest) {
   try {
     const user = await requirePermission(PERMISSIONS.PRODUCT_CREATE)(request);
+    
+    const conn = await getMainConnection();
+    const Product = conn.model('Product', ProductSchema);
+    
+    // Also connect to main DB for audit logs
     await connectDB();
 
     const body = await request.json();

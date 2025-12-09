@@ -76,7 +76,7 @@ const ProductBundleSchema = new Schema<IProductBundle>({
   images: [String],
   category: {
     type: String,
-    enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
+    enum: ['Men', 'Women', 'Children', 'Office & Travel', 'Accessories', 'Gifting', 'Wool', 'Footwear'],
   },
   isActive: {
     type: Boolean,

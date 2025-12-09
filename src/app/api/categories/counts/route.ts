@@ -9,13 +9,16 @@ export async function GET(request: NextRequest) {
     await connectDB();
     console.log('[API /categories/counts] Database connected successfully');
     
-    // Build query for active, published products
-    const now = new Date();
-    const query: any = { 
-      isActive: true,
+    // Build query - get all products from main database, exclude test products
+    const query: any = {
       $and: [
-        { $or: [ { status: 'published' }, { status: { $exists: false } }, { status: null } ] },
-        { $or: [ { publishAt: null }, { publishAt: { $lte: now } }, { publishAt: { $exists: false } } ] },
+        {
+          $nor: [
+            { name: { $regex: /test/i } },
+            { sourceUrl: { $regex: /test/i } },
+            { tags: /test/i }
+          ]
+        }
       ]
     };
 
@@ -38,7 +41,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Ensure all expected categories are present (even if 0)
-    const allCategories = ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'];
+    const allCategories = ['Men', 'Women', 'Children', 'Office & Travel', 'Accessories', 'Gifting', 'Wool', 'Footwear'];
     allCategories.forEach(cat => {
       if (!(cat in counts)) {
         counts[cat] = 0;

@@ -1,13 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import { applyDeduplication } from '@/lib/deduplication';
+import Product from '@/models/Product';
+
+let mainConnection: mongoose.Connection | null = null;
+
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
+  }
+
+  // Use the main database connection (same as users)
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+  
+  // Ensure connection is ready
+  if (mongooseInstance.connection.readyState !== 1) {
+    throw new Error('Database connection is not ready');
+  }
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
+}
 
 export async function GET(request: NextRequest) {
   console.log('[API /products] GET request received');
   try {
-    console.log('[API /products] Connecting to database...');
-    await connectDB();
+    console.log('[API /products] Connecting to main database...');
+    try {
+      await getMainConnection();
+    } catch (connError) {
+      console.error('[API /products] Connection error:', connError);
+      return NextResponse.json(
+        { error: 'Database connection failed', details: connError instanceof Error ? connError.message : String(connError) },
+        { status: 500 }
+      );
+    }
+    
     console.log('[API /products] Database connected successfully');
     
     const { searchParams } = new URL(request.url);
@@ -46,14 +78,19 @@ export async function GET(request: NextRequest) {
     const style = searchParams.get('style');
     const color = searchParams.get('color');
 
-    // Build query - include legacy products without status/publishAt
-    const now = new Date();
-    const query: any = { isActive: true };
-
-    // Status/publish window
+    // Build query - get all products from main database, exclude test products
+    const query: any = {};
+    
+    // Exclude test products (identified by name or sourceUrl containing 'test')
+    // MongoDB will check array fields (tags) for regex matches automatically
     query.$and = [
-      { $or: [ { status: 'published' }, { status: { $exists: false } }, { status: null } ] },
-      { $or: [ { publishAt: null }, { publishAt: { $lte: now } }, { publishAt: { $exists: false } } ] },
+      {
+        $nor: [
+          { name: { $regex: /test/i } },
+          { sourceUrl: { $regex: /test/i } },
+          { tags: /test/i }
+        ]
+      }
     ];
     
     if (category && category !== 'all') {
@@ -121,6 +158,11 @@ export async function GET(request: NextRequest) {
     if (andConditions.length > 0) {
       query.$and = [...(query.$and || []), ...andConditions];
     }
+    
+    // Ensure $and is an array
+    if (query.$and && query.$and.length === 0) {
+      delete query.$and;
+    }
 
     // Collections can influence query and sort
     let sort: any = {};
@@ -161,15 +203,37 @@ export async function GET(request: NextRequest) {
 
     console.log('[API /products] Executing query:', JSON.stringify(query));
     
-    // Build query - apply pagination only if valid and enabled
-    let queryBuilder = Product.find(query).sort(sort);
+    // Build query - always apply a reasonable limit to prevent memory issues
+    // MongoDB has a 32MB memory limit for sorts, so we must limit results
+    let queryBuilder = Product.find(query);
     
+    // Apply sort
+    if (Object.keys(sort).length > 0) {
+      queryBuilder = queryBuilder.sort(sort);
+    }
+    
+    // Always apply a limit to prevent "Sort exceeded memory limit" errors
+    // When filters are active, cap at 5000 to prevent memory issues
     if (usePagination) {
       queryBuilder = queryBuilder.limit(limit).skip((page - 1) * limit);
+    } else if (hasActiveFilters || hasNoLimit) {
+      // When filters are active, limit to max 5000 to prevent memory issues
+      // This prevents MongoDB from trying to sort 15,000+ products in memory
+      const maxLimit = Math.min(limit || 5000, 5000);
+      queryBuilder = queryBuilder.limit(maxLimit);
+    } else {
+      // Default limit if nothing specified
+      queryBuilder = queryBuilder.limit(limit || 20);
     }
-    // Otherwise, don't apply limit - return all matching products
     
-    const productsRaw = await queryBuilder.lean();
+    let productsRaw;
+    try {
+      productsRaw = await queryBuilder.lean();
+    } catch (queryError) {
+      console.error('[API /products] Query execution error:', queryError);
+      // Return empty results instead of error if query fails
+      productsRaw = [];
+    }
 
     console.log('[API /products] Found', productsRaw.length, 'products (before deduplication)');
     
@@ -177,13 +241,22 @@ export async function GET(request: NextRequest) {
     const products = applyDeduplication(productsRaw, 'products');
     console.log('[API /products] After deduplication:', products.length, 'products');
 
-    const total = await Product.countDocuments(query);
-    console.log('[API /products] Total count:', total);
+    let total = 0;
+    let categories: string[] = [];
+    let brands: string[] = [];
+    
+    try {
+      total = await Product.countDocuments(query);
+      console.log('[API /products] Total count:', total);
 
-    const [categories, brands] = await Promise.all([
-      Product.distinct('category', { isActive: true }),
-      Product.distinct('brand', { isActive: true })
-    ]);
+      [categories, brands] = await Promise.all([
+        Product.distinct('category', query).catch(() => []),
+        Product.distinct('brand', query).catch(() => [])
+      ]);
+    } catch (countError) {
+      console.error('[API /products] Count/distinct error:', countError);
+      // Continue with empty arrays if count fails
+    }
 
     console.log('[API /products] Success - Returning', products.length, 'products');
     return NextResponse.json({
@@ -209,7 +282,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    await getMainConnection();
     
     const productData = await request.json();
     

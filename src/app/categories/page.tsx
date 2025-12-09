@@ -55,6 +55,33 @@ const baseCategories = [
       image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=600&h=400&fit=crop',
       productCount: 0,
       featuredProducts: []
+    },
+    {
+      id: 'wool',
+      name: 'Wool',
+      slug: 'wool',
+      description: 'Premium woolen clothing and accessories',
+      image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&h=400&fit=crop',
+      productCount: 0,
+      featuredProducts: []
+    },
+    {
+      id: 'children',
+      name: 'Children',
+      slug: 'children',
+      description: 'Quality products designed for kids and children',
+      image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=400&fit=crop',
+      productCount: 0,
+      featuredProducts: []
+    },
+    {
+      id: 'footwear',
+      name: 'Footwear',
+      slug: 'footwear',
+      description: 'Comfortable and stylish shoes, boots, and footwear for all occasions',
+      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&h=400&fit=crop',
+      productCount: 0,
+      featuredProducts: []
     }
   ];
 

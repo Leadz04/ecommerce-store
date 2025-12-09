@@ -8279,9 +8279,12 @@ export default function AdminDashboard() {
                                   { value: '', label: 'All Categories' },
                                   { value: 'Men', label: 'Men' },
                                   { value: 'Women', label: 'Women' },
+                                  { value: 'Children', label: 'Children' },
                                   { value: 'Office & Travel', label: 'Office & Travel' },
                                   { value: 'Accessories', label: 'Accessories' },
                                   { value: 'Gifting', label: 'Gifting' },
+                                  { value: 'Wool', label: 'Wool' },
+                                  { value: 'Footwear', label: 'Footwear' },
                                 ]}
                                 value={selectedCategory}
                                 isOpen={openSelect === 'category'}

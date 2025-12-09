@@ -36,6 +36,7 @@ export default function Header() {
     { name: 'Office & Travel', value: 'Office & Travel', slug: 'office-travel' },
     { name: 'Accessories', value: 'Accessories', slug: 'accessories' },
     { name: 'Gifting', value: 'Gifting', slug: 'gifting' },
+    { name: 'Footwear', value: 'Footwear', slug: 'footwear' },
   ];
 
   // Set mounted state to prevent hydration mismatch
@@ -66,6 +67,7 @@ export default function Header() {
     { name: 'Women', href: '/categories/women', hasMegaMenu: true },
     { name: 'Children', href: '/categories/children', hasMegaMenu: true },
     { name: 'Wool', href: '/categories/wool', hasMegaMenu: true },
+    { name: 'Footwear', href: '/categories/footwear', hasMegaMenu: true },
     { name: 'Gifts', href: '/categories/gifting', hasMegaMenu: true },
     { name: 'Accessories', href: '/categories/accessories', hasMegaMenu: true },
     { name: 'Help', href: '/help', hasMegaMenu: true },

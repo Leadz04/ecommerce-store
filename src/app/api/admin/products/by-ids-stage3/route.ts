@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
+import connectDB from '@/lib/mongodb';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 
-const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3 || '';
+let mainConnection: mongoose.Connection | null = null;
 
-if (!MONGODB_URI_STAGE3) {
-  console.error('MONGODB_URI_STAGE3 is not defined');
-}
-
-let stage3Connection: mongoose.Connection | null = null;
-
-async function getStage3Connection() {
-  if (stage3Connection && stage3Connection.readyState === 1) {
-    return stage3Connection;
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
   }
 
-  if (!MONGODB_URI_STAGE3) {
-    throw new Error('MONGODB_URI_STAGE3 is not configured');
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
   }
-
-  stage3Connection = await mongoose.createConnection(MONGODB_URI_STAGE3).asPromise();
-  return stage3Connection;
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
 }
 
 // Product Schema (same as in src/models/Product.ts)
@@ -77,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requirePermission(PERMISSIONS.PRODUCT_VIEW)(request);
     
-    const conn = await getStage3Connection();
+    const conn = await getMainConnection();
     const Product = conn.model('Product', ProductSchema);
 
     const body = await request.json();

@@ -16,6 +16,21 @@ async function verifyTokenOptional(request: NextRequest): Promise<string | null>
   }
 }
 
+// Helper function to add test product exclusion to query
+function addTestProductExclusion(query: any) {
+  if (!query.$and) {
+    query.$and = [];
+  }
+  query.$and.push({
+    $nor: [
+      { name: { $regex: /test/i } },
+      { sourceUrl: { $regex: /test/i } },
+      { tags: /test/i }
+    ]
+  });
+  return query;
+}
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -83,11 +98,9 @@ export async function GET(request: NextRequest) {
           .slice(0, 3)
           .map(([category]) => category);
 
-        personalizedData.recommendedForYou = await Product.find({
+        personalizedData.recommendedForYou = await Product.find(addTestProductExclusion({
           _id: { $nin: Array.from(purchasedProductIds).map(id => new mongoose.Types.ObjectId(id)) },
           category: { $in: topCategories },
-          isActive: true,
-          status: 'published',
           rating: { $gte: 3.5 },
           image: {
             $exists: true,
@@ -96,7 +109,7 @@ export async function GET(request: NextRequest) {
               $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
             }
           }
-        })
+        }))
           .sort({ rating: -1, reviewCount: -1, createdAt: -1 })
           .limit(8)
           .lean();
@@ -120,11 +133,9 @@ export async function GET(request: NextRequest) {
             ...Array.from(purchasedProductIds).map(id => new mongoose.Types.ObjectId(id))
           ];
           
-          personalizedData.basedOnWishlist = await Product.find({
+          personalizedData.basedOnWishlist = await Product.find(addTestProductExclusion({
             _id: { $nin: excludedIds },
             category: { $in: Array.from(wishlistCategories) },
-            isActive: true,
-            status: 'published',
             rating: { $gte: 4.0 },
             image: {
               $exists: true,
@@ -133,7 +144,7 @@ export async function GET(request: NextRequest) {
                 $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
               }
             }
-          })
+          }))
             .sort({ rating: -1, reviewCount: -1 })
             .limit(8)
             .lean();
@@ -147,10 +158,8 @@ export async function GET(request: NextRequest) {
           .slice(0, 2)
           .map(([category]) => category);
 
-        personalizedData.trendingInYourCategories = await Product.find({
+        personalizedData.trendingInYourCategories = await Product.find(addTestProductExclusion({
           category: { $in: favoriteCategories },
-          isActive: true,
-          status: 'published',
           rating: { $gte: 4.0 },
           reviewCount: { $gte: 5 },
           image: {
@@ -160,7 +169,7 @@ export async function GET(request: NextRequest) {
               $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
             }
           }
-        })
+        }))
           .sort({ reviewCount: -1, rating: -1, createdAt: -1 })
           .limit(8)
           .lean();
@@ -172,9 +181,7 @@ export async function GET(request: NextRequest) {
 
     // 5. Featured Products - Random selection from products with original Cloudinary images
     // Exclude products with demo/unsplash placeholder images
-    const allFeaturedCandidates = await Product.find({
-      isActive: true,
-      status: 'published',
+    const allFeaturedCandidates = await Product.find(addTestProductExclusion({
       inStock: true,
       image: {
         $exists: true,
@@ -183,7 +190,7 @@ export async function GET(request: NextRequest) {
           $regex: /res\.cloudinary\.com\/demo|images\.unsplash\.com/
         }
       }
-    })
+    }))
       .lean();
     
     // Randomly shuffle and select 8 products
@@ -218,11 +225,9 @@ export async function GET(request: NextRequest) {
     // Return featured products as fallback
     try {
       await connectDB();
-      const featuredProducts = await Product.find({
-        isActive: true,
-        status: 'published',
+      const featuredProducts = await Product.find(addTestProductExclusion({
         rating: { $gte: 4.0 }
-      })
+      }))
         .sort({ rating: -1, reviewCount: -1 })
         .limit(8)
         .lean();

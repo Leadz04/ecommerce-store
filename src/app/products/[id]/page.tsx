@@ -1336,15 +1336,15 @@ export default function ProductPage() {
                 </div>
               </div>
             ) : (
-              <>
+              <div className="flex items-center flex-wrap gap-2 mb-2">
                 {/* Discount Badge */}
                 {comparePrice && comparePrice > displayPrice && (
-                  <div className="absolute -top-2 -left-2 bg-black text-white px-3 py-1 text-sm font-bold z-10">
+                  <span className="inline-flex items-center px-3 py-1 text-xs sm:text-sm font-semibold text-white bg-black rounded-md shadow-sm">
                     {Math.round(((comparePrice - displayPrice) / comparePrice) * 100)}% OFF
-                  </div>
+                  </span>
                 )}
-                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 pr-20">{product.name}</h1>
-              </>
+                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 pr-20">{product.name}</h1>
+              </div>
             )}
           </div>
 

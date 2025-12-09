@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
+import connectDB from '@/lib/mongodb';
 import { requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 
@@ -51,20 +52,20 @@ const ProductSchema = new mongoose.Schema({
   timestamps: true
 });
 
-let stage3Connection: mongoose.Connection | null = null;
+let mainConnection: mongoose.Connection | null = null;
 
-async function getStage3Connection() {
-  if (stage3Connection && stage3Connection.readyState === 1) {
-    return stage3Connection;
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
   }
 
-  const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3;
-  if (!MONGODB_URI_STAGE3) {
-    throw new Error('MONGODB_URI_STAGE3 is not configured');
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
   }
-
-  stage3Connection = await mongoose.createConnection(MONGODB_URI_STAGE3).asPromise();
-  return stage3Connection;
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
 }
 
 // PUT /api/admin/products/stage3/[id] - Update STAGE3 product
@@ -77,7 +78,7 @@ export async function PUT(
     const { id } = await context.params;
     const body = await request.json();
     
-    const conn = await getStage3Connection();
+    const conn = await getMainConnection();
     const Product = conn.model('Product', ProductSchema);
 
     const {

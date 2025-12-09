@@ -1,17 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidObjectId } from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import Product from '@/models/Product';
 import { verifyToken } from '@/lib/auth';
 import { User } from '@/models';
+import Product from '@/models/Product';
+
+let mainConnection: any = null;
+
+// Use main DB for all operations (customer and admin)
+async function getMainConnection() {
+  if (mainConnection && mainConnection.readyState === 1) {
+    return mainConnection;
+  }
+
+  const mongooseInstance = await connectDB();
+  if (!mongooseInstance) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+  
+  mainConnection = mongooseInstance.connection;
+  return mainConnection;
+}
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-    
+    // Use main DB for customer-facing product requests
+    await getMainConnection();
+
     const { id } = await context.params;
     if (!isValidObjectId(id)) {
       return NextResponse.json(
@@ -64,7 +82,9 @@ export async function PUT(
       );
     }
 
+    // Connect to main DB for user lookup (roles) and products
     await connectDB();
+    await getMainConnection();
 
     // If role is not in token or seems invalid, fetch from database
     let userRole = user.role;
@@ -184,7 +204,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
+    await getMainConnection();
     const { id } = await context.params;
 
     if (!isValidObjectId(id)) {
