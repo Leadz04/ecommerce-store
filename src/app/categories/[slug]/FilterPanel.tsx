@@ -85,11 +85,11 @@ export default function FilterPanel({
   const handlePriceRangeClick = (min: number, max: number) => {
     setFilters({ priceRange: [min, max] });
     setPagination({ page: 1 });
-    
+
     if (priceDebounceRef.current) {
       window.clearTimeout(priceDebounceRef.current);
     }
-    
+
     priceDebounceRef.current = window.setTimeout(() => {
       updateURL({ minPrice: min.toString(), maxPrice: max.toString(), page: '' });
       fetchProducts({
@@ -101,60 +101,24 @@ export default function FilterPanel({
   };
 
   const handleStyleClick = (style: string) => {
-    // Clear search if it matches the style being selected
-    const shouldClearSearch = filters.search && 
-      filters.search.toLowerCase().includes(style.toLowerCase());
-    
-    if (shouldClearSearch && setSearchInput) {
-      setSearchInput('');
-    }
-    
-    setFilters({ 
-      style, 
-      ...(shouldClearSearch ? { search: '' } : {})
-    });
+    setFilters({ style });
     setPagination({ page: 1 });
-    
-    // Update URL - remove search if it conflicts with style
-    const urlParams: Record<string, string> = { style, page: '' };
-    if (shouldClearSearch) {
-      urlParams.search = '';
-    }
-    updateURL(urlParams);
-    
+    updateURL({ style, page: '' });
+
     fetchProducts({
       category: categoryName,
-      style,
-      ...(shouldClearSearch ? { search: '' } : {})
+      style
     });
   };
 
   const handleColorClick = (color: string) => {
-    // Clear search if it matches the color being selected
-    const shouldClearSearch = filters.search && 
-      filters.search.toLowerCase().includes(color.toLowerCase());
-    
-    if (shouldClearSearch && setSearchInput) {
-      setSearchInput('');
-    }
-    
-    setFilters({ 
-      color,
-      ...(shouldClearSearch ? { search: '' } : {})
-    });
+    setFilters({ color });
     setPagination({ page: 1 });
-    
-    // Update URL - remove search if it conflicts with color
-    const urlParams: Record<string, string> = { color, page: '' };
-    if (shouldClearSearch) {
-      urlParams.search = '';
-    }
-    updateURL(urlParams);
-    
+    updateURL({ color, page: '' });
+
     fetchProducts({
       category: categoryName,
-      color,
-      ...(shouldClearSearch ? { search: '' } : {})
+      color
     });
   };
 
@@ -209,11 +173,10 @@ export default function FilterPanel({
                 <button
                   key={index}
                   onClick={() => handleStyleClick(style)}
-                  className={`block w-full text-left text-sm transition-colors ${
-                    filters.style === style
-                      ? 'text-gray-900 font-semibold underline'
-                      : 'text-gray-700 hover:text-gray-900 underline'
-                  }`}
+                  className={`block w-full text-left text-sm transition-colors ${filters.style === style
+                    ? 'text-gray-900 font-semibold underline'
+                    : 'text-gray-700 hover:text-gray-900 underline'
+                    }`}
                 >
                   {style}
                 </button>
@@ -244,13 +207,11 @@ export default function FilterPanel({
                   className="flex items-center space-x-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
                 >
                   <div
-                    className={`w-4 h-4 rounded-full border ${
-                      color.name === 'White' || color.name === 'Off white'
-                        ? 'border-gray-300'
-                        : 'border-transparent'
-                    } ${
-                      filters.color === color.name ? 'ring-2 ring-blue-600 ring-offset-1' : ''
-                    }`}
+                    className={`w-4 h-4 rounded-full border ${color.name === 'White' || color.name === 'Off white'
+                      ? 'border-gray-300'
+                      : 'border-transparent'
+                      } ${filters.color === color.name ? 'ring-2 ring-blue-600 ring-offset-1' : ''
+                      }`}
                     style={{ backgroundColor: color.hex }}
                   />
                   <span className={filters.color === color.name ? 'font-semibold' : ''}>

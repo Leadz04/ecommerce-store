@@ -17,16 +17,16 @@ const DEFAULT_PRODUCTS_LIMIT = 24;
 export default function ProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { 
-    products, 
-    isLoading, 
-    error, 
-    pagination, 
-    filters, 
-    fetchProducts, 
-    setFilters 
+  const {
+    products,
+    isLoading,
+    error,
+    pagination,
+    filters,
+    fetchProducts,
+    setFilters
   } = useProductStore();
-  
+
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState('');
@@ -35,7 +35,7 @@ export default function ProductsPage() {
   const [displayedProducts, setDisplayedProducts] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  
+
   // Get the current limit from URL or use default
   const getCurrentLimit = () => {
     return parseInt(searchParams.get('limit') || String(DEFAULT_PRODUCTS_LIMIT));
@@ -54,17 +54,6 @@ export default function ProductsPage() {
     };
   }, [showFilters]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setShowFilters(false);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const categories = ['all', 'Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'];
   const currentPriceRange = filters.priceRange || [0, 1000];
 
@@ -82,46 +71,53 @@ export default function ProductsPage() {
     const color = searchParams.get('color') || '';
     // Always use default limit for products listing page, or read from URL if specified
     const limit = getCurrentLimit();
-    
+
     // Only use price range from URL if explicitly set, otherwise use defaults
     const priceRange: [number, number] = minPrice || maxPrice
       ? [
-          minPrice ? parseInt(minPrice, 10) : 0,
-          maxPrice ? parseInt(maxPrice, 10) : 1000
-        ]
+        minPrice ? parseInt(minPrice, 10) : 0,
+        maxPrice ? parseInt(maxPrice, 10) : 1000
+      ]
       : [0, 1000];
-    
+
     // Only use inStock if explicitly set in URL
     const inStockValue = inStock === 'true' ? true : null;
-    
+
     // Only use style/color if explicitly set in URL
     const styleValue = style ? style : undefined;
     const colorValue = color ? color : undefined;
-    
+
     // Only fetch if params actually changed or on first mount
     const paramsKey = `${search}-${category}-${sortBy}-${page}-${limit}-${minPrice}-${maxPrice}-${inStock}-${style}-${color}`;
     if (hasInitialized.current !== false && paramsKey === hasInitialized.current) {
       return;
     }
     hasInitialized.current = paramsKey;
-    
-    setSearchInput(search);
-    setFilters({ 
-      search, 
-      category, 
+
+    // Only set searchInput on initial mount, don't reset it on URL changes
+    // This prevents the input from being cleared when debounce updates the URL
+    if (hasInitialized.current === paramsKey && !searchInput) {
+      setSearchInput(search);
+    }
+
+    setFilters({
+      search,
+      category,
       sortBy,
       priceRange,
       inStock: inStockValue,
       style: styleValue,
       color: colorValue
     });
-    
-    // Reset displayed products and page when filters change
-    setDisplayedProducts([]);
-    setCurrentPage(1);
-    isInitialLoadRef.current = true;
-    loadingMoreRef.current = false;
-    
+
+    // Clear displayed products and reset page when filters change (not when loading more)
+    // This ensures skeleton shows while new products load
+    if (!loadingMoreRef.current) {
+      setDisplayedProducts([]);
+      setCurrentPage(1);
+      isInitialLoadRef.current = true;
+    }
+
     // Check if any filters are active - if so, don't use pagination
     const hasActiveFilters = !!(
       search ||
@@ -132,12 +128,12 @@ export default function ProductsPage() {
       colorValue ||
       category !== 'all'
     );
-    
+
     // Always start with page 1 and limit 24 for initial load
-    fetchProducts({ 
-      search: search || undefined, 
-      category: category === 'all' ? undefined : category, 
-      sortBy: sortBy === 'name' ? undefined : sortBy, 
+    fetchProducts({
+      search: search || undefined,
+      category: category === 'all' ? undefined : category,
+      sortBy: sortBy === 'name' ? undefined : sortBy,
       ...(hasActiveFilters ? {} : { page: 1, limit }),
       minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
       maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
@@ -156,74 +152,93 @@ export default function ProductsPage() {
 
   // Update displayed products when products from store change
   useEffect(() => {
-    const hasActiveFilters = !!(
-      filters.search ||
-      filters.priceRange[0] > 0 ||
-      filters.priceRange[1] < 1000 ||
-      filters.inStock === true ||
-      filters.style ||
-      filters.color ||
-      filters.category !== 'all'
-    );
-    
-    if (hasActiveFilters) {
-      // With filters, show all products directly (no pagination)
+    // For pagination mode (with or without filters)
+    if (loadingMoreRef.current) {
+      // We're loading more - append to existing products, don't replace
+      // Deduplicate by _id, sourceUrl, and name to catch all duplicates
+      setDisplayedProducts(prev => {
+        const existingIds = new Set(prev.map(p => p._id || (p as any).id));
+        const existingUrls = new Set(
+          prev
+            .map((p) => {
+              const url = (p as any).sourceUrl || (p as any).url || '';
+              return url ? url.toLowerCase().trim() : '';
+            })
+            .filter(Boolean)
+        );
+        const existingNames = new Set(
+          prev
+            .map((p) => {
+              const name = (p as any).name || '';
+              return name ? name.toLowerCase().trim() : '';
+            })
+            .filter(Boolean)
+        );
+        
+        const newProducts = products.filter((p) => {
+          const id = p._id || (p as any).id;
+          const url = ((p as any).sourceUrl || (p as any).url || '').toLowerCase().trim();
+          const name = ((p as any).name || '').toLowerCase().trim();
+          
+          // Skip if duplicate by ID, URL, or name
+          if (id && existingIds.has(id)) return false;
+          if (url && existingUrls.has(url)) return false;
+          if (name && existingNames.has(name)) return false;
+          
+          return true;
+        });
+        
+        return [...prev, ...newProducts];
+      });
+      prevProductsLengthRef.current = products.length;
+      isInitialLoadRef.current = false;
+      loadingMoreRef.current = false;
+      return;
+    }
+
+    // Initial load or filter change - replace all products
+    // Always update if: (1) initial load, (2) product count changed, OR (3) displayed is empty but store has products
+    if (isInitialLoadRef.current ||
+      products.length !== prevProductsLengthRef.current ||
+      (displayedProducts.length === 0 && products.length > 0)) {
       setDisplayedProducts(products);
       prevProductsLengthRef.current = products.length;
       isInitialLoadRef.current = false;
-      return;
     }
-    
-    // For pagination mode
-    if (loadingMoreRef.current) {
-      // We're loading more - append to existing products, don't replace
-      setDisplayedProducts(prev => {
-        const existingIds = new Set(prev.map(p => (p as any)._id || (p as any).id));
-        const newProducts = products.filter(p => !existingIds.has((p as any)._id || (p as any).id));
-        return [...prev, ...newProducts];
-      });
-      loadingMoreRef.current = false;
-      prevProductsLengthRef.current = products.length;
-    } else if (isInitialLoadRef.current || products.length !== prevProductsLengthRef.current) {
-      // Initial load or filter change - replace all products
-      if (products.length > 0) {
-        setDisplayedProducts(products);
-        prevProductsLengthRef.current = products.length;
-      }
-      isInitialLoadRef.current = false;
-    }
-  }, [products, filters]);
+  }, [products, filters, displayedProducts.length]);
 
   // Load more products function
   const handleLoadMore = async () => {
     if (isLoadingMore || isLoading) return;
-    
-    const hasActiveFilters = !!(
-      filters.search ||
-      filters.priceRange[0] > 0 ||
-      filters.priceRange[1] < 1000 ||
-      filters.inStock === true ||
-      filters.style ||
-      filters.color ||
-      filters.category !== 'all'
-    );
-    
-    // Don't load more if filters are active (they show all results already)
-    if (hasActiveFilters) return;
-    
+
+    // Calculate the next page based on currently displayed products
+    const limit = getCurrentLimit();
+    const calculatedCurrentPage = Math.ceil(displayedProducts.length / limit) || 1;
+    const nextPage = calculatedCurrentPage + 1;
+
+    // Don't load if we've already loaded all products
+    if (displayedProducts.length >= pagination.total) {
+      return;
+    }
+
     setIsLoadingMore(true);
     loadingMoreRef.current = true;
-    const nextPage = currentPage + 1;
-    const limit = getCurrentLimit();
-    
+
     try {
+      // Pass ALL current filters to maintain filter state when loading more
       await fetchProducts({
         page: nextPage,
         limit,
+        search: filters.search || undefined,
         category: filters.category === 'all' ? undefined : filters.category,
         sortBy: filters.sortBy === 'name' ? undefined : filters.sortBy,
+        minPrice: filters.priceRange[0] > 0 ? filters.priceRange[0] : undefined,
+        maxPrice: filters.priceRange[1] < 1000 ? filters.priceRange[1] : undefined,
+        inStock: filters.inStock === true ? true : undefined,
+        style: filters.style || undefined,
+        color: filters.color || undefined,
       });
-      
+
       setCurrentPage(nextPage);
     } catch (error) {
       console.error('Error loading more products:', error);
@@ -244,11 +259,11 @@ export default function ProductsPage() {
           params.delete('search');
         }
         params.set('page', '1');
-        
+
         setFilters({ search: searchInput });
         const newURL = params.toString() ? `?${params.toString()}` : '/products';
         router.push(newURL, { scroll: false });
-        
+
         // Build fetch params from URL
         const category = params.get('category') || 'all';
         const sortBy = params.get('sortBy') || 'name';
@@ -257,10 +272,10 @@ export default function ProductsPage() {
         const inStock = params.get('inStock');
         const style = params.get('style') || '';
         const color = params.get('color') || '';
-        
-        fetchProducts({ 
-          search: searchInput || undefined, 
-          page: 1, 
+
+        fetchProducts({
+          search: searchInput || undefined,
+          page: 1,
           limit: getCurrentLimit(),
           category: category === 'all' ? undefined : category,
           sortBy: sortBy !== 'name' ? sortBy : undefined,
@@ -284,11 +299,11 @@ export default function ProductsPage() {
       params.set('category', category);
     }
     params.set('page', '1');
-    
+
     setFilters({ category });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const sortBy = params.get('sortBy') || 'name';
@@ -297,10 +312,10 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      category: category === 'all' ? undefined : category, 
-      page: 1, 
+
+    fetchProducts({
+      category: category === 'all' ? undefined : category,
+      page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
       sortBy: sortBy !== 'name' ? sortBy : undefined,
@@ -321,11 +336,11 @@ export default function ProductsPage() {
       params.set('sortBy', sortBy);
     }
     params.set('page', '1');
-    
+
     setFilters({ sortBy });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -334,10 +349,10 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      sortBy: sortBy !== 'name' ? sortBy : undefined, 
-      page: 1, 
+
+    fetchProducts({
+      sortBy: sortBy !== 'name' ? sortBy : undefined,
+      page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
       category: category === 'all' ? undefined : category,
@@ -363,11 +378,11 @@ export default function ProductsPage() {
       params.delete('maxPrice');
     }
     params.set('page', '1');
-    
+
     setFilters({ priceRange });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -375,10 +390,10 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      minPrice: priceRange[0] > 0 ? priceRange[0] : undefined, 
-      maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined, 
+
+    fetchProducts({
+      minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
+      maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined,
       page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
@@ -394,10 +409,10 @@ export default function ProductsPage() {
     // Preserve all filters when changing page - just update page number
     const params = new URLSearchParams(searchParams);
     params.set('page', page.toString());
-    
+
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -407,9 +422,9 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      page, 
+
+    fetchProducts({
+      page,
       limit: getCurrentLimit(),
       search: search || undefined,
       category: category === 'all' ? undefined : category,
@@ -427,11 +442,11 @@ export default function ProductsPage() {
     const params = new URLSearchParams(searchParams);
     params.delete('search');
     params.set('page', '1');
-    
+
     setFilters({ search: '' });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const category = params.get('category') || 'all';
     const sortBy = params.get('sortBy') || 'name';
@@ -440,9 +455,9 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      page: 1, 
+
+    fetchProducts({
+      page: 1,
       limit: getCurrentLimit(),
       category: category === 'all' ? undefined : category,
       sortBy: sortBy !== 'name' ? sortBy : undefined,
@@ -474,11 +489,11 @@ export default function ProductsPage() {
     const params = new URLSearchParams(searchParams);
     params.delete('category');
     params.set('page', '1');
-    
+
     setFilters({ category: 'all' });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     const search = params.get('search') || '';
     const sortBy = params.get('sortBy') || 'name';
     const minPrice = params.get('minPrice');
@@ -486,9 +501,9 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      page: 1, 
+
+    fetchProducts({
+      page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
       sortBy: sortBy !== 'name' ? sortBy : undefined,
@@ -513,20 +528,20 @@ export default function ProductsPage() {
     params.delete('minPrice');
     params.delete('maxPrice');
     params.set('page', '1');
-    
+
     setFilters({ priceRange: [0, 1000] });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
     const sortBy = params.get('sortBy') || 'name';
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      page: 1, 
+
+    fetchProducts({
+      page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
       category: category === 'all' ? undefined : category,
@@ -541,11 +556,11 @@ export default function ProductsPage() {
     const params = new URLSearchParams(searchParams);
     params.delete('inStock');
     params.set('page', '1');
-    
+
     setFilters({ inStock: null });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
     const sortBy = params.get('sortBy') || 'name';
@@ -553,9 +568,9 @@ export default function ProductsPage() {
     const maxPrice = params.get('maxPrice');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
-    fetchProducts({ 
-      page: 1, 
+
+    fetchProducts({
+      page: 1,
       limit: getCurrentLimit(),
       search: search || undefined,
       category: category === 'all' ? undefined : category,
@@ -674,18 +689,18 @@ export default function ProductsPage() {
   const handleStyleChange = (style: string) => {
     const params = new URLSearchParams(searchParams);
     const newStyle = filters.style === style ? undefined : style;
-    
+
     if (newStyle) {
       params.set('style', newStyle);
     } else {
       params.delete('style');
     }
     params.set('page', '1');
-    
+
     setFilters({ style: newStyle });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -694,7 +709,7 @@ export default function ProductsPage() {
     const maxPrice = params.get('maxPrice');
     const inStock = params.get('inStock');
     const color = params.get('color') || '';
-    
+
     fetchProducts({
       style: newStyle || undefined,
       page: 1,
@@ -712,18 +727,18 @@ export default function ProductsPage() {
   const handleColorChange = (color: string) => {
     const params = new URLSearchParams(searchParams);
     const newColor = filters.color === color ? undefined : color;
-    
+
     if (newColor) {
       params.set('color', newColor);
     } else {
       params.delete('color');
     }
     params.set('page', '1');
-    
+
     setFilters({ color: newColor });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -732,7 +747,7 @@ export default function ProductsPage() {
     const maxPrice = params.get('maxPrice');
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
-    
+
     fetchProducts({
       color: newColor || undefined,
       page: 1,
@@ -750,7 +765,7 @@ export default function ProductsPage() {
   const handlePricePreset = (min: number, max: number) => {
     const params = new URLSearchParams(searchParams);
     const newRange: [number, number] = [min, max];
-    
+
     if (min > 0) {
       params.set('minPrice', min.toString());
     } else {
@@ -762,11 +777,11 @@ export default function ProductsPage() {
       params.delete('maxPrice');
     }
     params.set('page', '1');
-    
+
     setFilters({ priceRange: newRange });
     const newURL = params.toString() ? `?${params.toString()}` : '/products';
     router.push(newURL, { scroll: false });
-    
+
     // Build fetch params from URL
     const search = params.get('search') || '';
     const category = params.get('category') || 'all';
@@ -774,7 +789,7 @@ export default function ProductsPage() {
     const inStock = params.get('inStock');
     const style = params.get('style') || '';
     const color = params.get('color') || '';
-    
+
     fetchProducts({
       minPrice: min > 0 ? min : undefined,
       maxPrice: max < 1000 ? max : undefined,
@@ -790,7 +805,7 @@ export default function ProductsPage() {
   };
 
   const styleOptions = [
-    'Trucker jacket', 'Belted', 'Cowhide', 'Removable hood', 'Chocolate', 
+    'Trucker jacket', 'Belted', 'Cowhide', 'Removable hood', 'Chocolate',
     'Biker jacket', 'Cognac', 'Shirt', 'Shirt collar', 'Harrington', 'Fur', 'Blazer',
     'Leather', 'Vintage', 'Hood', 'Hooded', 'Moto', 'Motorcycle', 'Cafe racer',
     'Asymmetrical', 'Biker', 'Quilted', 'Casual', 'Distressed', 'Bomber', 'Waxed'
@@ -821,10 +836,10 @@ export default function ProductsPage() {
     { label: '$600+', min: 600, max: 1000 }
   ];
 
-  const FiltersContent = ({ 
-    onFilterChange, 
-    pendingFilters 
-  }: { 
+  const FiltersContent = ({
+    onFilterChange,
+    pendingFilters
+  }: {
     onFilterChange?: (filters: any) => void;
     pendingFilters?: any;
   } = {}) => {
@@ -868,11 +883,10 @@ export default function ProductsPage() {
                         handlePricePreset(preset.min, preset.max);
                       }
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg border-2 transition-all ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded-lg border-2 transition-all ${isActive
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
                   >
                     <span className="text-sm underline">{preset.label}</span>
                   </button>
@@ -887,13 +901,12 @@ export default function ProductsPage() {
           <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Category</h4>
           <div className="grid grid-cols-2 gap-2">
             {categories.map((category) => (
-              <label 
-                key={category} 
-                className={`flex items-center justify-center px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${
-                  displayFilters.category === category
-                    ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                }`}
+              <label
+                key={category}
+                className={`flex items-center justify-center px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${displayFilters.category === category
+                  ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
               >
                 <input
                   type="radio"
@@ -948,11 +961,10 @@ export default function ProductsPage() {
                         handleStyleChange(style.toLowerCase());
                       }
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700 font-medium border-2 border-blue-200'
-                        : 'text-gray-700 hover:bg-gray-50 border-2 border-transparent'
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center justify-between ${isActive
+                      ? 'bg-blue-50 text-blue-700 font-medium border-2 border-blue-200'
+                      : 'text-gray-700 hover:bg-gray-50 border-2 border-transparent'
+                      }`}
                   >
                     <span className="text-sm">{style}</span>
                     {isActive && (
@@ -999,11 +1011,10 @@ export default function ProductsPage() {
                         handleColorChange(color.value);
                       }
                     }}
-                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-all relative ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50 shadow-md'
-                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                    }`}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-all relative ${isActive
+                      ? 'border-blue-600 bg-blue-50 shadow-md'
+                      : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                      }`}
                   >
                     {isActive && (
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
@@ -1030,11 +1041,10 @@ export default function ProductsPage() {
         {/* Availability Section */}
         <div>
           <h4 className="font-semibold mb-3 text-gray-900 text-sm uppercase tracking-wide">Availability</h4>
-          <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${
-            displayFilters.inStock === true
-              ? 'border-blue-600 bg-blue-50'
-              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-          }`}>
+          <label className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${displayFilters.inStock === true
+            ? 'border-blue-600 bg-blue-50'
+            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}>
             <input
               type="checkbox"
               checked={displayFilters.inStock === true}
@@ -1051,11 +1061,11 @@ export default function ProductsPage() {
                     params.delete('inStock');
                   }
                   params.set('page', '1');
-                  
+
                   setFilters({ inStock: nextInStock });
                   const newURL = params.toString() ? `?${params.toString()}` : '/products';
                   router.push(newURL, { scroll: false });
-                  
+
                   // Build fetch params from URL
                   const search = params.get('search') || '';
                   const category = params.get('category') || 'all';
@@ -1064,7 +1074,7 @@ export default function ProductsPage() {
                   const maxPrice = params.get('maxPrice');
                   const style = params.get('style') || '';
                   const color = params.get('color') || '';
-                  
+
                   fetchProducts({
                     inStock: e.target.checked ? true : undefined,
                     page: 1,
@@ -1102,11 +1112,10 @@ export default function ProductsPage() {
               </span>
             )}
           </div>
-          <div className={`space-y-4 p-4 rounded-lg border-2 transition-all ${
-            displayFilters.priceRange && (displayFilters.priceRange[0] > 0 || displayFilters.priceRange[1] < 1000)
-              ? 'border-blue-200 bg-blue-50/30'
-              : 'border-gray-100 bg-gray-50/30'
-          }`}>
+          <div className={`space-y-4 p-4 rounded-lg border-2 transition-all ${displayFilters.priceRange && (displayFilters.priceRange[0] > 0 || displayFilters.priceRange[1] < 1000)
+            ? 'border-blue-200 bg-blue-50/30'
+            : 'border-gray-100 bg-gray-50/30'
+            }`}>
             <div className="relative">
               <input
                 type="range"
@@ -1131,17 +1140,15 @@ export default function ProductsPage() {
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-1">
                 <span className="text-xs text-gray-500">Min:</span>
-                <span className={`text-sm font-semibold ${
-                  filters.priceRange && filters.priceRange[0] > 0 ? 'text-blue-600' : 'text-gray-900'
-                }`}>
+                <span className={`text-sm font-semibold ${filters.priceRange && filters.priceRange[0] > 0 ? 'text-blue-600' : 'text-gray-900'
+                  }`}>
                   ${currentPriceRange[0]}
                 </span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-gray-500">Max:</span>
-                <span className={`text-sm font-semibold ${
-                  filters.priceRange && filters.priceRange[1] < 1000 ? 'text-blue-600' : 'text-gray-900'
-                }`}>
+                <span className={`text-sm font-semibold ${filters.priceRange && filters.priceRange[1] < 1000 ? 'text-blue-600' : 'text-gray-900'
+                  }`}>
                   ${currentPriceRange[1]}
                 </span>
               </div>
@@ -1254,8 +1261,10 @@ export default function ProductsPage() {
                   className="w-full"
                 />
               </div>
+            </div>
 
-              {/* Filter Toggle - Show for all screen sizes */}
+            {/* FILTER & SORT Button - Always visible (matching categories page) */}
+            <div className="flex items-center justify-end mb-6">
               <button
                 onClick={() => {
                   setShowFilters(!showFilters);
@@ -1263,72 +1272,48 @@ export default function ProductsPage() {
                     setPendingFilters(filters);
                   }
                 }}
-                className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 hover:bg-gray-50 text-sm sm:text-base font-medium shadow-sm hover:shadow-md transition-all"
-                aria-expanded={showFilters}
-                aria-controls="filter-panel"
+                className="flex items-center space-x-2 px-5 py-3 border-2 border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold shadow-sm"
               >
-                <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span>
-                  {showFilters ? 'Hide' : 'Show'} Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
-                </span>
+                <SlidersHorizontal className="h-5 w-5" />
+                <span>FILTER & SORT</span>
+                <SlidersHorizontal className="h-5 w-5 rotate-180" />
               </button>
             </div>
           </div>
 
+          {/* Right Side Filter Overlay */}
           {showFilters && (
-            <div 
-              className="lg:hidden fixed inset-0 z-50 flex items-end" 
-              id="mobile-filter-drawer" 
-              role="dialog" 
-              aria-modal="true"
-            >
-              {/* Backdrop with fade-in animation */}
-              <div 
-                className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" 
-                onClick={() => setShowFilters(false)} 
-                aria-hidden="true"
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/50 z-40"
+                onClick={() => setShowFilters(false)}
               />
-              
-              {/* Bottom sheet with slide-up animation */}
-              <div className="relative w-full max-h-[85vh] bg-white rounded-t-3xl shadow-2xl flex flex-col animate-slide-up">
-                {/* Drag handle */}
-                <div className="flex justify-center pt-3 pb-2">
-                  <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
-                </div>
-                
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-50 rounded-lg">
-                      <Filter className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
-                      {activeFilterCount > 0 && (
-                        <p className="text-xs text-gray-500">{activeFilterCount} active</p>
-                      )}
-                    </div>
-                  </div>
+              {/* Filter Panel */}
+              <div className="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 flex flex-col">
+                {/* White Header with Blue Close Icon */}
+                <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+                  <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
                   <button
                     onClick={() => setShowFilters(false)}
-                    className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                    className="p-2 hover:bg-gray-100 rounded transition-colors"
                     aria-label="Close filters"
                   >
-                    <X className="h-5 w-5" />
+                    <X className="h-5 w-5 text-blue-600" />
                   </button>
                 </div>
-                
-                {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto px-5 py-4">
+
+                {/* Filter Content - Scrollable */}
+                <div className="flex-1 overflow-y-auto px-6 py-4">
                   <ActiveFiltersDisplay />
-                  <FiltersContent 
+                  <FiltersContent
                     onFilterChange={(newFilters) => setPendingFilters(newFilters)}
                     pendingFilters={pendingFilters}
                   />
                 </div>
-                
-                {/* Footer with action buttons */}
-                <div className="border-t border-gray-100 px-5 py-4 bg-gray-50">
+
+                {/* Footer with action buttons - Fixed at bottom */}
+                <div className="border-t border-gray-200 px-6 py-4 bg-white flex-shrink-0">
                   <div className="flex gap-3">
                     {hasActiveFilters() && (
                       <button
@@ -1347,14 +1332,14 @@ export default function ProductsPage() {
                         const filtersToApply = pendingFilters || filters;
                         setFilters(filtersToApply);
                         const params = new URLSearchParams(searchParams);
-                        
+
                         // Update URL params
                         if (filtersToApply.category && filtersToApply.category !== 'all') {
                           params.set('category', filtersToApply.category);
                         } else {
                           params.delete('category');
                         }
-                        
+
                         if (filtersToApply.priceRange) {
                           if (filtersToApply.priceRange[0] > 0) {
                             params.set('minPrice', filtersToApply.priceRange[0].toString());
@@ -1367,34 +1352,34 @@ export default function ProductsPage() {
                             params.delete('maxPrice');
                           }
                         }
-                        
+
                         if (filtersToApply.inStock === true) {
                           params.set('inStock', 'true');
                         } else {
                           params.delete('inStock');
                         }
-                        
+
                         if (filtersToApply.style) {
                           params.set('style', filtersToApply.style);
                         } else {
                           params.delete('style');
                         }
-                        
+
                         if (filtersToApply.color) {
                           params.set('color', filtersToApply.color);
                         } else {
                           params.delete('color');
                         }
-                        
+
                         params.set('page', '1');
                         const newURL = params.toString() ? `?${params.toString()}` : '/products';
                         router.push(newURL, { scroll: false });
-                        
-                        fetchProducts({ 
+
+                        fetchProducts({
                           ...filtersToApply,
                           category: filtersToApply.category === 'all' ? undefined : filtersToApply.category,
-                          page: 1, 
-                          limit: getCurrentLimit() 
+                          page: 1,
+                          limit: getCurrentLimit()
                         });
                         setPendingFilters(null);
                         setShowFilters(false);
@@ -1406,127 +1391,20 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
 
-          <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
-            {/* Sidebar Filters - Hidden by default, shown when showFilters is true */}
-            {showFilters && (
-              <div className="hidden lg:block lg:w-64 flex-shrink-0">
-                <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-gray-100 sticky top-4">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold flex items-center text-gray-900">
-                      <Filter className="h-5 w-5 mr-2 text-blue-600" />
-                      Filters
-                    </h3>
-                    <button
-                      onClick={() => {
-                        setShowFilters(false);
-                        setPendingFilters(null);
-                      }}
-                      className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
-                      aria-label="Close filters"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <ActiveFiltersDisplay />
-                  <FiltersContent 
-                    onFilterChange={(newFilters) => setPendingFilters(newFilters)}
-                    pendingFilters={pendingFilters}
-                  />
-                  <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
-                    {hasActiveFilters() && (
-                      <button
-                        onClick={() => {
-                          clearAllFilters();
-                          setPendingFilters(null);
-                        }}
-                        className="w-full px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
-                      >
-                        Clear All
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        const filtersToApply = pendingFilters || filters;
-                        setFilters(filtersToApply);
-                        const params = new URLSearchParams(searchParams);
-                        
-                        // Update URL params
-                        if (filtersToApply.category && filtersToApply.category !== 'all') {
-                          params.set('category', filtersToApply.category);
-                        } else {
-                          params.delete('category');
-                        }
-                        
-                        if (filtersToApply.priceRange) {
-                          if (filtersToApply.priceRange[0] > 0) {
-                            params.set('minPrice', filtersToApply.priceRange[0].toString());
-                          } else {
-                            params.delete('minPrice');
-                          }
-                          if (filtersToApply.priceRange[1] < 1000) {
-                            params.set('maxPrice', filtersToApply.priceRange[1].toString());
-                          } else {
-                            params.delete('maxPrice');
-                          }
-                        }
-                        
-                        if (filtersToApply.inStock === true) {
-                          params.set('inStock', 'true');
-                        } else {
-                          params.delete('inStock');
-                        }
-                        
-                        if (filtersToApply.style) {
-                          params.set('style', filtersToApply.style);
-                        } else {
-                          params.delete('style');
-                        }
-                        
-                        if (filtersToApply.color) {
-                          params.set('color', filtersToApply.color);
-                        } else {
-                          params.delete('color');
-                        }
-                        
-                        params.set('page', '1');
-                        const newURL = params.toString() ? `?${params.toString()}` : '/products';
-                        router.push(newURL, { scroll: false });
-                        
-                        fetchProducts({ 
-                          ...filtersToApply,
-                          category: filtersToApply.category === 'all' ? undefined : filtersToApply.category,
-                          page: 1, 
-                          limit: getCurrentLimit() 
-                        });
-                        setPendingFilters(null);
-                        setShowFilters(false);
-                      }}
-                      className="w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-md"
-                    >
-                      Apply Filters
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
+          <div className="flex flex-col gap-8">
             {/* Products Grid */}
             <div className="flex-1">
-              {/* Active Filters Display for Desktop */}
-              <div className="lg:hidden mb-4">
-                <ActiveFiltersDisplay />
-              </div>
               <div className="mb-6 sm:mb-8">
                 <p className="text-base sm:text-lg font-semibold text-gray-900">
                   Showing <span className="text-blue-600">{displayedProducts.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
                 </p>
               </div>
 
-              {/* Loading State - Only show skeleton on initial load, not when loading more */}
-              {isLoading && !isLoadingMore && displayedProducts.length === 0 && (
+              {/* Loading State - Show skeleton when loading with no products displayed */}
+              {isLoading && displayedProducts.length === 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <ProductCardSkeleton key={i} />
@@ -1538,7 +1416,7 @@ export default function ProductsPage() {
               {error && (
                 <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                   <p className="text-red-500 text-lg">{error}</p>
-                  <button 
+                  <button
                     onClick={() => fetchProducts({ limit: getCurrentLimit() })}
                     className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
@@ -1547,8 +1425,8 @@ export default function ProductsPage() {
                 </div>
               )}
 
-              {/* Products Display */}
-              {!isLoading && !error && displayedProducts.length === 0 && (
+              {/* Products Display - Show products unless initial loading */}
+              {(!isLoading || isLoadingMore) && !error && displayedProducts.length === 0 && (
                 <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
                   {filters.search ? (
                     <>
@@ -1599,13 +1477,18 @@ export default function ProductsPage() {
                 </div>
               )}
 
-              {!isLoading && !error && displayedProducts.length > 0 && (
+              {/* Products Grid - Keep visible during Load More */}
+              {(!isLoading || isLoadingMore) && !error && displayedProducts.length > 0 && (
                 <>
-                  <div className={`grid ${
-                    viewMode === 'grid' 
-                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6' 
-                      : 'grid-cols-1 gap-6'
-                  }`}>
+                  <div 
+                    className={viewMode === 'grid'
+                      ? 'grid gap-4 sm:gap-6'
+                      : 'grid grid-cols-1 gap-6'
+                    }
+                    style={viewMode === 'grid' ? {
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+                    } : {}}
+                  >
                     {displayedProducts.map((product) => (
                       <ProductCard key={product._id || product.id} product={product} />
                     ))}
@@ -1619,32 +1502,18 @@ export default function ProductsPage() {
                     )}
                   </div>
 
-                  {/* Load More Button */}
-                  {(() => {
-                    const hasActiveFilters = !!(
-                      filters.search ||
-                      filters.priceRange[0] > 0 ||
-                      filters.priceRange[1] < 1000 ||
-                      filters.inStock === true ||
-                      filters.style ||
-                      filters.color ||
-                      filters.category !== 'all'
-                    );
-                    
-                    const hasMoreProducts = !hasActiveFilters && displayedProducts.length < pagination.total;
-                    
-                    return hasMoreProducts && (
-                      <div className="flex justify-center mt-8">
-                        <button
-                          onClick={handleLoadMore}
-                          disabled={isLoadingMore || isLoading}
-                          className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
-                        >
-                          {isLoadingMore ? 'Loading...' : 'Load More Products'}
-                        </button>
-                      </div>
-                    );
-                  })()}
+                  {/* Load More Button - Show when more products available */}
+                  {displayedProducts.length < pagination.total && (
+                    <div className="flex justify-center mt-8">
+                      <button
+                        onClick={handleLoadMore}
+                        disabled={isLoadingMore || isLoading}
+                        className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
+                      >
+                        {isLoadingMore ? 'Loading...' : 'Load More Products'}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1728,7 +1597,7 @@ export default function ProductsPage() {
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-6 text-center">
                 Frequently Asked Questions
               </h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">

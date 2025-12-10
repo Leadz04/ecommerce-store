@@ -54,14 +54,14 @@ const CategoryHeader = memo(({ info, productsCount }: { info: { title: string; d
 CategoryHeader.displayName = 'CategoryHeader';
 
 // Memoized Search and Controls Component
-const SearchAndControls = memo(({ 
-  searchInput, 
-  setSearchInput, 
-  clearSearch, 
-  filters, 
-  categoryName, 
-  viewMode, 
-  setViewMode, 
+const SearchAndControls = memo(({
+  searchInput,
+  setSearchInput,
+  clearSearch,
+  filters,
+  categoryName,
+  viewMode,
+  setViewMode,
   handleSortChange,
   openSelect,
   setOpenSelect
@@ -154,15 +154,15 @@ const SearchAndControls = memo(({
 SearchAndControls.displayName = 'SearchAndControls';
 
 // Memoized Sidebar Filters Component
-const SidebarFilters = memo(({ 
-  filters, 
-  setFilters, 
+const SidebarFilters = memo(({
+  filters,
+  setFilters,
   setPagination,
   searchParams,
   categorySlug,
-  fetchProducts, 
-  categoryName, 
-  clearAllFilters, 
+  fetchProducts,
+  categoryName,
+  clearAllFilters,
   priceDebounceRef,
   updateURL
 }: {
@@ -196,8 +196,8 @@ const SidebarFilters = memo(({
               setFilters({ inStock: nextInStock });
               setPagination({ page: 1 });
               updateURL({ inStock: e.target.checked ? 'true' : '', page: '' });
-              fetchProducts({ 
-                category: categoryName, 
+              fetchProducts({
+                category: categoryName,
                 inStock: e.target.checked ? true : undefined
               });
             }}
@@ -219,12 +219,12 @@ const SidebarFilters = memo(({
             onChange={(e) => {
               const nextRange: [number, number] = [filters.priceRange[0], parseInt(e.target.value)];
               setFilters({ priceRange: nextRange });
-              
+
               // Clear existing timeout
               if (priceDebounceRef.current) {
                 window.clearTimeout(priceDebounceRef.current);
               }
-              
+
               // Set new timeout for debounced fetch
               priceDebounceRef.current = window.setTimeout(() => {
                 setPagination({ page: 1 });
@@ -234,9 +234,9 @@ const SidebarFilters = memo(({
                 if (!(nextRange[0] > 0)) urlParams.minPrice = '' as any;
                 if (!(nextRange[1] < 1000)) urlParams.maxPrice = '' as any;
                 updateURL(urlParams);
-                fetchProducts({ 
-                  category: categoryName, 
-                  minPrice: nextRange[0], 
+                fetchProducts({
+                  category: categoryName,
+                  minPrice: nextRange[0],
                   maxPrice: nextRange[1]
                 });
               }, 250);
@@ -264,19 +264,19 @@ const SidebarFilters = memo(({
 SidebarFilters.displayName = 'SidebarFilters';
 
 // Memoized Products Grid Component to prevent unnecessary re-renders
-const ProductsGrid = memo(({ 
+const ProductsGrid = memo(({
   products,
   displayedProducts,
-  viewMode, 
+  viewMode,
   isLoading,
   isLoadingMore,
-  error, 
-  pagination, 
-  categoryName, 
-  filters, 
-  fetchProducts, 
+  error,
+  pagination,
+  categoryName,
+  filters,
+  fetchProducts,
   setPagination,
-  clearSearch, 
+  clearSearch,
   clearAllFilters,
   handleLoadMore,
   updateURL
@@ -314,18 +314,7 @@ const ProductsGrid = memo(({
           {isLoading ? (
             <span className="animate-pulse">Loading products...</span>
           ) : (
-            (() => {
-              const hasActiveFilters = !!(
-                filters.search ||
-                filters.priceRange[0] > 0 ||
-                filters.priceRange[1] < 1000 ||
-                filters.inStock === true
-              );
-              if (hasActiveFilters) {
-                return `Showing all ${displayedProducts.length} matching products`;
-              }
-              return `Showing ${displayedProducts.length} of ${pagination.total} products`;
-            })()
+            `Showing ${displayedProducts.length} of ${pagination.total} products`
           )}
         </p>
       </div>
@@ -335,7 +324,7 @@ const ProductsGrid = memo(({
       {error && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <p className="text-red-500 text-lg">{error}</p>
-          <button 
+          <button
             onClick={() => fetchProducts({ category: categoryName })}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
@@ -399,11 +388,10 @@ const ProductsGrid = memo(({
         <>
           {isLoading && !isLoadingMore && displayedProducts.length === 0 ? (
             // Show skeleton when loading initial products
-            <div className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                : 'grid-cols-1'
-            }`}>
+            <div className={`grid gap-6 ${viewMode === 'grid'
+              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+              : 'grid-cols-1'
+              }`}>
               {Array.from({ length: 12 }, (_, i) => (
                 <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 animate-pulse">
                   <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
@@ -416,11 +404,15 @@ const ProductsGrid = memo(({
           ) : displayedProducts.length > 0 ? (
             // Show products normally
             <>
-              <div className={`grid gap-6 ${
-                viewMode === 'grid' 
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                  : 'grid-cols-1'
-              }`}>
+              <div 
+                className={viewMode === 'grid' 
+                  ? 'grid gap-6'
+                  : 'grid grid-cols-1 gap-6'
+                }
+                style={viewMode === 'grid' ? {
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+                } : {}}
+              >
                 {displayedProducts.map((product) => (
                   <ProductCard key={(product as any)._id || (product as any).id} product={product as any} />
                 ))}
@@ -439,29 +431,18 @@ const ProductsGrid = memo(({
                 )}
               </div>
 
-              {/* Load More Button - only show if no filters are active */}
-              {(() => {
-                const hasActiveFilters = !!(
-                  filters.search ||
-                  filters.priceRange[0] > 0 ||
-                  filters.priceRange[1] < 1000 ||
-                  filters.inStock === true
-                );
-                
-                const hasMoreProducts = !hasActiveFilters && displayedProducts.length < pagination.total;
-                
-                return hasMoreProducts && (
-                  <div className="flex justify-center mt-8">
-                    <button
-                      onClick={handleLoadMore}
-                      disabled={isLoadingMore || isLoading}
-                      className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
-                    >
-                      {isLoadingMore ? 'Loading...' : 'Load More Products'}
-                    </button>
-                  </div>
-                );
-              })()}
+              {/* Load More Button - show when there are more products available */}
+              {displayedProducts.length < pagination.total && (
+                <div className="flex justify-center mt-8">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={isLoadingMore || isLoading}
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
+                  >
+                    {isLoadingMore ? 'Loading...' : 'Load More Products'}
+                  </button>
+                </div>
+              )}
             </>
           ) : null}
         </>
@@ -536,7 +517,7 @@ export default function CategoryPage() {
   useEffect(() => {
     if (initializationRef.current) return;
     if (isUnknownCategory) return;
-    
+
     const search = searchParams.get('search') || '';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
@@ -546,27 +527,27 @@ export default function CategoryPage() {
     const style = searchParams.get('style') || '';
     const color = searchParams.get('color') || '';
     const subcategory = searchParams.get('subcategory') as 'men' | 'women' | null;
-    
+
     // Handle subcategory for Wool category
     if (isWoolCategory && subcategory) {
       setSelectedSubcategory(subcategory);
     } else if (isWoolCategory) {
       setSelectedSubcategory(null);
     }
-    
+
     // Build price range from URL or use defaults
     const priceRange: [number, number] = minPrice || maxPrice
       ? [
-          minPrice ? parseInt(minPrice, 10) : 0,
-          maxPrice ? parseInt(maxPrice, 10) : 1000
-        ]
+        minPrice ? parseInt(minPrice, 10) : 0,
+        maxPrice ? parseInt(maxPrice, 10) : 1000
+      ]
       : [0, 1000];
-    
+
     const inStockValue = inStock === 'true' ? true : null;
-    
+
     // If color/style is set, don't use search if it conflicts
     let finalSearch = search;
-    
+
     // For Wool category, handle subcategory-based search
     if (isWoolCategory) {
       if (subcategory === 'men') {
@@ -577,18 +558,18 @@ export default function CategoryPage() {
         finalSearch = search || 'wool coat';
       }
     }
-    
+
     if (color && finalSearch.toLowerCase().includes(color.toLowerCase())) {
       finalSearch = '';
     }
     if (style && finalSearch.toLowerCase().includes(style.toLowerCase())) {
       finalSearch = '';
     }
-    
+
     setSearchInput(finalSearch);
-    setFilters({ 
-      search: finalSearch, 
-      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName, 
+    setFilters({
+      search: finalSearch,
+      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName,
       sortBy,
       priceRange,
       inStock: inStockValue,
@@ -600,26 +581,25 @@ export default function CategoryPage() {
     setDisplayedProducts([]);
     isInitialLoadRef.current = true;
     loadingMoreRef.current = false;
-    
-    // Check if any filters are active
-    const hasActiveFilters = !!(finalSearch || minPrice || maxPrice || inStock || style || color || subcategory);
-    
-    fetchProducts({ 
-      search: finalSearch, 
-      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName, 
-      sortBy, 
-      ...(hasActiveFilters ? {} : { page: 1, limit: 24 }),
+
+    // Always use pagination, even with filters
+    fetchProducts({
+      search: finalSearch,
+      category: isWoolCategory ? (subcategory === 'men' ? 'Men' : subcategory === 'women' ? 'Women' : undefined) : categoryName,
+      sortBy,
+      page: 1,
+      limit: 24,
       minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
       maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined,
       inStock: inStockValue || undefined,
       style: style || undefined,
       color: color || undefined
     });
-    
+
     // Set the URL params key ref to prevent duplicate fetches
     urlParamsKeyRef.current = `${finalSearch}-${sortBy}-1-${minPrice || ''}-${maxPrice || ''}-${inStock || ''}-${style || ''}-${color || ''}`;
-    
-    initializationRef.current = true;
+
+    initializationRef.current = categorySlug;
     setIsInitialized(true);
   }, [categoryName, setFilters, setPagination, fetchProducts, searchParams, isUnknownCategory]);
 
@@ -627,7 +607,7 @@ export default function CategoryPage() {
   useEffect(() => {
     if (!isInitialized) return;
     if (isUnknownCategory) return;
-    
+
     const search = searchParams.get('search') || '';
     const sortBy = searchParams.get('sortBy') || 'name';
     const page = parseInt(searchParams.get('page') || '1');
@@ -636,17 +616,17 @@ export default function CategoryPage() {
     const inStock = searchParams.get('inStock') || '';
     const style = searchParams.get('style') || '';
     const color = searchParams.get('color') || '';
-    
+
     // Build price range from URL or use defaults
     const priceRange: [number, number] = minPrice || maxPrice
       ? [
-          minPrice ? parseInt(minPrice, 10) : 0,
-          maxPrice ? parseInt(maxPrice, 10) : 1000
-        ]
+        minPrice ? parseInt(minPrice, 10) : 0,
+        maxPrice ? parseInt(maxPrice, 10) : 1000
+      ]
       : [0, 1000];
-    
+
     const inStockValue = inStock === 'true' ? true : null;
-    
+
     // If color/style is set, don't use search if it conflicts
     let finalSearch = search;
     if (color && search.toLowerCase().includes(color.toLowerCase())) {
@@ -655,35 +635,67 @@ export default function CategoryPage() {
     if (style && search.toLowerCase().includes(style.toLowerCase())) {
       finalSearch = '';
     }
+
+    // Detect if filters/search changed (excluding page changes)
+    const filtersChanged = 
+      finalSearch !== filters.search ||
+      priceRange[0] !== filters.priceRange[0] ||
+      priceRange[1] !== filters.priceRange[1] ||
+      inStockValue !== filters.inStock ||
+      (style || undefined) !== filters.style ||
+      (color || undefined) !== filters.color ||
+      sortBy !== filters.sortBy;
+    
+    // If filters changed, reset to page 1 regardless of URL page param
+    const effectivePage = filtersChanged ? 1 : page;
     
     // Create a key from all URL params to detect changes
-    const paramsKey = `${finalSearch}-${sortBy}-${page}-${minPrice}-${maxPrice}-${inStock}-${style}-${color}`;
-    
+    const paramsKey = `${finalSearch}-${sortBy}-${effectivePage}-${minPrice}-${maxPrice}-${inStock}-${style}-${color}`;
+
     // Only proceed if params actually changed
     if (urlParamsKeyRef.current === paramsKey) return;
     urlParamsKeyRef.current = paramsKey;
-    
+
     // Update state and fetch products
     setSearchInput(finalSearch);
-    setFilters({ 
-      search: finalSearch, 
-      category: categoryName, 
+    setFilters({
+      search: finalSearch,
+      category: categoryName,
       sortBy,
       priceRange,
       inStock: inStockValue,
       style: style || undefined,
       color: color || undefined
     });
-    setPagination({ page });
+    setPagination({ page: effectivePage });
     
-    // Check if any filters are active - if so, don't use pagination
-    const hasActiveFilters = !!(finalSearch || minPrice || maxPrice || inStock || style || color);
-    
-    fetchProducts({ 
-      search: finalSearch, 
-      category: categoryName, 
-      sortBy, 
-      ...(hasActiveFilters ? {} : { page, limit: 24 }),
+    // Reset displayed products and current page when page is 1 or filters changed
+    if (effectivePage === 1 || filtersChanged) {
+      setDisplayedProducts([]);
+      setCurrentPage(1);
+      isInitialLoadRef.current = true;
+      loadingMoreRef.current = false;
+      
+      // Update URL to remove page param if filters changed
+      if (filtersChanged && page !== 1) {
+        const params = new URLSearchParams(searchParams);
+        params.delete('page');
+        const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : `/categories/${categorySlug}`;
+        window.history.replaceState(null, '', newURL);
+      }
+    } else if (effectivePage > currentPage) {
+      // When loading a different page via URL, treat it as loading more
+      loadingMoreRef.current = true;
+      setCurrentPage(effectivePage);
+    }
+
+    // Always use pagination, even with filters
+    fetchProducts({
+      search: finalSearch,
+      category: categoryName,
+      sortBy,
+      page: effectivePage,
+      limit: 24,
       minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
       maxPrice: priceRange[1] < 1000 ? priceRange[1] : undefined,
       inStock: inStockValue || undefined,
@@ -695,7 +707,7 @@ export default function CategoryPage() {
   // Update URL when filters change
   const updateURL = useCallback((newParams: Record<string, string>) => {
     const params = new URLSearchParams(searchParams);
-    
+
     Object.entries(newParams).forEach(([key, value]) => {
       if (value && value !== 'name' && value !== '') {
         params.set(key, value);
@@ -703,12 +715,12 @@ export default function CategoryPage() {
         params.delete(key);
       }
     });
-    
+
     // If color or style is set, remove conflicting search terms
     const color = params.get('color');
     const style = params.get('style');
     const search = params.get('search');
-    
+
     if (color && search) {
       // Check if search term matches the color (case-insensitive)
       const colorLower = color.toLowerCase();
@@ -717,7 +729,7 @@ export default function CategoryPage() {
         params.delete('search');
       }
     }
-    
+
     if (style && search) {
       // Check if search term matches the style (case-insensitive)
       const styleLower = style.toLowerCase();
@@ -726,7 +738,7 @@ export default function CategoryPage() {
         params.delete('search');
       }
     }
-    
+
     const query = params.toString();
     const newURL = query ? `${window.location.pathname}?${query}` : `/categories/${categorySlug}`;
     window.history.replaceState(null, '', newURL);
@@ -736,45 +748,20 @@ export default function CategoryPage() {
   useEffect(() => {
     if (!isInitialized) return;
     if (isUnknownCategory) return;
-    
+
     const t = setTimeout(() => {
       if (searchInput !== filters.search) {
-        // If search input matches an active color or style filter, clear that filter
-        const activeColor = filters.color;
-        const activeStyle = filters.style;
-        const searchLower = searchInput.toLowerCase();
-        
-        let updatedFilters: any = { search: searchInput };
-        let urlParams: Record<string, string> = { search: searchInput || '', page: '' };
-        
-        // Clear color if search matches it
-        if (activeColor && searchLower.includes(activeColor.toLowerCase())) {
-          updatedFilters.color = undefined;
-          urlParams.color = '';
-        }
-        
-        // Clear style if search matches it
-        if (activeStyle && searchLower.includes(activeStyle.toLowerCase())) {
-          updatedFilters.style = undefined;
-          urlParams.style = '';
-        }
-        
-        setFilters(updatedFilters);
+        setFilters({ search: searchInput });
         setPagination({ page: 1 });
-        fetchProducts({ 
-          category: categoryName, 
-          search: searchInput,
-          ...(updatedFilters.color === undefined ? { color: undefined } : {}),
-          ...(updatedFilters.style === undefined ? { style: undefined } : {})
+        fetchProducts({
+          category: categoryName,
+          search: searchInput
         });
-        // Update URL after state changes to avoid triggering effects
-        setTimeout(() => {
-          updateURL(urlParams);
-        }, 0);
+        updateURL({ search: searchInput || '', page: '' });
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [searchInput, filters.search, filters.color, filters.style, categoryName, fetchProducts, setFilters, setPagination, updateURL, isInitialized, isUnknownCategory]);
+  }, [searchInput, filters.search, categoryName, fetchProducts, setFilters, setPagination, updateURL, isInitialized, isUnknownCategory]);
 
   // Keep header count stable during loading; update after fetch completes
   useEffect(() => {
@@ -785,71 +772,102 @@ export default function CategoryPage() {
 
   // Update displayed products when products from store change
   useEffect(() => {
-    const hasActiveFilters = !!(
-      filters.search ||
-      filters.priceRange[0] > 0 ||
-      filters.priceRange[1] < 1000 ||
-      filters.inStock === true ||
-      filters.style ||
-      filters.color
-    );
-    
-    if (hasActiveFilters) {
-      // With filters, show all products directly (no pagination)
-      setDisplayedProducts(products);
-      prevProductsLengthRef.current = products.length;
-      isInitialLoadRef.current = false;
-      return;
-    }
-    
-    // For pagination mode
+    // For pagination mode (with or without filters)
     if (loadingMoreRef.current) {
       // We're loading more - append to existing products, don't replace
+      // Deduplicate by _id, sourceUrl, and name to catch all duplicates
       setDisplayedProducts(prev => {
         const existingIds = new Set(prev.map(p => (p as any)._id || (p as any).id));
-        const newProducts = products.filter(p => !existingIds.has((p as any)._id || (p as any).id));
+        const existingUrls = new Set(
+          prev
+            .map((p) => {
+              const url = (p as any).sourceUrl || (p as any).url || '';
+              return url ? url.toLowerCase().trim() : '';
+            })
+            .filter(Boolean)
+        );
+        const existingNames = new Set(
+          prev
+            .map((p) => {
+              const name = (p as any).name || '';
+              return name ? name.toLowerCase().trim() : '';
+            })
+            .filter(Boolean)
+        );
+        
+        const newProducts = products.filter((p) => {
+          const id = (p as any)._id || (p as any).id;
+          const url = ((p as any).sourceUrl || (p as any).url || '').toLowerCase().trim();
+          const name = ((p as any).name || '').toLowerCase().trim();
+          
+          // Skip if duplicate by ID, URL, or name
+          if (id && existingIds.has(id)) return false;
+          if (url && existingUrls.has(url)) return false;
+          if (name && existingNames.has(name)) return false;
+          
+          return true;
+        });
+        
         return [...prev, ...newProducts];
       });
       loadingMoreRef.current = false;
       prevProductsLengthRef.current = products.length;
-    } else if (isInitialLoadRef.current || products.length !== prevProductsLengthRef.current) {
-      // Initial load or filter change - replace all products
-      if (products.length > 0) {
-        setDisplayedProducts(products);
-        prevProductsLengthRef.current = products.length;
-      }
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Initial load or filter change - replace all products
+    // Always update if: (1) initial load, (2) product count changed, OR (3) displayed is empty but store has products
+    if (isInitialLoadRef.current ||
+      products.length !== prevProductsLengthRef.current ||
+      (displayedProducts.length === 0 && products.length > 0)) {
+      setDisplayedProducts(products);
+      prevProductsLengthRef.current = products.length;
       isInitialLoadRef.current = false;
     }
-  }, [products, filters]);
+  }, [products, filters, displayedProducts.length]);
 
   // Load more products function
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore || isLoading) return;
-    
-    const hasActiveFilters = !!(
-      filters.search ||
-      filters.priceRange[0] > 0 ||
-      filters.priceRange[1] < 1000 ||
-      filters.inStock === true ||
-      filters.style ||
-      filters.color
-    );
-    
-    // Don't load more if filters are active (they show all results already)
-    if (hasActiveFilters) return;
-    
+
+    // Calculate the next page based on currently displayed products
+    // If we have 25 products displayed with limit 24, we're on page 1, so next is page 2
+    const limit = 24;
+    const calculatedCurrentPage = Math.ceil(displayedProducts.length / limit) || 1;
+    const nextPage = calculatedCurrentPage + 1;
+
+    // Don't load if we've already loaded all products
+    if (displayedProducts.length >= pagination.total) {
+      console.log('[Load More] All products already loaded:', { displayed: displayedProducts.length, total: pagination.total });
+      return;
+    }
+
+    console.log('[Load More] Loading page:', { 
+      displayed: displayedProducts.length, 
+      total: pagination.total,
+      calculatedPage: calculatedCurrentPage,
+      nextPage 
+    });
+
     setIsLoadingMore(true);
     loadingMoreRef.current = true;
-    const nextPage = currentPage + 1;
-    
+
     try {
+      // Pass ALL current filters to maintain filter state when loading more
       await fetchProducts({
         category: categoryName,
         page: nextPage,
-        limit: 24,
+        limit: limit,
+        search: filters.search || undefined,
         sortBy: filters.sortBy === 'name' ? undefined : filters.sortBy,
+        minPrice: filters.priceRange[0] > 0 ? filters.priceRange[0] : undefined,
+        maxPrice: filters.priceRange[1] < 1000 ? filters.priceRange[1] : undefined,
+        inStock: filters.inStock === true ? true : undefined,
+        style: filters.style || undefined,
+        color: filters.color || undefined
       });
-      
+
       setCurrentPage(nextPage);
     } catch (error) {
       console.error('Error loading more products:', error);
@@ -857,7 +875,7 @@ export default function CategoryPage() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, isLoading, filters, categoryName, currentPage, fetchProducts]);
+  }, [isLoadingMore, isLoading, filters, categoryName, displayedProducts.length, pagination.total, fetchProducts]);
 
   const handleSortChange = useCallback((sortBy: string) => {
     setFilters({ sortBy });
@@ -884,7 +902,7 @@ export default function CategoryPage() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: q, resultsCount: products.length })
         });
-      } catch {}
+      } catch { }
     }, 700);
     return () => clearTimeout(t);
   }, [searchInput, products.length, isInitialized]);
@@ -906,13 +924,13 @@ export default function CategoryPage() {
   const clearAllFilters = useCallback(() => {
     // Clear all state first
     setSearchInput('');
-    setFilters({ 
-      search: '', 
-      priceRange: [0, 1000], 
-      inStock: null, 
-      sortBy: 'name', 
-      brand: undefined, 
-      minRating: undefined, 
+    setFilters({
+      search: '',
+      priceRange: [0, 1000],
+      inStock: null,
+      sortBy: 'name',
+      brand: undefined,
+      minRating: undefined,
       collection: undefined,
       style: undefined,
       color: undefined
@@ -921,14 +939,14 @@ export default function CategoryPage() {
     setDisplayedProducts([]);
     setCurrentPage(1);
     isInitialLoadRef.current = true;
-    
+
     // Clear URL params key ref to force re-initialization
     urlParamsKeyRef.current = '';
-    
+
     // Navigate to clean URL - this will trigger the useEffect that watches searchParams
     const cleanURL = `/categories/${categorySlug}`;
     router.replace(cleanURL);
-    
+
     // Fetch products without any filters
     fetchProducts({ category: categoryName, search: '', minPrice: 0, maxPrice: 1000, page: 1, limit: 24 });
   }, [setFilters, setPagination, fetchProducts, categoryName, categorySlug, router]);
@@ -1016,7 +1034,7 @@ export default function CategoryPage() {
                 <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
                   The category may have been moved or doesn't exist yet. Browse our categories or view all products to find what you're looking for.
                 </p>
-                
+
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Link
                     href="/categories"
@@ -1077,7 +1095,7 @@ export default function CategoryPage() {
           {showFilters && (
             <>
               {/* Backdrop */}
-              <div 
+              <div
                 className="fixed inset-0 bg-black/50 z-40"
                 onClick={() => setShowFilters(false)}
               />

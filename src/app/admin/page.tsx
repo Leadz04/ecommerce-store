@@ -671,7 +671,7 @@ export default function AdminDashboard() {
   const [productPage, setProductPage] = useState(1);
   const [productPerPage, setProductPerPage] = useState(20);
   
-  // Jacket Maker Products state (from STAGE3 database)
+  // Jacket Maker Products state
   const [jacketMakerProducts, setJacketMakerProducts] = useState<Product[]>([]);
   const [jacketMakerPage, setJacketMakerPage] = useState(1);
   const [jacketMakerPerPage, setJacketMakerPerPage] = useState(20);
@@ -1196,17 +1196,17 @@ export default function AdminDashboard() {
     id: `brand-${brand.toLowerCase().replace(/\s+/g, '-')}` as TabKey,
     label: brand,
     icon: Package,
-    description: `${brandCounts[brand] || 0} products (STAGE3)`
+    description: `${brandCounts[brand] || 0} products`
   }));
 
-  // Create STAGE3 Brand Products section with expandable children
+  // Create Brand Products section with expandable children
   const stage3BrandProductsTab: SidebarTab = {
     id: 'stage3-brand-products',
-    label: 'Scraped Products (STAGE3)',
+    label: 'Scraped Products',
     icon: Package,
     description: 'Products from scraped brands',
     children: [
-      { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker (STAGE3)' },
+      { id: 'jacket-maker-products', label: 'Jacket Maker Products', icon: Package, description: 'Products from The Jacket Maker' },
       ...brandTabs.map(tab => ({
         id: tab.id,
         label: tab.label,
@@ -1437,7 +1437,7 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthenticated]);
 
-  // Fetch brands from STAGE3 on mount
+  // Fetch brands on mount
   useEffect(() => {
     if (isAuthenticated) {
       fetchBrandsStage3();
@@ -1578,7 +1578,7 @@ export default function AdminDashboard() {
                   }));
                 }
 
-                // Try STAGE3 database for remaining IDs
+                // Try main database for remaining IDs
                 if (notFoundIds.length > 0) {
                   try {
                     const stage3Response = await fetch('/api/admin/products/by-ids-stage3', {
@@ -1593,21 +1593,21 @@ export default function AdminDashboard() {
                     if (stage3Response.ok) {
                       const stage3Data = await stage3Response.json();
                       if (stage3Data.products && Array.isArray(stage3Data.products)) {
-                        const foundStage3Products: Record<string, Product> = {};
+                        const foundProducts: Record<string, Product> = {};
                         stage3Data.products.forEach((product: Product) => {
-                          foundStage3Products[product._id] = product;
+                          foundProducts[product._id] = product;
                         });
 
-                        if (Object.keys(foundStage3Products).length > 0) {
+                        if (Object.keys(foundProducts).length > 0) {
                           setSelectedProductsDetails(prev => ({
                             ...prev,
-                            ...foundStage3Products
+                            ...foundProducts
                           }));
                         }
                       }
                     }
                   } catch (err) {
-                    console.error('Error fetching STAGE3 products:', err);
+                    console.error('Error fetching products:', err);
                   }
                 }
               }
@@ -2032,7 +2032,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Fetch all brands from STAGE3
+  // Fetch all brands
   const fetchBrandsStage3 = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -9604,7 +9604,7 @@ export default function AdminDashboard() {
                               </button>
                             )}
                           </div>
-                          <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker (STAGE3 Database) - {jacketMakerTotal} total products</p>
+                          <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker - {jacketMakerTotal} total products</p>
                         </div>
                       <button
                         onClick={() => fetchJacketMakerProducts()}
@@ -9909,7 +9909,7 @@ export default function AdminDashboard() {
                                 </button>
                               )}
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-600">Products from {brand} (STAGE3 Database) - {total} total products</p>
+                            <p className="text-xs sm:text-sm text-gray-600">Products from {brand} - {total} total products</p>
                           </div>
                         <button
                           onClick={() => fetchBrandProducts(brand)}
@@ -12636,11 +12636,11 @@ export default function AdminDashboard() {
                   return;
                 }
 
-                // Check if product is from STAGE3 (brands products tab)
+                // Check if product is from scraped brands (brands products tab)
                 const isStage3Product = activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products' || activeTab === 'jacket-maker-products';
                 
                 if (isStage3Product) {
-                  // Update STAGE3 product
+                  // Update product
                   const response = await fetch(`/api/admin/products/stage3/${selectedProductForModal._id}`, {
                     method: 'PUT',
                     headers: {

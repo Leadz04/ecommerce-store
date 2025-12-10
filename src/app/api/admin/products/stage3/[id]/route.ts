@@ -1,85 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
 import { requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import Product from '@/models/Product';
 
-// Product Schema for STAGE3
-const ProductSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  description: { type: String, required: true, trim: true },
-  descriptionHtml: { type: String },
-  price: { type: Number, required: true, min: 0 },
-  originalPrice: { type: Number, min: 0 },
-  image: { type: String, required: true },
-  images: [{ type: String }],
-  imageAltTexts: [{ type: String, trim: true }],
-  category: {
-    type: String,
-    enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
-    default: 'Accessories'
-  },
-  brand: { type: String, trim: true },
-  rating: { type: Number, default: 0, min: 0, max: 5 },
-  reviewCount: { type: Number, default: 0, min: 0 },
-  inStock: { type: Boolean, default: true },
-  stockCount: { type: Number, default: 0, min: 0 },
-  tags: [{ type: String, trim: true }],
-  specifications: { type: Map, of: String },
-  sourceUrl: { type: String, index: true, sparse: true },
-  productType: { type: String },
-  status: {
-    type: String,
-    enum: ['draft', 'published', 'archived'],
-    default: 'draft',
-    index: true,
-  },
-  publishAt: { type: Date, default: null, index: true },
-  variants: [{
-    title: { type: String },
-    sku: { type: String },
-    price: { type: Number, min: 0 },
-    originalPrice: { type: Number, min: 0 },
-    available: { type: Boolean },
-    inventory: { type: Number, min: 0, required: false },
-  }],
-  isActive: { type: Boolean, default: true },
-  etsyExported: { type: Boolean, default: false, index: true },
-  etsyExportedAt: { type: Date, default: null },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}, {
-  timestamps: true
-});
-
-let mainConnection: mongoose.Connection | null = null;
-
-async function getMainConnection() {
-  if (mainConnection && mainConnection.readyState === 1) {
-    return mainConnection;
-  }
-
-  const mongooseInstance = await connectDB();
-  if (!mongooseInstance) {
-    throw new Error('MONGODB_URI is not configured');
-  }
-  
-  mainConnection = mongooseInstance.connection;
-  return mainConnection;
-}
-
-// PUT /api/admin/products/stage3/[id] - Update STAGE3 product
+// PUT /api/admin/products/stage3/[id] - Update product in main database
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requirePermission(PERMISSIONS.PRODUCT_UPDATE)(request);
+    await requirePermission(PERMISSIONS.PRODUCT_UPDATE)(request);
     const { id } = await context.params;
     const body = await request.json();
     
-    const conn = await getMainConnection();
-    const Product = conn.model('Product', ProductSchema);
+    // Ensure database connection
+    await connectDB();
 
     const {
       name,

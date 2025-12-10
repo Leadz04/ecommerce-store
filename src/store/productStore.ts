@@ -92,7 +92,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
 
   fetchProducts: async (params = {}) => {
     set({ isLoading: true, error: null });
-    
+
     // Determine if this request intends to append (so we can preserve items on failure)
     const intendedPage = parseInt((params as any).page || get().pagination.page || 1, 10);
     const isAppendRequest = intendedPage > 1;
@@ -100,34 +100,16 @@ export const useProductStore = create<ProductStore>((set, get) => ({
     try {
       const { filters } = get();
       const searchParams = new URLSearchParams();
-      
-      // Check if any filters are active (including search)
-      const hasActiveFilters = !!(
-        (params.search || filters.search) ||
-        (params.minPrice !== undefined && params.minPrice > 0) ||
-        (params.maxPrice !== undefined && params.maxPrice < 1000) ||
-        (filters.priceRange[0] > 0 || filters.priceRange[1] < 1000) ||
-        (params.inStock !== undefined ? params.inStock === true : filters.inStock === true) ||
-        (params.brand ?? filters.brand) ||
-        (params.style ?? filters.style) ||
-        (params.color ?? filters.color) ||
-        (typeof (params.minRating ?? filters.minRating) === 'number') ||
-        (params.collection ?? filters.collection)
-      );
-      
-      // Only add pagination if no filters are active
-      // When search or any filter is active, show all matching products
-      if (!hasActiveFilters) {
-        // Use provided params or fall back to store pagination
-        searchParams.set('page', (params.page || get().pagination.page).toString());
-        searchParams.set('limit', (params.limit || get().pagination.limit).toString());
-      }
-      // When filters are active, don't set page/limit to get all results
-      
+
+      // ALWAYS send pagination parameters - even with filters
+      // Backend now handles pagination consistently
+      searchParams.set('page', (params.page || get().pagination.page).toString());
+      searchParams.set('limit', (params.limit || get().pagination.limit).toString());
+
       if (params.category || filters.category !== 'all') {
         searchParams.set('category', params.category || filters.category);
       }
-      
+
       if (params.search || filters.search) {
         searchParams.set('search', params.search || filters.search);
       }
@@ -135,15 +117,15 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       if (params.sortBy || filters.sortBy !== 'name') {
         searchParams.set('sortBy', params.sortBy || filters.sortBy);
       }
-      
+
       if (params.minPrice || filters.priceRange[0] > 0) {
         searchParams.set('minPrice', (params.minPrice || filters.priceRange[0]).toString());
       }
-      
+
       if (params.maxPrice || filters.priceRange[1] < 1000) {
         searchParams.set('maxPrice', (params.maxPrice || filters.priceRange[1]).toString());
       }
-      
+
       // Only send inStock when true to avoid filtering out items by default
       const effectiveInStock = (params.inStock !== undefined ? params.inStock : filters.inStock);
       if (effectiveInStock === true) {
@@ -179,7 +161,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       const dedupeKey = `products-${searchParams.toString()}`;
 
       console.log('[ProductStore] Fetching products:', searchParams.toString());
-      
+
       // Use request deduplication to prevent duplicate calls
       const response = await requestDeduplicator.deduplicate(
         dedupeKey,
@@ -188,9 +170,9 @@ export const useProductStore = create<ProductStore>((set, get) => ({
           return res.clone(); // Clone to allow multiple reads
         }
       );
-      
+
       console.log('[ProductStore] Response status:', response.status);
-      
+
       // Check if response is JSON before parsing
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -205,7 +187,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         console.error('[ProductStore] Error fetching products:', data.error);
         throw new Error(data.error || 'Failed to fetch products');
       }
-      
+
       console.log('[ProductStore] Successfully fetched', data.products?.length, 'products');
 
       const normalizedIncoming = Array.isArray(data.products)
@@ -213,15 +195,44 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         : [];
 
       const incomingPage = parseInt(searchParams.get('page') || '1', 10);
-      const shouldAppend = !hasActiveFilters && incomingPage > 1;
+      // Append products when loading page > 1 (for "Load More" functionality)
+      const shouldAppend = incomingPage > 1;
 
       set((state) => {
         if (shouldAppend) {
           // Append while keeping existing items visible
+          // Deduplicate by _id, sourceUrl, and name to catch all duplicates
           const existingIds = new Set(state.products.map((p) => (p as any)._id || (p as any).id));
-          const newOnes = normalizedIncoming.filter(
-            (p) => !existingIds.has((p as any)._id || (p as any).id)
+          const existingUrls = new Set(
+            state.products
+              .map((p) => {
+                const url = (p as any).sourceUrl || (p as any).url || '';
+                return url ? url.toLowerCase().trim() : '';
+              })
+              .filter(Boolean)
           );
+          const existingNames = new Set(
+            state.products
+              .map((p) => {
+                const name = (p as any).name || '';
+                return name ? name.toLowerCase().trim() : '';
+              })
+              .filter(Boolean)
+          );
+          
+          const newOnes = normalizedIncoming.filter((p) => {
+            const id = (p as any)._id || (p as any).id;
+            const url = ((p as any).sourceUrl || (p as any).url || '').toLowerCase().trim();
+            const name = ((p as any).name || '').toLowerCase().trim();
+            
+            // Skip if duplicate by ID, URL, or name
+            if (id && existingIds.has(id)) return false;
+            if (url && existingUrls.has(url)) return false;
+            if (name && existingNames.has(name)) return false;
+            
+            return true;
+          });
+          
           return {
             products: [...state.products, ...newOnes],
             pagination: data.pagination,
@@ -231,8 +242,24 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         }
 
         // Replace for first page or when filters are active
+        // Also deduplicate the incoming products
+        const seen = new Map<string, any>();
+        const uniqueProducts = normalizedIncoming.filter((p) => {
+          const url = ((p as any).sourceUrl || (p as any).url || '').toLowerCase().trim();
+          const name = ((p as any).name || '').toLowerCase().trim();
+          const key = url || name || (p as any)._id || (p as any).id;
+          
+          if (key && seen.has(key)) {
+            return false;
+          }
+          if (key) {
+            seen.set(key, p);
+          }
+          return true;
+        });
+        
         return {
-          products: normalizedIncoming,
+          products: uniqueProducts,
           pagination: data.pagination,
           isLoading: false,
           error: null,
@@ -258,10 +285,10 @@ export const useProductStore = create<ProductStore>((set, get) => ({
     }
 
     set({ isLoading: true, error: null, currentProduct: null });
-    
+
     try {
       console.log('[ProductStore] Fetching product:', id);
-      
+
       // Use request deduplication to prevent duplicate calls
       const response = await requestDeduplicator.deduplicate(
         `product-${id}`,
@@ -270,7 +297,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
           return res.clone(); // Clone to allow multiple reads
         }
       );
-      
+
       // Check if response is JSON before parsing
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -285,7 +312,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         console.error('[ProductStore] Error fetching product:', data.error);
         throw new Error(data.error || 'Failed to fetch product');
       }
-      
+
       console.log('[ProductStore] Successfully fetched product:', data.product?.name);
 
       set({

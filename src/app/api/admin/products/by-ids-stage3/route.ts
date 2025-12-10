@@ -1,80 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/mongodb';
-import { verifyToken, requirePermission } from '@/lib/auth';
+import { requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
+import Product from '@/models/Product';
 
-let mainConnection: mongoose.Connection | null = null;
-
-async function getMainConnection() {
-  if (mainConnection && mainConnection.readyState === 1) {
-    return mainConnection;
-  }
-
-  const mongooseInstance = await connectDB();
-  if (!mongooseInstance) {
-    throw new Error('MONGODB_URI is not configured');
-  }
-  
-  mainConnection = mongooseInstance.connection;
-  return mainConnection;
-}
-
-// Product Schema (same as in src/models/Product.ts)
-const ProductSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  description: { type: String, required: true, trim: true },
-  descriptionHtml: { type: String },
-  price: { type: Number, required: true, min: 0 },
-  originalPrice: { type: Number, min: 0 },
-  image: { type: String, required: true },
-  images: [{ type: String }],
-  imageAltTexts: [{ type: String, trim: true }],
-  category: {
-    type: String,
-    enum: ['Men', 'Women', 'Office & Travel', 'Accessories', 'Gifting'],
-    default: 'Accessories'
-  },
-  brand: { type: String, trim: true },
-  rating: { type: Number, default: 0, min: 0, max: 5 },
-  reviewCount: { type: Number, default: 0, min: 0 },
-  inStock: { type: Boolean, default: true },
-  stockCount: { type: Number, default: 0, min: 0 },
-  tags: [{ type: String, trim: true }],
-  specifications: { type: Map, of: String },
-  sourceUrl: { type: String, index: true, sparse: true },
-  productType: { type: String },
-  status: {
-    type: String,
-    enum: ['draft', 'published', 'archived'],
-    default: 'draft',
-    index: true,
-  },
-  publishAt: { type: Date, default: null, index: true },
-  variants: [{
-    title: { type: String },
-    sku: { type: String },
-    price: { type: Number, min: 0 },
-    originalPrice: { type: Number, min: 0 },
-    available: { type: Boolean },
-    inventory: { type: Number, min: 0, required: false },
-  }],
-  isActive: { type: Boolean, default: true },
-  etsyExported: { type: Boolean, default: false, index: true },
-  etsyExportedAt: { type: Date, default: null },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}, {
-  timestamps: true
-});
-
-// POST /api/admin/products/by-ids-stage3 - Get STAGE3 products by array of IDs
+// POST /api/admin/products/by-ids-stage3 - Get products by array of IDs from main database
 export async function POST(request: NextRequest) {
   try {
-    const user = await requirePermission(PERMISSIONS.PRODUCT_VIEW)(request);
+    await requirePermission(PERMISSIONS.PRODUCT_VIEW)(request);
     
-    const conn = await getMainConnection();
-    const Product = conn.model('Product', ProductSchema);
+    // Ensure database connection
+    await connectDB();
 
     const body = await request.json();
     const { ids } = body;
@@ -107,9 +44,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('STAGE3 Products by IDs API error:', error);
+    console.error('Products by IDs API error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch STAGE3 products' },
+      { error: error.message || 'Failed to fetch products' },
       { status: 500 }
     );
   }

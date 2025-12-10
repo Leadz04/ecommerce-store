@@ -165,7 +165,12 @@ export default function CollectionPage() {
             <p className="text-gray-600 text-lg">No products found in this collection.</p>
           </div>
         ) : (
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div 
+            className="grid gap-6"
+            style={{
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+            }}
+          >
             {products.map((p: any) => (
               <ProductCard key={p._id} product={p} />
             ))}

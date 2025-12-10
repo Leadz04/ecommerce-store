@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Crop, ImageOff, Download, Loader2, Check, RotateCw } from 'lucide-react';
+import { X, Crop, ImageOff, Download, Loader2, Check, RotateCw, Paintbrush } from 'lucide-react';
 import clsx from 'clsx';
 import ReactCrop, { Crop as CropType, PixelCrop, makeAspectCrop, centerCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -33,6 +33,12 @@ export default function ImageEditor({
   const [bgColor, setBgColor] = useState('#ffffff');
   const [fineEdges, setFineEdges] = useState(false);
   const [bgPreset, setBgPreset] = useState<string | null>(null);
+  const [colorFillMode, setColorFillMode] = useState(false);
+  const [fillColor, setFillColor] = useState('#ff0000');
+  const [brushSize, setBrushSize] = useState(20);
+  const colorFillCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
   
   // Studio background presets
   const studioBackgrounds = [
@@ -56,6 +62,7 @@ export default function ImageEditor({
   
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   // Load image when component opens
   useEffect(() => {
@@ -87,32 +94,7 @@ export default function ImageEditor({
     }
   }, [isOpen, imageUrl]);
 
-  // Generate preview when crop or settings change
-  useEffect(() => {
-    if (originalImage && completedCrop && imgRef.current) {
-      generatePreview();
-    }
-  }, [completedCrop, removeBg, bgColor, fineEdges]);
-
-  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget;
-    const crop = centerCrop(
-      makeAspectCrop(
-        {
-          unit: '%',
-          width: 90,
-        },
-        aspectRatio || 1,
-        width,
-        height
-      ),
-      width,
-      height
-    );
-    setCrop(crop);
-  }, [aspectRatio]);
-
-  const generatePreview = async () => {
+  const generatePreview = useCallback(async () => {
     if (!imgRef.current || !completedCrop || !canvasRef.current) return;
 
     const image = imgRef.current;
@@ -147,6 +129,34 @@ export default function ImageEditor({
       crop.height * scaleY
     );
 
+    // Apply color fills if any
+    if (colorFillCanvasRef.current && colorFillMode) {
+      const fillCanvas = colorFillCanvasRef.current;
+      const fillCtx = fillCanvas.getContext('2d');
+      if (fillCtx) {
+        // The fill canvas is at natural image dimensions
+        // Draw the cropped portion of the fill canvas onto the main canvas
+        const fillCropX = cropX;
+        const fillCropY = cropY;
+        const fillCropWidth = crop.width * scaleX;
+        const fillCropHeight = crop.height * scaleY;
+        
+        // Draw the color fills on top of the image
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(
+          fillCanvas,
+          fillCropX,
+          fillCropY,
+          fillCropWidth,
+          fillCropHeight,
+          0,
+          0,
+          crop.width * scaleX,
+          crop.height * scaleY
+        );
+      }
+    }
+
     // Convert canvas to blob for preview
     canvas.toBlob((blob) => {
       if (blob) {
@@ -154,7 +164,32 @@ export default function ImageEditor({
         setPreviewUrl(url);
       }
     }, 'image/png');
-  };
+  }, [completedCrop, colorFillMode]);
+
+  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const crop = centerCrop(
+      makeAspectCrop(
+        {
+          unit: '%',
+          width: 90,
+        },
+        aspectRatio || 1,
+        width,
+        height
+      ),
+      width,
+      height
+    );
+    setCrop(crop);
+  }, [aspectRatio]);
+
+  // Generate preview when crop or settings change
+  useEffect(() => {
+    if (originalImage && completedCrop && imgRef.current) {
+      generatePreview();
+    }
+  }, [completedCrop, removeBg, bgColor, fineEdges, colorFillMode, generatePreview, originalImage]);
 
   const handleProcess = async () => {
     if (!imgRef.current || !completedCrop) {
@@ -166,6 +201,9 @@ export default function ImageEditor({
     setProcessingStage('Preparing image...');
 
     try {
+      // Regenerate preview to ensure color fills are included
+      await generatePreview();
+      
       // Use client-side processing (free, no paid APIs)
       const canvas = canvasRef.current;
       if (!canvas) throw new Error('Canvas not available');
@@ -227,6 +265,174 @@ export default function ImageEditor({
     }
   };
 
+  // Initialize color fill canvas when image loads
+  const initializeCanvases = useCallback(() => {
+    if (imgRef.current && colorFillCanvasRef.current && previewCanvasRef.current) {
+      const image = imgRef.current;
+      if (image.complete && image.naturalWidth > 0) {
+        const rect = image.getBoundingClientRect();
+        
+        // Set canvas internal dimensions to natural image size
+        colorFillCanvasRef.current.width = image.naturalWidth;
+        colorFillCanvasRef.current.height = image.naturalHeight;
+        previewCanvasRef.current.width = image.naturalWidth;
+        previewCanvasRef.current.height = image.naturalHeight;
+        
+        // Set canvas display size to match displayed image
+        colorFillCanvasRef.current.style.width = `${rect.width}px`;
+        colorFillCanvasRef.current.style.height = `${rect.height}px`;
+        previewCanvasRef.current.style.width = `${rect.width}px`;
+        previewCanvasRef.current.style.height = `${rect.height}px`;
+        
+        // Clear canvases
+        const fillCtx = colorFillCanvasRef.current.getContext('2d');
+        const previewCtx = previewCanvasRef.current.getContext('2d');
+        if (fillCtx) {
+          fillCtx.clearRect(0, 0, colorFillCanvasRef.current.width, colorFillCanvasRef.current.height);
+        }
+        if (previewCtx) {
+          previewCtx.clearRect(0, 0, previewCanvasRef.current.width, previewCanvasRef.current.height);
+        }
+      }
+    }
+  }, []);
+
+  // Initialize canvases when image loads or when color fill mode is enabled
+  useEffect(() => {
+    if (imgRef.current?.complete) {
+      initializeCanvases();
+    }
+  }, [originalImage, colorFillMode, initializeCanvases]);
+
+  // Also initialize when image loads
+  useEffect(() => {
+    const image = imgRef.current;
+    if (image) {
+      if (image.complete) {
+        initializeCanvases();
+      } else {
+        image.addEventListener('load', initializeCanvases);
+        return () => image.removeEventListener('load', initializeCanvases);
+      }
+    }
+  }, [initializeCanvases]);
+
+  // Draw preview circle on preview canvas
+  const drawPreview = useCallback((x: number, y: number) => {
+    if (!previewCanvasRef.current || !imgRef.current) return;
+    
+    const canvas = previewCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const image = imgRef.current;
+    const rect = image.getBoundingClientRect();
+    const scaleX = image.naturalWidth / rect.width;
+    const scaleY = image.naturalHeight / rect.height;
+    const brushSizeScaled = brushSize * scaleX;
+
+    // Clear and redraw
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = fillColor;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+  }, [fillColor, brushSize]);
+
+  // Handle mouse events for color fill
+  const handleImageMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!colorFillMode || !imgRef.current) return;
+
+    const image = imgRef.current;
+    const rect = image.getBoundingClientRect();
+    const scaleX = image.naturalWidth / rect.width;
+    const scaleY = image.naturalHeight / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    // Show preview
+    drawPreview(x, y);
+
+    // If dragging, apply color
+    if (isDrawingRef.current && colorFillCanvasRef.current) {
+      const canvas = colorFillCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const brushSizeScaled = brushSize * scaleX;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (completedCrop) {
+          generatePreview();
+        }
+      }
+    }
+  }, [colorFillMode, fillColor, brushSize, completedCrop, drawPreview, generatePreview]);
+
+  const handleImageMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!colorFillMode || !imgRef.current || !colorFillCanvasRef.current) return;
+    e.preventDefault();
+    
+    isDrawingRef.current = true;
+    
+    const image = imgRef.current;
+    const rect = image.getBoundingClientRect();
+    const scaleX = image.naturalWidth / rect.width;
+    const scaleY = image.naturalHeight / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    const canvas = colorFillCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const brushSizeScaled = brushSize * scaleX;
+
+    // Apply color at click position
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = fillColor;
+    ctx.beginPath();
+    ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (completedCrop) {
+      generatePreview();
+    }
+  }, [colorFillMode, fillColor, brushSize, completedCrop, generatePreview]);
+
+  const handleImageMouseUp = useCallback(() => {
+    isDrawingRef.current = false;
+  }, []);
+
+  const handleImageMouseLeave = useCallback(() => {
+    // Clear preview when mouse leaves
+    if (previewCanvasRef.current) {
+      const ctx = previewCanvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, previewCanvasRef.current.width, previewCanvasRef.current.height);
+      }
+    }
+    isDrawingRef.current = false;
+  }, []);
+
+  const clearColorFills = () => {
+    if (colorFillCanvasRef.current) {
+      const ctx = colorFillCanvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, colorFillCanvasRef.current.width, colorFillCanvasRef.current.height);
+        if (completedCrop) {
+          generatePreview();
+        }
+      }
+    }
+  };
+
   const handleClose = () => {
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -235,8 +441,15 @@ export default function ImageEditor({
     setCrop(undefined);
     setCompletedCrop(undefined);
     setRemoveBg(false);
+    setColorFillMode(false);
     setProcessing(false);
     setProcessingStage('');
+    if (colorFillCanvasRef.current) {
+      const ctx = colorFillCanvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, colorFillCanvasRef.current.width, colorFillCanvasRef.current.height);
+      }
+    }
     onClose();
   };
 
@@ -268,7 +481,15 @@ export default function ImageEditor({
                 </div>
                 
                 {originalImage && (
-                  <div className="relative">
+                  <div 
+                    ref={imageContainerRef}
+                    className="relative"
+                    onMouseMove={handleImageMouseMove}
+                    onMouseDown={handleImageMouseDown}
+                    onMouseUp={handleImageMouseUp}
+                    onMouseLeave={handleImageMouseLeave}
+                    style={{ cursor: colorFillMode ? 'crosshair' : 'default' }}
+                  >
                     <ReactCrop
                       crop={crop}
                       onChange={(_, percentCrop) => setCrop(percentCrop)}
@@ -276,15 +497,46 @@ export default function ImageEditor({
                       aspect={aspectRatio}
                       minWidth={100}
                       minHeight={100}
+                      disabled={colorFillMode}
                     >
-                      <img
-                        ref={imgRef}
-                        src={imageUrl}
-                        alt="Crop"
-                        style={{ maxWidth: '100%', maxHeight: '60vh' }}
-                        onLoad={onImageLoad}
-                        crossOrigin="anonymous"
-                      />
+                      <div className="relative">
+                        <img
+                          ref={imgRef}
+                          src={imageUrl}
+                          alt="Crop"
+                          style={{ maxWidth: '100%', maxHeight: '60vh', pointerEvents: colorFillMode ? 'none' : 'auto' }}
+                          onLoad={onImageLoad}
+                          crossOrigin="anonymous"
+                        />
+                        {colorFillMode && (
+                          <>
+                            <canvas
+                              ref={colorFillCanvasRef}
+                              className="absolute top-0 left-0 pointer-events-none"
+                              style={{ 
+                                width: '100%',
+                                height: '100%',
+                                maxWidth: '100%', 
+                                maxHeight: '60vh',
+                                mixBlendMode: 'normal',
+                                zIndex: 2
+                              }}
+                            />
+                            <canvas
+                              ref={previewCanvasRef}
+                              className="absolute top-0 left-0 pointer-events-none"
+                              style={{ 
+                                width: '100%',
+                                height: '100%',
+                                maxWidth: '100%', 
+                                maxHeight: '60vh',
+                                mixBlendMode: 'normal',
+                                zIndex: 3
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
                     </ReactCrop>
                   </div>
                 )}
@@ -332,6 +584,77 @@ export default function ImageEditor({
                   >
                     16:9
                   </button>
+                </div>
+              </div>
+
+              {/* Color Fill Tool */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Paintbrush className="w-5 h-5 text-gray-600" />
+                  <h3 className="font-semibold text-gray-900">Color Fill</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={colorFillMode}
+                      onChange={(e) => setColorFillMode(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">Enable color fill tool</span>
+                  </label>
+
+                  {colorFillMode && (
+                    <div className="pl-6 space-y-3 border-l-2 border-gray-200">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 block">Fill Color</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            value={fillColor}
+                            onChange={(e) => setFillColor(e.target.value)}
+                            className="w-12 h-8 rounded border border-gray-300 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={fillColor}
+                            onChange={(e) => setFillColor(e.target.value)}
+                            className="px-2 py-1 text-sm border border-gray-300 rounded w-24"
+                            placeholder="#ff0000"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 block">
+                          Brush Size: {brushSize}px
+                        </label>
+                        <input
+                          type="range"
+                          min="5"
+                          max="100"
+                          value={brushSize}
+                          onChange={(e) => setBrushSize(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={clearColorFills}
+                          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                        >
+                          Clear All Fills
+                        </button>
+                      </div>
+
+                      <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                        💡 <strong>Tip:</strong> Hover over the image to see a preview, then click to apply the color.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
