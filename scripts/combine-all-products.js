@@ -131,13 +131,13 @@ function normalizeTitle(title) {
  */
 function calculateDetailScore(product) {
   let score = 0;
-  
+
   // Basic fields
   if (product.name && product.name.trim().length > 0) score += 1;
   if (product.description && product.description.trim().length > 100) score += 2;
   if (product.description && product.description.trim().length > 500) score += 1;
   if (product.descriptionHtml && product.descriptionHtml.trim().length > 0) score += 2;
-  
+
   // Images
   if (product.images && Array.isArray(product.images) && product.images.length > 0) {
     score += product.images.length; // More images = more detailed
@@ -145,23 +145,23 @@ function calculateDetailScore(product) {
   if (product.imageAltTexts && Array.isArray(product.imageAltTexts) && product.imageAltTexts.length > 0) {
     score += product.imageAltTexts.length;
   }
-  
+
   // Specifications
   if (product.specifications) {
     const specCount = Object.keys(product.specifications).length;
     score += specCount * 2; // Specifications are valuable
   }
-  
+
   // Tags
   if (product.tags && Array.isArray(product.tags) && product.tags.length > 0) {
     score += product.tags.length;
   }
-  
+
   // Variants
   if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
     score += product.variants.length * 2;
   }
-  
+
   // Additional fields
   if (product.brand && product.brand.trim().length > 0) score += 1;
   if (product.category && product.category.trim().length > 0) score += 1;
@@ -170,11 +170,11 @@ function calculateDetailScore(product) {
   if (product.stockCount !== undefined && product.stockCount !== null) score += 1;
   if (product.rating > 0) score += 1;
   if (product.reviewCount > 0) score += 1;
-  
+
   // Status and metadata
   if (product.status && product.status !== 'draft') score += 1;
   if (product.publishAt) score += 1;
-  
+
   return score;
 }
 
@@ -185,12 +185,12 @@ function calculateDetailScore(product) {
 function mergeProducts(product1, product2) {
   const score1 = calculateDetailScore(product1);
   const score2 = calculateDetailScore(product2);
-  
+
   // Keep the one with higher detail score
   if (score2 > score1) {
     return product2;
   }
-  
+
   // If scores are equal, prefer the one from STAGE3 (target database)
   return product1;
 }
@@ -199,15 +199,10 @@ async function combineAllProducts() {
   try {
     // Get database URIs
     const MONGODB_URI = process.env.MONGODB_URI;
-    const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3;
+    // const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3; // Deprecated
 
     if (!MONGODB_URI) {
       console.error('❌ MONGODB_URI is not set in environment variables');
-      process.exit(1);
-    }
-
-    if (!MONGODB_URI_STAGE3) {
-      console.error('❌ MONGODB_URI_STAGE3 is not set in environment variables');
       process.exit(1);
     }
 
@@ -219,9 +214,9 @@ async function combineAllProducts() {
     const SourceProduct = sourceConn.model('Product', ProductSchema);
     console.log('✅ Connected to source database\n');
 
-    // Connect to target database (MONGODB_URI_STAGE3)
-    console.log('📦 Connecting to target database (MONGODB_URI_STAGE3)...');
-    const targetConn = await mongoose.createConnection(MONGODB_URI_STAGE3);
+    // Connect to target database (MONGODB_URI - same as source now)
+    console.log('📦 Connecting to target database (MONGODB_URI)...');
+    const targetConn = await mongoose.createConnection(MONGODB_URI);
     const TargetProduct = targetConn.model('Product', ProductSchema);
     console.log('✅ Connected to target database\n');
 
@@ -247,7 +242,7 @@ async function combineAllProducts() {
     // Build lookup maps for target products (for duplicate detection)
     const targetBySourceUrl = new Map();
     const targetByName = new Map();
-    
+
     for (const product of targetProducts) {
       if (product.sourceUrl) {
         targetBySourceUrl.set(product.sourceUrl, product);
@@ -273,14 +268,14 @@ async function combineAllProducts() {
     // Process each source product
     for (let i = 0; i < sourceProducts.length; i++) {
       const sourceProduct = sourceProducts[i];
-      
+
       try {
         const sourceName = sourceProduct.name || 'Untitled Product';
-        
+
         // Check for duplicates by sourceUrl first
         let existingProduct = null;
         let duplicateType = null;
-        
+
         if (sourceProduct.sourceUrl) {
           existingProduct = targetBySourceUrl.get(sourceProduct.sourceUrl);
           if (existingProduct) {
@@ -295,8 +290,8 @@ async function combineAllProducts() {
             const candidates = targetByName.get(normalizedName);
             if (candidates && candidates.length > 0) {
               // If multiple candidates, prefer one with same sourceUrl or brand
-              existingProduct = candidates.find(p => 
-                p.sourceUrl === sourceProduct.sourceUrl || 
+              existingProduct = candidates.find(p =>
+                p.sourceUrl === sourceProduct.sourceUrl ||
                 (p.brand && sourceProduct.brand && p.brand.toLowerCase() === sourceProduct.brand.toLowerCase())
               ) || candidates[0];
               duplicateType = 'name';
@@ -308,7 +303,7 @@ async function combineAllProducts() {
           // Duplicate found - compare and keep the more detailed one
           const sourceScore = calculateDetailScore(sourceProduct);
           const existingScore = calculateDetailScore(existingProduct);
-          
+
           if (sourceScore > existingScore) {
             // Source product is more detailed - update the target
             const productData = {
@@ -317,10 +312,10 @@ async function combineAllProducts() {
               createdAt: existingProduct.createdAt, // Preserve original creation date
               updatedAt: new Date() // Update timestamp
             };
-            
+
             await TargetProduct.findByIdAndUpdate(existingProduct._id, productData, { runValidators: true });
             updatedCount++;
-            
+
             duplicateDetails.push({
               name: sourceName.substring(0, 50),
               type: duplicateType,
@@ -328,7 +323,7 @@ async function combineAllProducts() {
               sourceScore,
               existingScore
             });
-            
+
             console.log(`🔄 [${i + 1}/${sourceProducts.length}] Updated (more detailed): "${sourceName.substring(0, 50)}..." (${duplicateType} match, scores: ${sourceScore} > ${existingScore})`);
           } else {
             // Existing product is more detailed or equal - skip

@@ -17,12 +17,47 @@ async function getMainConnection() {
     throw new Error('MONGODB_URI is not configured');
   }
 
-  // Ensure connection is ready
-  if (mongooseInstance.connection.readyState !== 1) {
-    throw new Error('Database connection is not ready');
+  const connection = mongooseInstance.connection;
+
+  // Wait for connection to be ready if it's connecting (state 2) or disconnected (state 0)
+  if (connection.readyState === 0 || connection.readyState === 2) {
+    // Wait for the connection to be established
+    await new Promise<void>((resolve, reject) => {
+      // Double-check state after Promise creation (handles race condition)
+      if (connection.readyState === 1) {
+        resolve();
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        connection.removeListener('connected', onConnected);
+        connection.removeListener('error', onError);
+        reject(new Error('Database connection timeout - connection not established within 10 seconds'));
+      }, 10000);
+
+      const onConnected = () => {
+        clearTimeout(timeout);
+        connection.removeListener('error', onError);
+        resolve();
+      };
+
+      const onError = (err: Error) => {
+        clearTimeout(timeout);
+        connection.removeListener('connected', onConnected);
+        reject(err);
+      };
+
+      connection.once('connected', onConnected);
+      connection.once('error', onError);
+    });
   }
 
-  mainConnection = mongooseInstance.connection;
+  // Final check - ensure connection is ready
+  if (connection.readyState !== 1) {
+    throw new Error(`Database connection is not ready. State: ${connection.readyState} (0=disconnected, 1=connected, 2=connecting, 3=disconnecting)`);
+  }
+
+  mainConnection = connection;
   return mainConnection;
 }
 

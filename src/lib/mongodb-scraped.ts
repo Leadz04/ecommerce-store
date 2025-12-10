@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 
-const MONGODB_SCRAPED_URI = process.env.MONGODB_SCRAPED_URI || process.env.MONGODB_URI || '';
+const MONGODB_URI = process.env.MONGODB_URI || '';
 
-if (!MONGODB_SCRAPED_URI) {
-  throw new Error('Please define the MONGODB_SCRAPED_URI (or MONGODB_URI) env var in .env.local');
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI env var in .env.local');
 }
 
 interface MongooseCache {
@@ -27,7 +27,7 @@ async function connectScrapedDB() {
 
   if (!cached.promise) {
     const opts = { bufferCommands: false } as const;
-    cached.promise = mongoose.createConnection(MONGODB_SCRAPED_URI, opts as any).asPromise() as any;
+    cached.promise = mongoose.createConnection(MONGODB_URI, opts as any).asPromise() as any;
   }
 
   try {

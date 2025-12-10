@@ -10,16 +10,16 @@ require('dotenv').config({
 });
 require('dotenv').config(); // fallback to .env
 
-const MONGODB_URI_STAGE3 = process.env.MONGODB_URI_STAGE3;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!MONGODB_URI_STAGE3) {
-  console.error('Error: MONGODB_URI_STAGE3 is not set.');
-  console.error('Please ensure MONGODB_URI_STAGE3 is set in your .env.local file.');
+if (!MONGODB_URI) {
+  console.error('Error: MONGODB_URI is not set.');
+  console.error('Please ensure MONGODB_URI is set in your .env.local file.');
   process.exit(1);
 }
 
-console.log('Connecting to MongoDB Stage3 database...');
-console.log('URI prefix:', MONGODB_URI_STAGE3.substring(0, 30) + '...');
+console.log('Connecting to MongoDB Main database...');
+console.log('URI prefix:', MONGODB_URI.substring(0, 30) + '...');
 
 /**
  * Extract database name from MongoDB URI
@@ -41,14 +41,14 @@ async function run() {
   let conn;
   let db;
   try {
-    // Connect to MongoDB Stage3 database
-    conn = await mongoose.createConnection(MONGODB_URI_STAGE3);
-    
-    // Get the database name from URI and ensure we're explicitly using Stage3 database
-    const dbName = extractDatabaseName(MONGODB_URI_STAGE3);
+    // Connect to MongoDB Main database
+    conn = await mongoose.createConnection(MONGODB_URI);
+
+    // Get the database name from URI
+    const dbName = extractDatabaseName(MONGODB_URI);
     db = dbName ? conn.useDb(dbName, { useCache: true }) : conn;
-    
-    console.log(`✅ Connected successfully to Stage3 database: ${db.name}`);
+
+    console.log(`✅ Connected successfully to Main database: ${db.name}`);
   } catch (error) {
     console.error('❌ Connection failed:', error.message);
     if (error.message.includes('ENOTFOUND')) {
@@ -59,7 +59,7 @@ async function run() {
     }
     throw error;
   }
-  
+
   // Create Product model using the Stage3 database connection
   const Product = db.model(
     'Product',
@@ -73,27 +73,27 @@ async function run() {
   );
 
   console.log('Connected. Analyzing products...');
-  
+
   // Check current state of products
   const totalProducts = await Product.countDocuments({});
-  const alreadyActiveAndPublished = await Product.countDocuments({ 
-    isActive: true, 
-    status: 'published' 
+  const alreadyActiveAndPublished = await Product.countDocuments({
+    isActive: true,
+    status: 'published'
   });
   const inactiveProducts = await Product.countDocuments({ isActive: false });
-  const notPublishedProducts = await Product.countDocuments({ 
+  const notPublishedProducts = await Product.countDocuments({
     $or: [
       { status: { $ne: 'published' } },
       { status: { $exists: false } }
     ]
   });
-  
+
   console.log(`\n📊 Current State:`);
   console.log(`   Total products: ${totalProducts}`);
   console.log(`   Already active & published: ${alreadyActiveAndPublished}`);
   console.log(`   Inactive products: ${inactiveProducts}`);
   console.log(`   Not published products: ${notPublishedProducts}`);
-  
+
   console.log('\n🔄 Activating and publishing all products...');
   const result = await Product.updateMany(
     {},
@@ -103,12 +103,12 @@ async function run() {
   console.log(`\n✅ Update Results:`);
   console.log(`   Matched: ${result.matchedCount}`);
   console.log(`   Modified: ${result.modifiedCount}`);
-  
+
   const notModified = result.matchedCount - result.modifiedCount;
   if (notModified > 0) {
     console.log(`   Not modified: ${notModified} (already had isActive=true and status='published')`);
   }
-  
+
   await conn.close();
   console.log('\n✅ Done.');
 }
