@@ -1,0 +1,70 @@
+CATEGORY ANALYSIS REPORT
+==================================================
+
+Current "Mapped" Categories Distribution:
+- Men: 27526
+- Accessories: 8829
+- Women: 3432
+
+Original "ProductType" Distribution (Top 50):
+- Men: 5537
+- Boys: 3839
+- Girls: 2428
+- Women: 2126
+- Heels: 1034
+- Moccasins: 945
+- Flats: 852
+- Men Shirts: 793
+- Block Heels: 773
+- Men Graphic Tees: 592
+- Accessories: 531
+- Formal: 520
+- Basic: 464
+- Trainers: 401
+- Courts: 398
+- Men Polo Shirts: 387
+- Tees: 386
+- Graphic: 330
+- Men Caps: 318
+- Ballerinas: 314
+- Casual Bags: 306
+- Women Footwear: 295
+- Women Apparel: 293
+- Comfort Slippers: 290
+- Men Denim Jeans: 283
+- Men Jogger Pants: 276
+- Men Jackets: 275
+- Comfort Sandals: 259
+- Men Socks: 246
+- BOTTOM: 243
+- PANTS: 238
+- KNIT: 236
+- Slim Fit: 236
+- Cut & Sew: 227
+- Casual Slippers: 226
+- SWEATER: 221
+- Wedges: 214
+- Solid: 214
+- Casual Sandals: 201
+- Men Apparel: 197
+- Woman Shirts: 192
+- Men Basic Tees: 186
+- Men Chino Pants: 184
+- Track Pants: 182
+- Casual Khussa: 177
+- WOVEN: 174
+- Shirts: 171
+- UPPER: 163
+- POLO: 160
+- Men Hoodies: 159
+
+Categories per Brand:
+- 999pk: Accessories, Women
+- almas: Men, Accessories
+- beoneshopone: Men, Women, Accessories
+- breakout: Men, Women, Accessories
+- engine: Men, Accessories, Women
+- furorjeans: Men, Accessories
+- hustlenholla: Men
+- lamaretail: Accessories
+- unze: Men, Accessories, Women

@@ -10,6 +10,7 @@ import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton, CategoryDetailSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
+import { useAuthStore } from '@/store/authStore';
 import FilterPanel from './FilterPanel';
 import CategoryReviews from '@/components/CategoryReviews';
 import CategoryFAQ from '@/components/CategoryFAQ';
@@ -279,7 +280,8 @@ const ProductsGrid = memo(({
   clearSearch,
   clearAllFilters,
   handleLoadMore,
-  updateURL
+  updateURL,
+  isAdminUser
 }: {
   products: any[];
   displayedProducts: any[];
@@ -296,6 +298,7 @@ const ProductsGrid = memo(({
   clearAllFilters: () => void;
   handleLoadMore: () => void;
   updateURL: (newParams: Record<string, string>) => void;
+  isAdminUser: boolean;
 }) => {
   const hasActiveFilters = (
     (filters?.inStock === true) ||
@@ -309,15 +312,17 @@ const ProductsGrid = memo(({
   );
   return (
     <div className="flex-1">
-      <div className="mb-4">
-        <p className="text-gray-600">
-          {isLoading ? (
-            <span className="animate-pulse">Loading products...</span>
-          ) : (
-            `Showing ${displayedProducts.length} of ${pagination.total} products`
-          )}
-        </p>
-      </div>
+      {isAdminUser && (
+        <div className="mb-4">
+          <p className="text-gray-600">
+            {isLoading ? (
+              <span className="animate-pulse">Loading products...</span>
+            ) : (
+              `Showing ${displayedProducts.length} of ${pagination.total} products`
+            )}
+          </p>
+        </div>
+      )}
 
 
       {/* Error State */}
@@ -431,8 +436,8 @@ const ProductsGrid = memo(({
                 )}
               </div>
 
-              {/* Load More Button - show when there are more products available */}
-              {displayedProducts.length < pagination.total && (
+              {/* Load More Button - show only when more server pages remain */}
+              {pagination.page < pagination.pages && displayedProducts.length < pagination.total && (
                 <div className="flex justify-center mt-8">
                   <button
                     onClick={handleLoadMore}
@@ -483,6 +488,8 @@ export default function CategoryPage() {
     setFilters,
     setPagination
   } = useProductStore();
+  const { user } = useAuthStore();
+  const isAdminUser = !!user?.role?.name && user.role.name.toUpperCase().includes('ADMIN');
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false); // Start hidden, toggle with button
@@ -831,14 +838,14 @@ export default function CategoryPage() {
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore || isLoading) return;
 
-    // Calculate the next page based on currently displayed products
-    // If we have 25 products displayed with limit 24, we're on page 1, so next is page 2
     const limit = 24;
-    const calculatedCurrentPage = Math.ceil(displayedProducts.length / limit) || 1;
-    const nextPage = calculatedCurrentPage + 1;
+    // Use API pagination page to avoid drifting when deduplication trims results
+    const currentPageFromApi = pagination?.page || currentPage || 1;
+    const totalPages = pagination?.pages || Math.ceil((pagination?.total || 0) / limit) || 1;
+    const nextPage = currentPageFromApi + 1;
 
     // Don't load if we've already loaded all products
-    if (displayedProducts.length >= pagination.total) {
+    if (currentPageFromApi >= totalPages || displayedProducts.length >= pagination.total) {
       console.log('[Load More] All products already loaded:', { displayed: displayedProducts.length, total: pagination.total });
       return;
     }
@@ -846,7 +853,7 @@ export default function CategoryPage() {
     console.log('[Load More] Loading page:', { 
       displayed: displayedProducts.length, 
       total: pagination.total,
-      calculatedPage: calculatedCurrentPage,
+      currentPage: currentPageFromApi,
       nextPage 
     });
 
@@ -1223,6 +1230,7 @@ export default function CategoryPage() {
               clearAllFilters={clearAllFilters}
               handleLoadMore={handleLoadMore}
               updateURL={updateURL}
+              isAdminUser={isAdminUser}
             />
           </div>
         </div>

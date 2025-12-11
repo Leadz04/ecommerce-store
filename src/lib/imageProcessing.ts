@@ -381,3 +381,497 @@ export function generateCloudinaryTransformUrl(
   // For non-Cloudinary URLs, we'd need to upload first
   return imageUrl;
 }
+
+/**
+ * Color detection result
+ */
+export interface ColorResult {
+  hex: string;
+  rgb: { r: number; g: number; b: number };
+  rgba: { r: number; g: number; b: number; a: number };
+  isLight: boolean;
+  isDark: boolean;
+  name?: string; // Approximate color name
+}
+
+/**
+ * Background color detection options
+ */
+export interface BackgroundColorOptions {
+  /**
+   * Method to detect background color
+   * - 'edges': Sample pixels from edges/corners (fast, good for solid backgrounds)
+   * - 'corners': Sample only corner pixels (fastest)
+   * - 'dominant': Find most common color in entire image (slower, more accurate)
+   * - 'smart': Try edges first, fallback to dominant if edges are too varied
+   */
+  method?: 'edges' | 'corners' | 'dominant' | 'smart';
+  /**
+   * Edge sampling width in pixels (for 'edges' method)
+   */
+  edgeWidth?: number;
+  /**
+   * Number of color clusters to consider (for 'dominant' method)
+   */
+  colorTolerance?: number;
+}
+
+/**
+ * Convert RGB to hex
+ */
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+/**
+ * Calculate luminance to determine if color is light or dark
+ */
+function getLuminance(r: number, g: number, b: number): number {
+  // Relative luminance formula
+  const [rs, gs, bs] = [r, g, b].map(val => {
+    val = val / 255;
+    return val <= 0.03928 ? val / 12.92 : Math.pow((val + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+}
+
+/**
+ * Get approximate color name from RGB
+ */
+function getColorName(r: number, g: number, b: number): string {
+  const colors: Array<{ name: string; rgb: [number, number, number] }> = [
+    { name: 'White', rgb: [255, 255, 255] },
+    { name: 'Black', rgb: [0, 0, 0] },
+    { name: 'Red', rgb: [255, 0, 0] },
+    { name: 'Green', rgb: [0, 128, 0] },
+    { name: 'Blue', rgb: [0, 0, 255] },
+    { name: 'Yellow', rgb: [255, 255, 0] },
+    { name: 'Orange', rgb: [255, 165, 0] },
+    { name: 'Purple', rgb: [128, 0, 128] },
+    { name: 'Pink', rgb: [255, 192, 203] },
+    { name: 'Brown', rgb: [165, 42, 42] },
+    { name: 'Gray', rgb: [128, 128, 128] },
+    { name: 'Cream', rgb: [255, 253, 208] },
+    { name: 'Beige', rgb: [245, 245, 220] },
+  ];
+
+  let minDistance = Infinity;
+  let closestColor = 'Unknown';
+
+  for (const color of colors) {
+    const distance = Math.sqrt(
+      Math.pow(r - color.rgb[0], 2) +
+      Math.pow(g - color.rgb[1], 2) +
+      Math.pow(b - color.rgb[2], 2)
+    );
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestColor = color.name;
+    }
+  }
+
+  return closestColor;
+}
+
+/**
+ * Sample pixels from image edges
+ */
+function sampleEdgePixels(
+  imageData: ImageData,
+  width: number,
+  height: number,
+  edgeWidth: number = 10
+): Array<{ r: number; g: number; b: number; a: number }> {
+  const pixels: Array<{ r: number; g: number; b: number; a: number }> = [];
+  const data = imageData.data;
+
+  // Sample top edge
+  for (let y = 0; y < Math.min(edgeWidth, height); y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Sample bottom edge
+  for (let y = Math.max(0, height - edgeWidth); y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Sample left edge
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < Math.min(edgeWidth, width); x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Sample right edge
+  for (let y = 0; y < height; y++) {
+    for (let x = Math.max(0, width - edgeWidth); x < width; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  return pixels;
+}
+
+/**
+ * Sample pixels from corners only
+ */
+function sampleCornerPixels(
+  imageData: ImageData,
+  width: number,
+  height: number,
+  cornerSize: number = 20
+): Array<{ r: number; g: number; b: number; a: number }> {
+  const pixels: Array<{ r: number; g: number; b: number; a: number }> = [];
+  const data = imageData.data;
+  const size = Math.min(cornerSize, Math.min(width, height) / 2);
+
+  // Top-left corner
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Top-right corner
+  for (let y = 0; y < size; y++) {
+    for (let x = Math.max(0, width - size); x < width; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Bottom-left corner
+  for (let y = Math.max(0, height - size); y < height; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  // Bottom-right corner
+  for (let y = Math.max(0, height - size); y < height; y++) {
+    for (let x = Math.max(0, width - size); x < width; x++) {
+      const idx = (y * width + x) * 4;
+      pixels.push({
+        r: data[idx],
+        g: data[idx + 1],
+        b: data[idx + 2],
+        a: data[idx + 3],
+      });
+    }
+  }
+
+  return pixels;
+}
+
+/**
+ * Find dominant color from pixel array using simple averaging
+ */
+function getAverageColor(
+  pixels: Array<{ r: number; g: number; b: number; a: number }>
+): { r: number; g: number; b: number; a: number } {
+  if (pixels.length === 0) {
+    return { r: 255, g: 255, b: 255, a: 255 };
+  }
+
+  let r = 0, g = 0, b = 0, a = 0;
+  const count = pixels.length;
+
+  for (const pixel of pixels) {
+    r += pixel.r;
+    g += pixel.g;
+    b += pixel.b;
+    a += pixel.a;
+  }
+
+  return {
+    r: Math.round(r / count),
+    g: Math.round(g / count),
+    b: Math.round(b / count),
+    a: Math.round(a / count),
+  };
+}
+
+/**
+ * Find the most common color cluster (better for background detection)
+ * Groups similar colors together and finds the most frequent cluster
+ */
+function getDominantColorCluster(
+  pixels: Array<{ r: number; g: number; b: number; a: number }>,
+  tolerance: number = 30
+): { r: number; g: number; b: number; a: number } {
+  if (pixels.length === 0) {
+    return { r: 255, g: 255, b: 255, a: 255 };
+  }
+
+  // Group pixels into color clusters
+  const clusters: Array<{ 
+    color: { r: number; g: number; b: number; a: number }; 
+    count: number;
+    pixels: Array<{ r: number; g: number; b: number; a: number }>;
+  }> = [];
+
+  for (const pixel of pixels) {
+    // Skip transparent or very transparent pixels
+    if (pixel.a < 128) continue;
+
+    // Find existing cluster that this pixel belongs to
+    let foundCluster = false;
+    for (const cluster of clusters) {
+      const distance = Math.sqrt(
+        Math.pow(pixel.r - cluster.color.r, 2) +
+        Math.pow(pixel.g - cluster.color.g, 2) +
+        Math.pow(pixel.b - cluster.color.b, 2)
+      );
+
+      if (distance <= tolerance) {
+        // Add to existing cluster
+        cluster.pixels.push(pixel);
+        cluster.count++;
+        // Update cluster center (running average)
+        cluster.color.r = Math.round(
+          (cluster.color.r * (cluster.count - 1) + pixel.r) / cluster.count
+        );
+        cluster.color.g = Math.round(
+          (cluster.color.g * (cluster.count - 1) + pixel.g) / cluster.count
+        );
+        cluster.color.b = Math.round(
+          (cluster.color.b * (cluster.count - 1) + pixel.b) / cluster.count
+        );
+        foundCluster = true;
+        break;
+      }
+    }
+
+    // Create new cluster if no match found
+    if (!foundCluster) {
+      clusters.push({
+        color: { ...pixel },
+        count: 1,
+        pixels: [pixel]
+      });
+    }
+  }
+
+  if (clusters.length === 0) {
+    return getAverageColor(pixels);
+  }
+
+  // Find the cluster with the most pixels
+  const dominantCluster = clusters.reduce((max, cluster) => 
+    cluster.count > max.count ? cluster : max
+  );
+
+  return dominantCluster.color;
+}
+
+/**
+ * Get all pixels from image (for dominant color method)
+ */
+function getAllPixels(imageData: ImageData): Array<{ r: number; g: number; b: number; a: number }> {
+  const pixels: Array<{ r: number; g: number; b: number; a: number }> = [];
+  const data = imageData.data;
+
+  // Sample every Nth pixel for performance (e.g., every 10th pixel)
+  const step = 10;
+  for (let i = 0; i < data.length; i += 4 * step) {
+    pixels.push({
+      r: data[i],
+      g: data[i + 1],
+      b: data[i + 2],
+      a: data[i + 3],
+    });
+  }
+
+  return pixels;
+}
+
+/**
+ * Detect background color of an image using free client-side code
+ * 
+ * @param imageSource - Image URL, File, or Blob
+ * @param options - Detection options
+ * @returns Color result with hex, rgb, and other properties
+ * 
+ * @example
+ * ```typescript
+ * const color = await detectBackgroundColor('https://example.com/image.jpg');
+ * console.log(color.hex); // '#ffffff'
+ * console.log(color.rgb); // { r: 255, g: 255, b: 255 }
+ * ```
+ */
+export async function detectBackgroundColor(
+  imageSource: File | Blob | string,
+  options: BackgroundColorOptions = {}
+): Promise<ColorResult> {
+  const {
+    method = 'smart',
+    edgeWidth = 10,
+  } = options;
+
+  // Load image
+  let image: HTMLImageElement;
+  if (typeof imageSource === 'string') {
+    image = await loadImage(imageSource);
+  } else {
+    const url = URL.createObjectURL(imageSource);
+    image = await loadImage(url);
+    URL.revokeObjectURL(url);
+  }
+
+  // Create canvas and draw image
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
+
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  let pixels: Array<{ r: number; g: number; b: number; a: number }>;
+  let avgColor: { r: number; g: number; b: number; a: number };
+
+  // Choose detection method
+  if (method === 'corners') {
+    pixels = sampleCornerPixels(imageData, canvas.width, canvas.height, 30);
+    // Use clustering for corners to find most common background color
+    avgColor = getDominantColorCluster(pixels, 25);
+  } else if (method === 'edges') {
+    pixels = sampleEdgePixels(imageData, canvas.width, canvas.height, edgeWidth);
+    // Use clustering for edges
+    avgColor = getDominantColorCluster(pixels, 30);
+  } else if (method === 'dominant') {
+    pixels = getAllPixels(imageData);
+    // Use clustering for dominant color detection
+    avgColor = getDominantColorCluster(pixels, 40);
+  } else {
+    // 'smart' method: try corners first (most likely to be background)
+    // then check consistency, fallback to edges or dominant if needed
+    pixels = sampleCornerPixels(imageData, canvas.width, canvas.height, 30);
+    
+    if (pixels.length > 0) {
+      // Use clustering to find most common color in corners
+      const cornerColor = getDominantColorCluster(pixels, 25);
+      
+      // Check if corners are consistent (low variance)
+      let variance = 0;
+      let matchingPixels = 0;
+      for (const pixel of pixels) {
+        const distance = Math.sqrt(
+          Math.pow(pixel.r - cornerColor.r, 2) +
+          Math.pow(pixel.g - cornerColor.g, 2) +
+          Math.pow(pixel.b - cornerColor.b, 2)
+        );
+        variance += distance;
+        if (distance <= 30) {
+          matchingPixels++;
+        }
+      }
+      variance = variance / pixels.length;
+      const consistency = matchingPixels / pixels.length;
+
+      // If corners are consistent (60%+ match), use corner color
+      // Otherwise try edges, then fallback to dominant
+      if (consistency >= 0.6 && variance < 50) {
+        avgColor = cornerColor;
+      } else {
+        // Try edges with clustering
+        pixels = sampleEdgePixels(imageData, canvas.width, canvas.height, edgeWidth);
+        const edgeColor = getDominantColorCluster(pixels, 30);
+        
+        // Check edge consistency
+        let edgeVariance = 0;
+        let edgeMatching = 0;
+        for (const pixel of pixels) {
+          const distance = Math.sqrt(
+            Math.pow(pixel.r - edgeColor.r, 2) +
+            Math.pow(pixel.g - edgeColor.g, 2) +
+            Math.pow(pixel.b - edgeColor.b, 2)
+          );
+          edgeVariance += distance;
+          if (distance <= 35) {
+            edgeMatching++;
+          }
+        }
+        edgeVariance = edgeVariance / pixels.length;
+        const edgeConsistency = edgeMatching / pixels.length;
+
+        if (edgeConsistency >= 0.5 && edgeVariance < 60) {
+          avgColor = edgeColor;
+        } else {
+          // Fallback to dominant color from entire image
+          pixels = getAllPixels(imageData);
+          avgColor = getDominantColorCluster(pixels, 40);
+        }
+      }
+    } else {
+      // Fallback if no pixels sampled
+      pixels = getAllPixels(imageData);
+      avgColor = getDominantColorCluster(pixels, 40);
+    }
+  }
+
+  const { r, g, b, a } = avgColor;
+  const luminance = getLuminance(r, g, b);
+  const isLight = luminance > 0.5;
+  const isDark = luminance < 0.3;
+
+  return {
+    hex: rgbToHex(r, g, b),
+    rgb: { r, g, b },
+    rgba: { r, g, b, a },
+    isLight,
+    isDark,
+    name: getColorName(r, g, b),
+  };
+}

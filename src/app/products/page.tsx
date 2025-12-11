@@ -10,6 +10,7 @@ import ProductCard from '@/components/ProductCard';
 import { ProductCardSkeleton } from '@/components/LoadingSkeleton';
 import SelectField from '@/components/SelectField';
 import { useProductStore } from '@/store/productStore';
+import { useAuthStore } from '@/store/authStore';
 
 // Default limit for products per page
 const DEFAULT_PRODUCTS_LIMIT = 24;
@@ -26,6 +27,8 @@ export default function ProductsPage() {
     fetchProducts,
     setFilters
   } = useProductStore();
+  const { user } = useAuthStore();
+  const isAdminUser = !!user?.role?.name && user.role.name.toUpperCase().includes('ADMIN');
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -211,13 +214,14 @@ export default function ProductsPage() {
   const handleLoadMore = async () => {
     if (isLoadingMore || isLoading) return;
 
-    // Calculate the next page based on currently displayed products
     const limit = getCurrentLimit();
-    const calculatedCurrentPage = Math.ceil(displayedProducts.length / limit) || 1;
-    const nextPage = calculatedCurrentPage + 1;
+    // Prefer API-provided pagination page to avoid drift when dedup trims results
+    const currentPageFromApi = pagination?.page || currentPage || 1;
+    const totalPages = pagination?.pages || Math.ceil((pagination?.total || 0) / limit) || 1;
+    const nextPage = currentPageFromApi + 1;
 
     // Don't load if we've already loaded all products
-    if (displayedProducts.length >= pagination.total) {
+    if (currentPageFromApi >= totalPages || displayedProducts.length >= pagination.total) {
       return;
     }
 
@@ -1397,11 +1401,13 @@ export default function ProductsPage() {
           <div className="flex flex-col gap-8">
             {/* Products Grid */}
             <div className="flex-1">
-              <div className="mb-6 sm:mb-8">
-                <p className="text-base sm:text-lg font-semibold text-gray-900">
-                  Showing <span className="text-blue-600">{displayedProducts.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
-                </p>
-              </div>
+              {isAdminUser && (
+                <div className="mb-6 sm:mb-8">
+                  <p className="text-base sm:text-lg font-semibold text-gray-900">
+                    Showing <span className="text-blue-600">{displayedProducts.length}</span> of <span className="text-gray-700">{pagination.total}</span> products
+                  </p>
+                </div>
+              )}
 
               {/* Loading State - Show skeleton when loading with no products displayed */}
               {isLoading && displayedProducts.length === 0 && (
@@ -1502,8 +1508,8 @@ export default function ProductsPage() {
                     )}
                   </div>
 
-                  {/* Load More Button - Show when more products available */}
-                  {displayedProducts.length < pagination.total && (
+          {/* Load More Button - Show only when more server pages remain */}
+          {pagination.page < pagination.pages && displayedProducts.length < pagination.total && (
                     <div className="flex justify-center mt-8">
                       <button
                         onClick={handleLoadMore}

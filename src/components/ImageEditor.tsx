@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Crop, ImageOff, Download, Loader2, Check, RotateCw, Paintbrush } from 'lucide-react';
+import { X, Crop, ImageOff, Download, Loader2, Check, RotateCw, Paintbrush, Eye } from 'lucide-react';
 import clsx from 'clsx';
 import ReactCrop, { Crop as CropType, PixelCrop, makeAspectCrop, centerCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { processImageClientSide, generateCloudinaryTransformUrl } from '@/lib/imageProcessing';
+import { processImageClientSide, generateCloudinaryTransformUrl, detectBackgroundColor } from '@/lib/imageProcessing';
 import toast from 'react-hot-toast';
 
 interface ImageEditorProps {
@@ -58,6 +58,8 @@ export default function ImageEditor({
   const [processing, setProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [detectingColor, setDetectingColor] = useState(false);
+  const [detectedColor, setDetectedColor] = useState<string | null>(null);
   // Client-side processing only (free, no paid APIs)
   
   const imgRef = useRef<HTMLImageElement>(null);
@@ -317,7 +319,7 @@ export default function ImageEditor({
     }
   }, [initializeCanvases]);
 
-  // Draw preview circle on preview canvas
+  // Draw preview square on preview canvas
   const drawPreview = useCallback((x: number, y: number) => {
     if (!previewCanvasRef.current || !imgRef.current) return;
     
@@ -336,9 +338,8 @@ export default function ImageEditor({
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = fillColor;
     ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw square centered at (x, y)
+    ctx.fillRect(x - brushSizeScaled / 2, y - brushSizeScaled / 2, brushSizeScaled, brushSizeScaled);
     ctx.globalAlpha = 1.0;
   }, [fillColor, brushSize]);
 
@@ -364,9 +365,8 @@ export default function ImageEditor({
         const brushSizeScaled = brushSize * scaleX;
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = fillColor;
-        ctx.beginPath();
-        ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
-        ctx.fill();
+        // Draw square centered at (x, y)
+        ctx.fillRect(x - brushSizeScaled / 2, y - brushSizeScaled / 2, brushSizeScaled, brushSizeScaled);
         
         if (completedCrop) {
           generatePreview();
@@ -394,12 +394,10 @@ export default function ImageEditor({
 
     const brushSizeScaled = brushSize * scaleX;
 
-    // Apply color at click position
+    // Apply color at click position - draw square centered at (x, y)
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = fillColor;
-    ctx.beginPath();
-    ctx.arc(x, y, brushSizeScaled / 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(x - brushSizeScaled / 2, y - brushSizeScaled / 2, brushSizeScaled, brushSizeScaled);
     
     if (completedCrop) {
       generatePreview();
@@ -444,6 +442,7 @@ export default function ImageEditor({
     setColorFillMode(false);
     setProcessing(false);
     setProcessingStage('');
+    setDetectedColor(null);
     if (colorFillCanvasRef.current) {
       const ctx = colorFillCanvasRef.current.getContext('2d');
       if (ctx) {
@@ -678,6 +677,131 @@ export default function ImageEditor({
 
                   {removeBg && (
                     <div className="pl-6 space-y-3 border-l-2 border-gray-200">
+                      {/* Auto-detect Background Color */}
+                      <div className="space-y-2">
+                        <div className="flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!imageUrl) {
+                                toast.error('No image loaded');
+                                return;
+                              }
+                              setDetectingColor(true);
+                              try {
+                                // Try corners first (most reliable for background)
+                                const color = await detectBackgroundColor(imageUrl, { method: 'corners' });
+                                setBgColor(color.hex);
+                                setDetectedColor(color.hex);
+                                setBgPreset(null);
+                                toast.success(`Detected: ${color.hex} (${color.name})`);
+                              } catch (error: any) {
+                                console.error('Color detection error:', error);
+                                toast.error(error.message || 'Failed to detect background color');
+                              } finally {
+                                setDetectingColor(false);
+                              }
+                            }}
+                            disabled={detectingColor || !imageUrl}
+                            className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Eye className={`w-4 h-4 ${detectingColor ? 'animate-spin' : ''}`} />
+                            <span>{detectingColor ? 'Detecting...' : 'Auto-detect (Corners)'}</span>
+                          </button>
+                          
+                          {/* Alternative detection methods */}
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!imageUrl) return;
+                                setDetectingColor(true);
+                                try {
+                                  const color = await detectBackgroundColor(imageUrl, { method: 'edges' });
+                                  setBgColor(color.hex);
+                                  setDetectedColor(color.hex);
+                                  setBgPreset(null);
+                                  toast.success(`Detected: ${color.hex} (${color.name})`);
+                                } catch (error: any) {
+                                  toast.error('Detection failed');
+                                } finally {
+                                  setDetectingColor(false);
+                                }
+                              }}
+                              disabled={detectingColor || !imageUrl}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            >
+                              Try Edges
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!imageUrl) return;
+                                setDetectingColor(true);
+                                try {
+                                  const color = await detectBackgroundColor(imageUrl, { method: 'dominant' });
+                                  setBgColor(color.hex);
+                                  setDetectedColor(color.hex);
+                                  setBgPreset(null);
+                                  toast.success(`Detected: ${color.hex} (${color.name})`);
+                                } catch (error: any) {
+                                  toast.error('Detection failed');
+                                } finally {
+                                  setDetectingColor(false);
+                                }
+                              }}
+                              disabled={detectingColor || !imageUrl}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            >
+                              Try Dominant
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!imageUrl) return;
+                                setDetectingColor(true);
+                                try {
+                                  const color = await detectBackgroundColor(imageUrl, { method: 'smart' });
+                                  setBgColor(color.hex);
+                                  setDetectedColor(color.hex);
+                                  setBgPreset(null);
+                                  toast.success(`Detected: ${color.hex} (${color.name})`);
+                                } catch (error: any) {
+                                  toast.error('Detection failed');
+                                } finally {
+                                  setDetectingColor(false);
+                                }
+                              }}
+                              disabled={detectingColor || !imageUrl}
+                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            >
+                              Try Smart
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {detectedColor && (
+                          <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                            <div 
+                              className="w-5 h-5 rounded border-2 border-gray-300 shadow-sm" 
+                              style={{ backgroundColor: detectedColor }}
+                            />
+                            <span>Detected: <strong className="font-mono">{detectedColor}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetectedColor(null);
+                                setBgColor('#ffffff');
+                              }}
+                              className="ml-auto text-gray-400 hover:text-gray-600"
+                              title="Clear detection"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"

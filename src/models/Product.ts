@@ -11,6 +11,8 @@ export interface IProduct extends Document {
   images: string[];
   imageAltTexts?: string[];
   category?: string;
+  department?: string;
+  subCategory?: string;
   brand?: string;
   rating: number;
   reviewCount: number;
@@ -105,13 +107,24 @@ const ProductSchema = new Schema<IProduct>({
   }],
   category: {
     type: String,
-    enum: ['Men', 'Women', 'Children', 'Office & Travel', 'Accessories', 'Gifting', 'Wool', 'Footwear'],
-    default: 'Accessories'
+    required: false, // Relaxed from enum for scraped data support
+    index: true
+  },
+  department: {
+    type: String,
+    required: false,
+    index: true
+  },
+  subCategory: {
+    type: String,
+    required: false,
+    index: true
   },
   brand: {
     type: String,
     required: false,
-    trim: true
+    trim: true,
+    index: true
   },
   rating: {
     type: Number,

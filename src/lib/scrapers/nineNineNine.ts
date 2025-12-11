@@ -45,6 +45,13 @@ export async function scrapeNineNineNine(options: { limit?: number } = {}): Prom
                 const originalPrice = firstVariant?.compare_at_price ? convertPrice999(firstVariant.compare_at_price) : undefined;
 
                 const images = product.images?.map(img => cleanImageUrl(img.src, 'https://999.com.pk')) || [];
+
+                // DEBUG: Log first product's images
+                if (products.length === 0) {
+                    console.log('[DEBUG 999pk] First Product Images Raw:', JSON.stringify(product.images, null, 2));
+                    console.log('[DEBUG 999pk] Cleaned Images:', images);
+                }
+
                 if (images.length === 0 && product.image) {
                     images.push(cleanImageUrl(product.image.src, 'https://999.com.pk'));
                 }
