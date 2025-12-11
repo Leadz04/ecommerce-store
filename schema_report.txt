@@ -1,0 +1,47 @@
+Analyzing schemas for files: [
+  "999pk-products.json",
+  "almas-products.json",
+  "beoneshopone-products.json",
+  "breakout-products.json",
+  "engine-products.json",
+  "furorjeans-products.json",
+  "hustlenholla-products.json",
+  "lamaretail-products.json",
+  "unze-products.json"
+]
+
+==================================================
+COMMON SCHEMA (Present in ALL files)
+==================================================
+brand, category, description, descriptionHtml, image, images, inStock, isActive, name, price, productType, rating, raw, reviewCount, sourceUrl, specifications, specifications.Type, specifications.Vendor, status, stockCount, tags
+
+==================================================
+DIFFERENCES BY FILE
+==================================================
+
+📄 999pk-products.json
+   ➕ Unique/Extra Keys: specifications.Length, specifications.Size
+
+📄 almas-products.json
+   ➕ Unique/Extra Keys: specifications.Size, specifications.Tags
+
+📄 beoneshopone-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.Tags, specifications.color, specifications.size
+
+📄 breakout-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.COLOR, specifications.Size, specifications.Tags
+
+📄 engine-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.Color, specifications.Size, specifications.Tags
+
+📄 furorjeans-products.json
+   ➕ Unique/Extra Keys: specifications.Color, specifications.Size, specifications.Tags
+
+📄 hustlenholla-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.Material, specifications.Size, specifications.Tags, specifications.color
+
+📄 lamaretail-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.Color, specifications.Size, specifications.Tags
+
+📄 unze-products.json
+   ➕ Unique/Extra Keys: originalPrice, specifications.Size, specifications.Tags

@@ -131,7 +131,7 @@ async function getMainConnection() {
   if (!mongooseInstance) {
     throw new Error('MONGODB_URI is not configured');
   }
-  
+
   mainConnection = mongooseInstance.connection;
   return mainConnection;
 }
@@ -160,6 +160,11 @@ interface ShopifyProduct {
     src: string;
     alt?: string;
   }>;
+  image?: {
+    id: number;
+    src: string;
+    alt?: string;
+  } | null;
   options?: Array<{
     name: string;
     values: string[];
@@ -173,15 +178,15 @@ interface ShopifyProductsResponse {
 // Helper function to map categoryGroup to category
 function mapCategory(productType?: string, vendor?: string): string {
   if (!productType && !vendor) return 'Accessories';
-  
+
   const text = `${productType || ''} ${vendor || ''}`.toLowerCase();
-  
+
   if (text.includes('men') || text.includes("men's")) return 'Men';
   if (text.includes('women') || text.includes("women's") || text.includes('girls')) return 'Women';
   if (text.includes('office') || text.includes('travel')) return 'Office & Travel';
   if (text.includes('gift')) return 'Gifting';
   if (text.includes('accessor')) return 'Accessories';
-  
+
   // Default based on common patterns
   return 'Accessories';
 }
@@ -190,7 +195,7 @@ function mapCategory(productType?: string, vendor?: string): string {
 function extractTags(description: string, title: string, productType?: string, tags?: string[]): string[] {
   const extractedTags: string[] = [];
   const text = `${description} ${title} ${productType || ''}`.toLowerCase();
-  
+
   // Common tags
   if (text.includes('leather')) extractedTags.push('leather');
   if (text.includes('jacket')) extractedTags.push('jacket');
@@ -215,12 +220,12 @@ function extractTags(description: string, title: string, productType?: string, t
   if (text.includes('bag')) extractedTags.push('bag');
   if (text.includes('vest')) extractedTags.push('vest');
   if (text.includes('boxer')) extractedTags.push('boxer');
-  
+
   // Add tags from Shopify tags array
   if (tags && Array.isArray(tags)) {
     extractedTags.push(...tags.filter(tag => tag && typeof tag === 'string'));
   }
-  
+
   return [...new Set(extractedTags)]; // Remove duplicates
 }
 
@@ -239,7 +244,7 @@ function convertPrice(price: string | number): number {
 // Helper function to map variants
 function mapVariants(variants: ShopifyProduct['variants']): any[] {
   if (!variants || !Array.isArray(variants)) return [];
-  
+
   return variants.map(variant => ({
     title: variant.title || 'Default',
     sku: variant.sku || null,
@@ -253,7 +258,7 @@ function mapVariants(variants: ShopifyProduct['variants']): any[] {
 // Helper function to map specifications
 function mapSpecifications(product: ShopifyProduct): Map<string, string> {
   const specifications = new Map<string, string>();
-  
+
   if (product.vendor) {
     specifications.set('Vendor', product.vendor);
   }
@@ -263,7 +268,7 @@ function mapSpecifications(product: ShopifyProduct): Map<string, string> {
   if (product.tags && product.tags.length > 0) {
     specifications.set('Tags', product.tags.join(', '));
   }
-  
+
   // Add options as specifications
   if (product.options && Array.isArray(product.options)) {
     product.options.forEach(option => {
@@ -272,7 +277,7 @@ function mapSpecifications(product: ShopifyProduct): Map<string, string> {
       }
     });
   }
-  
+
   return specifications;
 }
 
@@ -282,9 +287,9 @@ function isWinterProduct(product: ShopifyProduct): boolean {
   const productType = (product.product_type || '').toLowerCase();
   const bodyHtml = (product.body_html || '').toLowerCase();
   const tags = (product.tags || []).map(tag => tag.toLowerCase()).join(' ');
-  
+
   const combinedText = `${title} ${productType} ${bodyHtml} ${tags}`;
-  
+
   // Winter-related keywords
   const winterKeywords = [
     'winter',
@@ -325,7 +330,7 @@ function isWinterProduct(product: ShopifyProduct): boolean {
     'fleece trouser',
     'cut & sew'
   ];
-  
+
   // Check if any winter keyword is present
   return winterKeywords.some(keyword => combinedText.includes(keyword));
 }
@@ -335,9 +340,10 @@ function convertShopifyToProduct(shopifyProduct: ShopifyProduct): any {
   const firstVariant = shopifyProduct.variants?.[0];
   const price = firstVariant ? convertPrice(firstVariant.price) : 0;
   const originalPrice = firstVariant?.compare_at_price ? convertPrice(firstVariant.compare_at_price) : undefined;
-  
+
   // Get all images
-  const images = shopifyProduct.images?.map(img => {
+  // Get all images
+  let images = shopifyProduct.images?.map(img => {
     if (img.src.startsWith('//')) {
       return `https:${img.src}`;
     }
@@ -346,9 +352,21 @@ function convertShopifyToProduct(shopifyProduct: ShopifyProduct): any {
     }
     return img.src;
   }) || [];
-  
+
+  // Fallback for single image if images array is empty
+  if (images.length === 0 && shopifyProduct.image) {
+    const imgSrc = shopifyProduct.image.src;
+    let cleanSrc = imgSrc;
+    if (imgSrc.startsWith('//')) {
+      cleanSrc = `https:${imgSrc}`;
+    } else if (imgSrc.startsWith('/')) {
+      cleanSrc = `https://unze.com.pk${imgSrc}`;
+    }
+    images = [cleanSrc];
+  }
+
   const primaryImage = images.length > 0 ? images[0] : '';
-  
+
   // Build description from body_html
   let description = '';
   if (shopifyProduct.body_html) {
@@ -363,18 +381,18 @@ function convertShopifyToProduct(shopifyProduct: ShopifyProduct): any {
       .replace(/&#39;/g, "'")
       .trim();
   }
-  
+
   if (!description) {
     description = shopifyProduct.title;
   }
-  
+
   const category = mapCategory(shopifyProduct.product_type, shopifyProduct.vendor);
   const tags = extractTags(description, shopifyProduct.title, shopifyProduct.product_type, shopifyProduct.tags);
   const variants = mapVariants(shopifyProduct.variants);
   const specifications = mapSpecifications(shopifyProduct);
-  
+
   const sourceUrl = `https://unze.com.pk/products/${shopifyProduct.handle}`;
-  
+
   return {
     name: shopifyProduct.title,
     description: description.substring(0, 5000),
@@ -427,20 +445,20 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication and permissions
     await requireAnyPermission([PERMISSIONS.PRODUCT_VIEW, PERMISSIONS.PRODUCT_MANAGE])(request);
-    
+
     console.log('[Unze Scraper] Starting to scrape products with pagination...');
-    
+
     // Connect to MongoDB stage3
     const conn = await getMainConnection();
     const Product = conn.model('Product', ProductSchema);
-    
+
     // Scrape all pages with pagination
     let page = 1;
     let hasNext = true;
     const limit = 250;
     let totalFetched = 0;
     let totalFiltered = 0;
-    
+
     // Convert and save products
     let importedCount = 0;
     let skippedCount = 0;
@@ -448,21 +466,21 @@ export async function POST(request: NextRequest) {
     let filteredOutCount = 0;
     const allScrapedProducts: any[] = [];
     const winterProducts: any[] = [];
-    
+
     while (hasNext) {
       try {
         const { products, hasNext: hasMore } = await fetchUnzeProducts(page, limit);
         totalFetched += products.length;
-        
+
         console.log(`[Unze Scraper] Page ${page}: Fetched ${products.length} products (Total fetched: ${totalFetched})`);
-        
+
         // Process each product
         for (let i = 0; i < products.length; i++) {
           const shopifyProduct = products[i];
-          
+
           try {
             const productData = convertShopifyToProduct(shopifyProduct);
-            
+
             // Store for all products JSON file
             allScrapedProducts.push({
               ...productData,
@@ -475,13 +493,13 @@ export async function POST(request: NextRequest) {
                 options: shopifyProduct.options,
               }
             });
-            
+
             // Check if product is winter-related
             const isWinter = isWinterProduct(shopifyProduct);
-            
+
             if (isWinter) {
               totalFiltered++;
-              
+
               // Store for winter products JSON file
               winterProducts.push({
                 ...productData,
@@ -494,10 +512,10 @@ export async function POST(request: NextRequest) {
                   options: shopifyProduct.options,
                 }
               });
-              
+
               // Check if product exists by sourceUrl
               const existingProduct = await Product.findOne({ sourceUrl: productData.sourceUrl });
-              
+
               if (existingProduct) {
                 // Update existing product
                 Object.assign(existingProduct, productData);
@@ -519,10 +537,10 @@ export async function POST(request: NextRequest) {
             skippedCount++;
           }
         }
-        
+
         hasNext = hasMore;
         page++;
-        
+
         // Small delay to avoid rate limiting
         if (hasNext) {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -533,9 +551,9 @@ export async function POST(request: NextRequest) {
         hasNext = false;
       }
     }
-    
+
     console.log(`[Unze Scraper] Completed. Total fetched: ${totalFetched}, Winter products: ${totalFiltered}, Filtered out: ${filteredOutCount}`);
-    
+
     // Save all products to JSON file
     const allProductsJsonData = {
       scrapedAt: new Date().toISOString(),
@@ -545,7 +563,7 @@ export async function POST(request: NextRequest) {
       pagesScraped: page - 1,
       products: allScrapedProducts
     };
-    
+
     // Save winter products to separate JSON file
     const winterProductsJsonData = {
       scrapedAt: new Date().toISOString(),
@@ -559,26 +577,26 @@ export async function POST(request: NextRequest) {
       pagesScraped: page - 1,
       products: winterProducts
     };
-    
+
     const scrapedDir = path.join(process.cwd(), 'scraped');
-    
+
     // Ensure scraped directory exists
     try {
       await fs.access(scrapedDir);
     } catch {
       await fs.mkdir(scrapedDir, { recursive: true });
     }
-    
+
     // Save all products JSON file
     const allProductsFilePath = path.join(scrapedDir, 'unze-all-products.json');
     await fs.writeFile(allProductsFilePath, JSON.stringify(allProductsJsonData, null, 2), 'utf-8');
     console.log(`[Unze Scraper] Saved ${allScrapedProducts.length} products to ${allProductsFilePath}`);
-    
+
     // Save winter products JSON file
     const winterProductsFilePath = path.join(scrapedDir, 'unze-winter-products.json');
     await fs.writeFile(winterProductsFilePath, JSON.stringify(winterProductsJsonData, null, 2), 'utf-8');
     console.log(`[Unze Scraper] Saved ${winterProducts.length} winter products to ${winterProductsFilePath}`);
-    
+
     return NextResponse.json({
       success: true,
       message: 'Products scraped and imported successfully',
@@ -594,7 +612,7 @@ export async function POST(request: NextRequest) {
         winterProductsFile: winterProductsFilePath
       }
     });
-    
+
   } catch (error: any) {
     console.error('[Unze Scraper] Error:', error);
     return NextResponse.json(

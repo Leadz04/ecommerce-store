@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
+import connectDB from '@/lib/mongodb';
 import { verifyToken, requirePermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/lib/permissions';
 import axios from 'axios';
@@ -130,7 +131,7 @@ async function getMainConnection() {
   if (!mongooseInstance) {
     throw new Error('MONGODB_URI is not configured');
   }
-  
+
   mainConnection = mongooseInstance.connection;
   return mainConnection;
 }
@@ -173,15 +174,15 @@ interface NineNineNineResponse {
 // Helper function to map categoryGroup to category
 function mapCategory(productType?: string, tags?: string[]): string {
   if (!productType && !tags) return 'Accessories';
-  
+
   const text = ((productType || '') + ' ' + (tags?.join(' ') || '')).toLowerCase();
-  
+
   if (text.includes('men') || text.includes("men's")) return 'Men';
   if (text.includes('women') || text.includes("women's")) return 'Women';
   if (text.includes('office') || text.includes('travel')) return 'Office & Travel';
   if (text.includes('gift')) return 'Gifting';
   if (text.includes('accessor')) return 'Accessories';
-  
+
   return 'Accessories';
 }
 
@@ -202,18 +203,18 @@ function convertPrice(price: string | number): number {
 // Helper function to extract tags
 function extractTags(product: NineNineNineProduct): string[] {
   const tags: string[] = [];
-  
+
   // Add tags from product tags array
   if (product.tags && Array.isArray(product.tags)) {
     tags.push(...product.tags);
   }
-  
+
   // Extract from product type
   if (product.product_type) {
     const typeTags = product.product_type.toLowerCase().split(/\s+/);
     tags.push(...typeTags);
   }
-  
+
   // Extract from title
   const titleWords = product.title.toLowerCase().split(/\s+/);
   const commonTags = ['jacket', 'coat', 'pant', 'trousers', 'skirt', 'dress', 'blazer', 'leather', 'wool', 'faux', 'oversized', 'belted', 'fitted'];
@@ -222,14 +223,14 @@ function extractTags(product: NineNineNineProduct): string[] {
       tags.push(word);
     }
   });
-  
+
   return [...new Set(tags)].filter(Boolean);
 }
 
 // Helper function to map variants
 function mapVariants(product: NineNineNineProduct) {
   if (!product.variants || product.variants.length === 0) return [];
-  
+
   return product.variants.map(variant => ({
     title: variant.title || 'Default',
     sku: variant.sku || null,
@@ -243,7 +244,7 @@ function mapVariants(product: NineNineNineProduct) {
 // Helper function to map specifications
 function mapSpecifications(product: NineNineNineProduct) {
   const specifications = new Map<string, string>();
-  
+
   if (product.vendor) {
     specifications.set('Vendor', product.vendor);
   }
@@ -260,7 +261,7 @@ function mapSpecifications(product: NineNineNineProduct) {
       }
     });
   }
-  
+
   return specifications;
 }
 
@@ -273,14 +274,14 @@ function stripHtml(html?: string): string {
 // Helper function to check if product is winter-related
 function isWinterProduct(product: NineNineNineProduct): boolean {
   const winterKeywords = [
-    'winter', 'wool', 'coat', 'jacket', 'warm', 'fleece', 'thermal', 'sweater', 
-    'cardigan', 'hoodie', 'shawl', 'scarf', 'gloves', 'beanie', 'cap', 'boots', 
-    'boot', 'puffer', 'down', 'insulated', 'sherpa', 'fur', 'faux fur', 'quilted', 
+    'winter', 'wool', 'coat', 'jacket', 'warm', 'fleece', 'thermal', 'sweater',
+    'cardigan', 'hoodie', 'shawl', 'scarf', 'gloves', 'beanie', 'cap', 'boots',
+    'boot', 'puffer', 'down', 'insulated', 'sherpa', 'fur', 'faux fur', 'quilted',
     'padded', 'fleece-lined', 'thermal', 'warmth', 'cold', 'snow', 'snowy',
     'blazer', 'trench', 'parka', 'anorak', 'bomber', 'windbreaker', 'fleece jacket',
     'wool coat', 'wool jacket', 'wool blazer', 'wool sweater', 'wool cardigan'
   ];
-  
+
   const searchText = [
     product.title?.toLowerCase() || '',
     product.body_html?.toLowerCase() || '',
@@ -288,7 +289,7 @@ function isWinterProduct(product: NineNineNineProduct): boolean {
     product.tags?.join(' ').toLowerCase() || '',
     product.vendor?.toLowerCase() || ''
   ].join(' ');
-  
+
   return winterKeywords.some(keyword => searchText.includes(keyword.toLowerCase()));
 }
 
@@ -298,32 +299,32 @@ async function fetchAllProductsWithPagination(baseUrl: string): Promise<NineNine
   let page = 1;
   const limit = 250; // Shopify default limit
   let hasMore = true;
-  
+
   while (hasMore) {
     try {
       const url = `${baseUrl}?page=${page}&limit=${limit}`;
       console.log(`[999.com.pk Scraper] Fetching page ${page} from ${url}`);
-      
+
       const response = await axios.get<NineNineNineResponse>(url, {
         timeout: 30000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
       });
-      
+
       const products = response.data.products || [];
-      
+
       if (products.length === 0) {
         hasMore = false;
         break;
       }
-      
+
       // Filter for winter products only
       const winterProducts = products.filter(product => isWinterProduct(product));
       allProducts.push(...winterProducts);
-      
+
       console.log(`[999.com.pk Scraper] Page ${page}: Found ${products.length} products, ${winterProducts.length} winter-related`);
-      
+
       // If we got less than the limit, we're on the last page
       if (products.length < limit) {
         hasMore = false;
@@ -346,35 +347,47 @@ async function fetchAllProductsWithPagination(baseUrl: string): Promise<NineNine
       }
     }
   }
-  
+
   return allProducts;
+}
+
+// Helper function to clean image URL
+function cleanImageUrl(src: string): string {
+  if (!src) return '';
+  if (src.startsWith('//')) {
+    return `https:${src}`;
+  }
+  if (src.startsWith('/')) {
+    return `https://999.com.pk${src}`;
+  }
+  return src;
 }
 
 export async function POST(request: NextRequest) {
   try {
     await requirePermission(PERMISSIONS.PRODUCT_CREATE)(request);
-    
+
     const NINE_NINE_NINE_URL = 'https://999.com.pk/products.json';
-    
+
     console.log('[999.com.pk Scraper] Starting to fetch winter products with pagination from:', NINE_NINE_NINE_URL);
-    
+
     // Fetch all products with pagination and filter for winter products
     const products = await fetchAllProductsWithPagination(NINE_NINE_NINE_URL);
     console.log(`[999.com.pk Scraper] Fetched ${products.length} winter-related products (after filtering)`);
-    
+
     // Connect to STAGE3 database
     const conn = await getMainConnection();
     const Product = conn.model('Product', ProductSchema);
-    
+
     let importedCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
     const scrapedProducts: any[] = [];
-    
+
     // Process each product
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
-      
+
       try {
         // Skip if missing required fields
         if (!product.title || !product.handle) {
@@ -382,20 +395,32 @@ export async function POST(request: NextRequest) {
           skippedCount++;
           continue;
         }
-        
+
         // Get images
-        const images = product.images?.map(img => img.src).filter(Boolean) || [];
+        let images: string[] = [];
+
+        if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+          images = product.images.map(img => cleanImageUrl(img.src)).filter(Boolean);
+        } else if ((product as any).image) {
+          // Fallback for single image property
+          const singleImage = (product as any).image;
+          const src = typeof singleImage === 'string' ? singleImage : singleImage.src;
+          if (src) {
+            images = [cleanImageUrl(src)];
+          }
+        }
+
         const primaryImage = images[0];
-        
+
         if (!primaryImage) {
           console.log(`[${i + 1}/${products.length}] Skipping: No image - "${product.title}"`);
           skippedCount++;
           continue;
         }
-        
+
         // Build source URL
         const sourceUrl = `https://999.com.pk/products/${product.handle}`;
-        
+
         // Check if product already exists
         const existingProduct = await Product.findOne({ sourceUrl });
         if (existingProduct) {
@@ -403,18 +428,18 @@ export async function POST(request: NextRequest) {
           skippedCount++;
           continue;
         }
-        
+
         // Convert product data
         const description = stripHtml(product.body_html) || product.title;
         const price = product.variants?.[0] ? convertPrice(product.variants[0].price) : 0;
-        const originalPrice = product.variants?.[0]?.compare_at_price 
-          ? convertPrice(product.variants[0].compare_at_price) 
+        const originalPrice = product.variants?.[0]?.compare_at_price
+          ? convertPrice(product.variants[0].compare_at_price)
           : undefined;
         const category = mapCategory(product.product_type, product.tags);
         const tags = extractTags(product);
         const variants = mapVariants(product);
         const specifications = mapSpecifications(product);
-        
+
         // Create product data
         const productData = {
           name: product.title,
@@ -437,13 +462,13 @@ export async function POST(request: NextRequest) {
           rating: 0,
           reviewCount: 0
         };
-        
+
         // Save to database
         const newProduct = new Product(productData);
         await newProduct.save();
         importedCount++;
         console.log(`[${i + 1}/${products.length}] Imported: "${product.title}"`);
-        
+
         // Add to scraped products array for JSON file
         scrapedProducts.push({
           title: product.title,
@@ -465,13 +490,13 @@ export async function POST(request: NextRequest) {
             options: product.options,
           }
         });
-        
+
       } catch (error: any) {
         console.error(`[${i + 1}/${products.length}] Error processing "${product.title}":`, error.message);
         errorCount++;
       }
     }
-    
+
     // Save to JSON file
     const jsonData = {
       scrapedAt: new Date().toISOString(),
@@ -482,7 +507,7 @@ export async function POST(request: NextRequest) {
       errorProducts: errorCount,
       products: scrapedProducts
     };
-    
+
     // Ensure scraped directory exists
     const scrapedDir = path.join(process.cwd(), 'scraped');
     try {
@@ -490,12 +515,12 @@ export async function POST(request: NextRequest) {
     } catch {
       await fs.mkdir(scrapedDir, { recursive: true });
     }
-    
+
     // Write JSON file
     const jsonFilePath = path.join(scrapedDir, '999pk-winter-products.json');
     await fs.writeFile(jsonFilePath, JSON.stringify(jsonData, null, 2), 'utf-8');
     console.log(`[999.com.pk Scraper] Saved JSON file: ${jsonFilePath}`);
-    
+
     return NextResponse.json({
       success: true,
       message: `Successfully scraped and imported ${importedCount} winter products from 999.com.pk`,
@@ -507,13 +532,13 @@ export async function POST(request: NextRequest) {
         jsonFile: jsonFilePath
       }
     });
-    
+
   } catch (error: any) {
     console.error('[999.com.pk Scraper] Error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message || 'Failed to scrape 999.com.pk products' 
+      {
+        success: false,
+        error: error.message || 'Failed to scrape 999.com.pk products'
       },
       { status: 500 }
     );
