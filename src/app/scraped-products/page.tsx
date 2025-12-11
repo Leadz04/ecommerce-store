@@ -39,15 +39,35 @@ export default function ScrapedProductsPage() {
             const params = new URLSearchParams();
             params.append('page', pagination.page.toString());
             params.append('limit', pagination.limit.toString());
-            if (filters.department) params.append('department', filters.department);
-            if (filters.category) params.append('category', filters.category);
-            if (filters.subCategory) params.append('subCategory', filters.subCategory);
-            if (filters.brand) params.append('brand', filters.brand);
-            if (filters.search) params.append('search', filters.search);
-            if (filters.minPrice) params.append('minPrice', filters.minPrice);
-            if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+            
+            // Only append non-empty filter values
+            if (filters.department && filters.department.trim()) {
+                params.append('department', filters.department.trim());
+            }
+            if (filters.category && filters.category.trim()) {
+                params.append('category', filters.category.trim());
+            }
+            if (filters.subCategory && filters.subCategory.trim()) {
+                params.append('subCategory', filters.subCategory.trim());
+            }
+            if (filters.brand && filters.brand.trim()) {
+                params.append('brand', filters.brand.trim());
+            }
+            if (filters.search && filters.search.trim()) {
+                params.append('search', filters.search.trim());
+            }
+            if (filters.minPrice && filters.minPrice.trim()) {
+                params.append('minPrice', filters.minPrice.trim());
+            }
+            if (filters.maxPrice && filters.maxPrice.trim()) {
+                params.append('maxPrice', filters.maxPrice.trim());
+            }
 
-            const res = await fetch(`/api/scraped-products?${params.toString()}`);
+            const url = `/api/scraped-products?${params.toString()}`;
+            console.log('[ScrapedProductsPage] Fetching:', url);
+            console.log('[ScrapedProductsPage] Active filters:', filters);
+
+            const res = await fetch(url);
             if (!res.ok) {
                 throw new Error(`API error: ${res.status} ${res.statusText}`);
             }
@@ -64,6 +84,7 @@ export default function ScrapedProductsPage() {
             setFacets(data.facets || { departments: {}, categories: {}, subCategories: {}, brands: {} });
         } catch (error) {
             console.error('Failed to fetch products', error);
+            setProducts([]);
         } finally {
             setLoading(false);
         }
@@ -74,10 +95,15 @@ export default function ScrapedProductsPage() {
     }, [fetchProducts]);
 
     const handleFilterChange = (key: string, value: string) => {
-        setFilters(prev => ({
-            ...prev,
-            [key]: value === prev[key as keyof typeof filters] ? '' : value // Toggle
-        }));
+        setFilters(prev => {
+            const newValue = value === prev[key as keyof typeof filters] ? '' : value;
+            console.log(`[ScrapedProductsPage] Filter changed: ${key} = "${newValue}"`);
+            return {
+                ...prev,
+                [key]: newValue
+            };
+        });
+        // Reset to page 1 when filters change
         setPagination(prev => ({ ...prev, page: 1 }));
     };
 
