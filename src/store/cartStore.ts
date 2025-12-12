@@ -235,10 +235,10 @@ export const useCartStore = create<CartStore>()(
       getTotalPrice: () => {
         return get().items.reduce(
           (total, item) => {
-            // Use original price if email promo is applied, otherwise use current price
-            const basePrice = item.product.emailPromo?.originalPrice 
-              || item.product.originalPrice 
-              || item.product.price;
+            // Use discounted price from email promo if available, otherwise use current price (which is already discounted if on sale)
+            const basePrice = item.product.emailPromo?.discountedPrice 
+              || item.product.price 
+              || item.product.originalPrice;
             return total + (basePrice * item.quantity);
           },
           0
@@ -264,10 +264,10 @@ export const useCartStore = create<CartStore>()(
           );
           const applicableTotal = applicableItems.reduce(
             (total, item) => {
-              // Use original price if email promo is applied, otherwise use current price
-              const basePrice = item.product.emailPromo?.originalPrice 
-                || item.product.originalPrice 
-                || item.product.price;
+              // Use discounted price from email promo if available, otherwise use current price (which is already discounted if on sale)
+              const basePrice = item.product.emailPromo?.discountedPrice 
+                || item.product.price 
+                || item.product.originalPrice;
               return total + (basePrice * item.quantity);
             },
             0

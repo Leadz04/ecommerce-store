@@ -90,6 +90,7 @@ import EtsyTrademarkDisclaimer from '@/components/EtsyTrademarkDisclaimer';
 import { ETSY_SUPPORT_EMAIL } from '@/lib/etsy-compliance';
 import toast from 'react-hot-toast';
 import ImageEditor from '@/components/ImageEditor';
+import QuickEditModal from '@/components/QuickEditModal';
 
 // Base allowed tabs - brand tabs will be added dynamically
 const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons','selected-products'] as const;
@@ -787,6 +788,8 @@ export default function AdminDashboard() {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showCreateProduct, setShowCreateProduct] = useState(false);
+  const [showQuickEditModal, setShowQuickEditModal] = useState(false);
+  const [quickEditProducts, setQuickEditProducts] = useState<Product[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -3234,6 +3237,74 @@ export default function AdminDashboard() {
     updateQuery({ tab: 'products', productId: product._id });
   };
 
+  const handleQuickEdit = (product: Product) => {
+    setQuickEditProducts([product]);
+    setShowQuickEditModal(true);
+  };
+
+  const handleBulkEdit = () => {
+    if (selectedProductsForExport.size === 0) {
+      toast.error('Please select at least one product');
+      return;
+    }
+    const selectedProducts = Array.from(selectedProductsForExport)
+      .map(id => products.find(p => p._id === id))
+      .filter((p): p is Product => Boolean(p));
+    if (selectedProducts.length === 0) {
+      toast.error('No valid products selected');
+      return;
+    }
+    setQuickEditProducts(selectedProducts);
+    setShowQuickEditModal(true);
+  };
+
+  const handleQuickEditSave = async (updates: { category?: string; subCategory?: string; brand?: string; price?: number; productType?: string; type?: string }) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const productIds = quickEditProducts.map(p => p._id);
+
+    // If single product, use regular update endpoint
+    if (productIds.length === 1) {
+      const response = await fetch(`/api/admin/products/${productIds[0]}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update product');
+      }
+    } else {
+      // Use bulk update endpoint
+      const response = await fetch('/api/admin/products/bulk-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productIds,
+          updates,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update products');
+      }
+    }
+
+    // Refresh products list
+    fetchProducts();
+  };
+
   const handleOrganizeProductImages = async (productId: string, productName: string) => {
     if (!confirm(`Organize images for "${productName}"? This will upload images to Cloudinary and create a folder structure.`)) {
       return;
@@ -4171,6 +4242,33 @@ export default function AdminDashboard() {
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
+                  {/* Quick Links to Product Pages */}
+                  <div className="bg-white p-4 rounded-lg shadow-sm border">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Links</h3>
+                    <div className="flex flex-wrap gap-3">
+                      <Link
+                        href="/brand-products"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      >
+                        <Package className="h-4 w-4" />
+                        Brand Products
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                      <Link
+                        href="/scraped-products"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <Download className="h-4 w-4" />
+                        Scraped Products
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+
                   {/* Controls for metrics */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -8401,6 +8499,15 @@ export default function AdminDashboard() {
                       <RefreshCw className="h-5 w-5" />
                       <span>Refresh</span>
                     </button>
+                    {selectedProductsForExport.size > 0 && (
+                      <button
+                        onClick={handleBulkEdit}
+                        className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                      >
+                        <Wrench className="h-5 w-5" />
+                        <span>Bulk Edit ({selectedProductsForExport.size})</span>
+                      </button>
+                    )}
                   </div>
                   
                   <div className="flex flex-col sm:flex-row gap-3">
@@ -12179,6 +12286,17 @@ export default function AdminDashboard() {
                   updateQuery({ productId: undefined });
                 }}
                 onSuccess={handleProductFormSuccess}
+              />
+
+              {/* Quick Edit Modal */}
+              <QuickEditModal
+                isOpen={showQuickEditModal}
+                onClose={() => {
+                  setShowQuickEditModal(false);
+                  setQuickEditProducts([]);
+                }}
+                products={quickEditProducts}
+                onSave={handleQuickEditSave}
               />
 
               {/* Delete Review Confirmation Modal */}

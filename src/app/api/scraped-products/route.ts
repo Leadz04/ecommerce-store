@@ -130,6 +130,26 @@ export async function GET(request: NextRequest) {
             const distinctCats = await Product.distinct('category', { sourceUrl: { $exists: true, $ne: null } });
             console.log('[scraped-products] Distinct departments in DB:', distinctDepts);
             console.log('[scraped-products] Distinct categories in DB:', distinctCats);
+            
+            // If department is selected, show what categories exist for that department
+            if (department) {
+                const deptEscaped = escapeRegex(department);
+                const categoriesForDept = await Product.distinct('category', { 
+                    sourceUrl: { $exists: true, $ne: null },
+                    department: { $regex: `^${deptEscaped}$`, $options: 'i' }
+                });
+                console.log(`[scraped-products] Categories for department="${department}":`, categoriesForDept);
+            }
+            
+            // If category is selected, show what departments exist for that category
+            if (category) {
+                const catEscaped = escapeRegex(category);
+                const departmentsForCat = await Product.distinct('department', { 
+                    sourceUrl: { $exists: true, $ne: null },
+                    category: { $regex: `^${catEscaped}$`, $options: 'i' }
+                });
+                console.log(`[scraped-products] Departments for category="${category}":`, departmentsForCat);
+            }
         }
 
         // 2. Fetch Products with Pagination

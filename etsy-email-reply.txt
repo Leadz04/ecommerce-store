@@ -1,0 +1,57 @@
+Subject: Re: API Key Request #22439256 - Application Screenshots and Video
+
+Dear Maverick,
+
+Thank you for your response and for reviewing my API key request. I understand that you were unable to access my website directly. I have prepared screenshots and a detailed description of my application's features and Etsy API integration to help with your review.
+
+APPLICATION OVERVIEW
+
+My application is an E-commerce Store Management Platform that integrates with the Etsy API to help sellers manage their products, orders, and inventory across multiple channels. The platform provides a comprehensive admin dashboard where sellers can:
+
+1. Connect their Etsy shops through OAuth authentication
+2. Synchronize products bidirectionally between the platform and Etsy
+3. Sync orders from Etsy to the platform for unified order management
+4. Manage inventory across both platforms with automatic synchronization
+5. Export products to CSV format compatible with Etsy's bulk import feature
+
+ETSY API INTEGRATION FEATURES
+
+The application uses the Etsy API v3 to:
+
+- Shop Connection: Authenticate and connect Etsy shops using OAuth 2.0
+- Product Management: Import listings from Etsy shops, create new listings on Etsy from platform products, update existing Etsy listings, and delete listings when needed
+- Order Synchronization: Import orders from connected Etsy shops
+- Inventory Management: Sync stock levels between the platform and Etsy
+- CSV Export: Export products in Etsy-compatible CSV format for bulk operations
+
+All API calls respect Etsy's rate limits and include proper error handling. The application also displays the required Etsy trademark disclaimer as specified in the API Terms of Use.
+
+USE CASE
+
+This application serves sellers who want to:
+- Manage their Etsy shop alongside their own e-commerce platform
+- Keep product information synchronized across platforms
+- Centralize order management from multiple sales channels
+- Streamline inventory management
+- Export products efficiently for Etsy bulk operations
+
+The Etsy API integration is essential for providing these features to our users, enabling them to manage their Etsy presence directly from our platform.
+
+COMPLIANCE
+
+The application:
+- Displays the required Etsy trademark disclaimer
+- Respects Etsy API rate limits
+- Implements proper OAuth 2.0 authentication flow
+- Handles errors gracefully
+- Follows Etsy API best practices
+
+I have attached screenshots demonstrating these features. Please let me know if you need any additional information or clarification.
+
+Thank you for your time and consideration.
+
+Best regards,
+Leadzfour
+testleadz04@gmail.com
+everstylecrafts-store-manager
+

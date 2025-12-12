@@ -295,9 +295,11 @@ export default function CheckoutPage() {
               : Boolean(promoCode);
 
             // Get the base/original price for calculations
-            const basePrice = item.product.emailPromo?.originalPrice 
-              || item.product.originalPrice 
-              || item.product.price;
+            // For order API: use current price (what customer pays), not original price
+            // If email promo exists, use discounted price; otherwise use current price (already discounted if on sale)
+            const basePrice = item.product.emailPromo?.discountedPrice 
+              || item.product.price 
+              || item.product.originalPrice;
 
             const appliedPromo = promoMatchesProduct && promoCode
               ? {

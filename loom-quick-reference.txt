@@ -1,0 +1,67 @@
+═══════════════════════════════════════════════════════════════
+LOOM VIDEO QUICK REFERENCE CARD
+═══════════════════════════════════════════════════════════════
+
+OPENING (20 sec)
+─────────────────
+✓ Greet Maverick
+✓ Explain purpose: showing Etsy API integration
+✓ Show homepage briefly
+✓ Navigate to admin
+
+MAIN DEMO (2 min)
+─────────────────
+✓ Click Etsy tab
+✓ Show "Connect Etsy Shop" - OAuth integration
+✓ Show Sync Controls (3 buttons):
+  • Sync Listings
+  • Sync Orders  
+  • Sync Inventory
+✓ Show Product Sync to Etsy section
+✓ Show CSV Export feature (point out filters/options)
+✓ Highlight Etsy Trademark Disclaimer
+✓ Quick demo: Products tab → show sync capability
+
+CLOSING (20 sec)
+────────────────
+✓ Summarize: bidirectional sync, compliance, value to sellers
+✓ Thank them
+✓ Offer to answer questions
+
+═══════════════════════════════════════════════════════════════
+KEY PHRASES TO USE:
+═══════════════════════════════════════════════════════════════
+
+• "Etsy API integration"
+• "OAuth 2.0 authentication"
+• "Bidirectional synchronization"
+• "Respects Etsy's rate limits"
+• "Etsy-compatible CSV format"
+• "Required trademark disclaimer"
+• "Compliance with Etsy's terms"
+• "Helps sellers manage multiple sales channels"
+
+═══════════════════════════════════════════════════════════════
+WHAT TO AVOID:
+═══════════════════════════════════════════════════════════════
+
+✗ Don't say "um" or "uh" too much (pauses are fine)
+✗ Don't rush through features
+✗ Don't skip the disclaimer/compliance mention
+✗ Don't make it longer than 3 minutes
+✗ Don't show errors or broken features
+
+═══════════════════════════════════════════════════════════════
+CHECKLIST BEFORE SENDING:
+═══════════════════════════════════════════════════════════════
+
+□ Audio is clear
+□ All features are visible
+□ Disclaimer is shown
+□ Navigation is smooth
+□ Under 3 minutes
+□ Professional tone maintained
+□ No major mistakes or long pauses
+
+═══════════════════════════════════════════════════════════════
+

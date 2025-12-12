@@ -61,6 +61,7 @@ export async function PUT(
       image,
       images,
       category,
+      subCategory,
       brand,
       stockCount,
       tags,
@@ -130,7 +131,22 @@ export async function PUT(
     if (image !== undefined) product.image = image;
     if (images !== undefined) product.images = images;
     if (category !== undefined) product.category = category;
+    if (subCategory !== undefined) (product as any).subCategory = subCategory;
+    if (productType !== undefined) (product as any).productType = productType;
     if (brand !== undefined) product.brand = brand;
+    
+    // Handle type field - it should be saved in specifications
+    const type = (body as any).type;
+    if (type !== undefined) {
+      if (!product.specifications) {
+        product.specifications = new Map();
+      }
+      if (product.specifications instanceof Map) {
+        product.specifications.set('type', type);
+      } else {
+        (product.specifications as any).type = type;
+      }
+    }
     if (stockCount !== undefined) {
       product.stockCount = stockCount;
       product.inStock = stockCount > 0;
