@@ -514,6 +514,35 @@ export class EtsyAPI {
     return this.makeRequest(`/application/listings/${listingId}`);
   }
 
+  async getShippingProfiles(shopId: string): Promise<any[]> {
+    const response = await this.makeRequest(
+      `/application/shops/${shopId}/shipping-profiles`
+    );
+    return response.results || [];
+  }
+
+  async getReadinessStateDefinitions(shopId: string): Promise<any[]> {
+    const response = await this.makeRequest(
+      `/application/shops/${shopId}/readiness-state-definitions`
+    );
+    return response.results || [];
+  }
+
+  async createReadinessStateDefinition(shopId: string, readinessState: 1 | 2, processingMin: number, processingMax: number): Promise<any> {
+    const formData = new URLSearchParams();
+    formData.append('readiness_state', readinessState.toString());
+    formData.append('processing_min', processingMin.toString());
+    formData.append('processing_max', processingMax.toString());
+    
+    return this.makeRequest(`/application/shops/${shopId}/readiness-state-definitions`, {
+      method: 'POST',
+      body: formData.toString(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+  }
+
   async createListing(shopId: string, listingData: Partial<EtsyListingData>): Promise<EtsyListingData> {
     // Etsy API requires application/x-www-form-urlencoded format
     // Convert the listing data to form-urlencoded format
@@ -543,8 +572,16 @@ export class EtsyAPI {
     if (listingData.materials && Array.isArray(listingData.materials)) {
       listingData.materials.forEach(material => formData.append('materials[]', material));
     }
-    if (listingData.shipping_template_id) {
+    // Shipping profile ID is required for physical listings
+    if (listingData.shipping_profile_id) {
+      formData.append('shipping_profile_id', listingData.shipping_profile_id.toString());
+    } else if (listingData.shipping_template_id) {
+      // Support legacy shipping_template_id field name
       formData.append('shipping_profile_id', listingData.shipping_template_id.toString());
+    }
+    // Readiness state ID is required for physical listings
+    if (listingData.readiness_state_id) {
+      formData.append('readiness_state_id', listingData.readiness_state_id.toString());
     }
     if (listingData.processing_min !== undefined) {
       formData.append('processing_min', listingData.processing_min.toString());

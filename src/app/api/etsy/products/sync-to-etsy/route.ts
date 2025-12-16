@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { EtsyShop, EtsyListing, Product } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
+import { getCurrentUserId } from '@/lib/etsy-auth-helper';
 
 // Helper function to download image from URL and return buffer for FormData
 async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; filename: string }> {
@@ -27,6 +28,8 @@ async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; 
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user ID from request
+    const userId = await getCurrentUserId(request);
     const { productId, shopId, action = 'create' } = await request.json();
 
     if (!productId || !shopId) {
@@ -43,15 +46,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
-    const shop = await EtsyShop.findOne({ shopId: String(shopId), isActive: true });
+    // Find shop belonging to this user (validate ownership)
+    const shop = await EtsyShop.findOne({ userId, shopId: String(shopId), isActive: true });
     if (!shop) {
-      return NextResponse.json({ error: 'Etsy shop not found or inactive' }, { status: 404 });
+      return NextResponse.json({ error: 'Etsy shop not found, inactive, or access denied' }, { status: 404 });
     }
 
     const etsyAPI = new EtsyAPI(shop.accessToken, shop.shopId, shop.refreshToken, async (newTokens) => {
       // Update tokens using updateOne to avoid validation issues
       await EtsyShop.updateOne(
-        { userId: shop.userId, shopId: shop.shopId },
+        { userId, shopId: shop.shopId },
         {
           $set: {
             accessToken: newTokens.access_token,
@@ -72,10 +76,10 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'create':
-        result = await createEtsyListing(etsyAPI, product, shop);
+        result = await createEtsyListing(etsyAPI, product, shop, userId);
         break;
       case 'update':
-        result = await updateEtsyListing(etsyAPI, product, shop);
+        result = await updateEtsyListing(etsyAPI, product, shop, userId);
         break;
       case 'delete':
         result = await deleteEtsyListing(etsyAPI, product, shop);
@@ -102,7 +106,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
+async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, userId: string) {
   // Extract materials from specifications
   const materials: string[] = [];
   if (product.specifications) {
@@ -118,6 +122,74 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
         }
       }
     }
+  }
+
+  // Fetch shipping profiles - required for physical listings
+  let shippingProfileId: number | undefined;
+  try {
+    const shippingProfiles = await etsyAPI.getShippingProfiles(shop.shopId);
+    if (shippingProfiles && shippingProfiles.length > 0) {
+      // Use the first non-deleted shipping profile
+      const activeProfile = shippingProfiles.find((p: any) => !p.is_deleted);
+      if (activeProfile) {
+        shippingProfileId = activeProfile.shipping_profile_id;
+      } else if (shippingProfiles[0]) {
+        // Fallback to first profile even if deleted (some shops might only have deleted ones)
+        shippingProfileId = shippingProfiles[0].shipping_profile_id;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch shipping profiles:', error);
+    // Continue without shipping profile - will fail with clear error message
+  }
+
+  if (!shippingProfileId) {
+    throw new Error('No shipping profile found for this shop. Please create a shipping profile in your Etsy shop settings before creating listings.');
+  }
+
+  // Fetch or create readiness state definition - required for physical listings
+  // readiness_state: 1 = ready_to_ship, 2 = made_to_order
+  let readinessStateId: number | undefined;
+  try {
+    const readinessStates = await etsyAPI.getReadinessStateDefinitions(shop.shopId);
+    // Since we're using 'made_to_order', look for readiness_state = 2
+    const madeToOrderState = readinessStates?.find((r: any) => r.readiness_state === 2);
+    
+    if (madeToOrderState) {
+      readinessStateId = madeToOrderState.readiness_state_id;
+    } else if (readinessStates && readinessStates.length > 0) {
+      // Use first available state if no made_to_order found
+      readinessStateId = readinessStates[0].readiness_state_id;
+    } else {
+      // Create a default made_to_order readiness state definition
+      // Default processing time: 1-3 days for made_to_order
+      const newState = await etsyAPI.createReadinessStateDefinition(shop.shopId, 2, 1, 3);
+      readinessStateId = newState.readiness_state_id;
+    }
+  } catch (error: any) {
+    // If creation fails (e.g., conflict - definition already exists), try to fetch again
+    if (error?.message?.includes('Conflict') || error?.message?.includes('409')) {
+      try {
+        const readinessStates = await etsyAPI.getReadinessStateDefinitions(shop.shopId);
+        const madeToOrderState = readinessStates?.find((r: any) => r.readiness_state === 2);
+        if (madeToOrderState) {
+          readinessStateId = madeToOrderState.readiness_state_id;
+        } else if (readinessStates && readinessStates.length > 0) {
+          readinessStateId = readinessStates[0].readiness_state_id;
+        }
+      } catch (retryError) {
+        console.warn('Failed to fetch readiness states after conflict:', retryError);
+      }
+    }
+    
+    if (!readinessStateId) {
+      console.warn('Failed to get/create readiness state definition:', error);
+      throw new Error('Failed to get or create readiness state definition. Please create a processing profile in your Etsy shop settings.');
+    }
+  }
+
+  if (!readinessStateId) {
+    throw new Error('No readiness state definition found for this shop. Please create a processing profile in your Etsy shop settings before creating listings.');
   }
 
   // Map our product to Etsy listing format
@@ -142,6 +214,8 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
     should_auto_renew: true,
     language: 'en' as const,
     is_private: false,
+    shipping_profile_id: shippingProfileId, // Required for physical listings
+    readiness_state_id: readinessStateId, // Required for physical listings
   };
 
   try {
@@ -194,10 +268,10 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
     
     // Save to our database
     const listing = new EtsyListing({
-      userId: shop.userId,
+      userId: String(userId), // Use authenticated user ID
       etsyListingId: listingId,
-      shopId: shop.shopId,
-      productId: product._id,
+      shopId: String(shop.shopId),
+      productId: product._id?.toString(),
       title: etsyListing.title || product.name,
       description: etsyListing.description || product.description || '',
       price: typeof etsyListing.price === 'object' && etsyListing.price?.amount 
@@ -208,11 +282,11 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
       tags: etsyListing.tags || product.tags || [],
       materials: etsyListing.materials || materials,
       categoryPath: etsyListing.category_path || [],
-      images: uploadedImages.map((img, idx) => ({
+      images: uploadedImages.length > 0 ? uploadedImages.map((img, idx) => ({
         url: img.url_fullxfull || img.url_570xN || img.url_75x75 || productImages[idx] || '',
         rank: img.rank || idx + 1,
         listingImageId: img.listing_image_id?.toString() || `${listingId}-${idx}`,
-      })),
+      })) : [],
       inventory: {
         quantity: etsyListing.quantity || product.stockCount || 1,
       },
@@ -233,7 +307,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
   }
 }
 
-async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
+async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, userId: string) {
   const existingListing = await EtsyListing.findOne({ 
     productId: product._id, 
     shopId: shop.shopId 

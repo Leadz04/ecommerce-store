@@ -659,7 +659,7 @@ function EtsyListingsSection({ shopId: propShopId }: { shopId: string | null }) 
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => loadListings(true, true)}
+            onClick={() => loadListings(true)}
             disabled={loading}
             className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
           >
@@ -1640,7 +1640,7 @@ type SidebarTab = {
   label: string;
   description?: string;
   icon: LucideIcon;
-  children?: Array<{ id: TabKey; label: string; icon?: LucideIcon }>;
+  children?: Array<{ id: TabKey; label: string; icon?: LucideIcon; description?: string }>;
 };
 
 interface User {
@@ -1691,6 +1691,16 @@ interface Product {
     summary?: PolicyReviewResult['summary'];
     aiReview?: PolicyReviewResult['aiReview'];
   };
+  variants?: Array<{
+    title?: string;
+    name?: string;
+    sku?: string;
+    price?: number;
+    originalPrice?: number;
+    available?: boolean;
+    inventory?: number | null;
+  }>;
+  sourceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1913,7 +1923,8 @@ export default function AdminDashboard() {
   
   // Etsy sub-navigation state
   const [etsySubNavOpen, setEtsySubNavOpen] = useState(false);
-  const [activeEtsySection, setActiveEtsySection] = useState<string>('shop-selector');
+  const initialEtsySection = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('section') || 'getting-started') : 'getting-started';
+  const [activeEtsySection, setActiveEtsySection] = useState<string>(initialEtsySection);
   
   // Etsy section navigation options
   const etsySections = [
@@ -1956,15 +1967,14 @@ export default function AdminDashboard() {
     return null;
   });
 
-  // Initialize active Etsy section from URL hash and auto-expand
+  // Initialize active Etsy section from URL query params and auto-expand
   useEffect(() => {
     if (activeTab === 'etsy') {
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#etsy-section-')) {
-        const sectionId = hash.replace('#etsy-section-', '');
+      const sectionParam = searchParams.get('section');
+      if (sectionParam) {
         const etsySectionIds = ['shop-selector', 'shop-connection', 'shop-overview', 'listings', 'listing-optimizer', 'review-management', 'bulk-operations', 'analytics', 'market-insights', 'repricing', 'create-listing', 'product-analysis', 'sync-controls', 'product-sync', 'export-products', 'sync-status'];
-        if (etsySectionIds.includes(sectionId)) {
-          setActiveEtsySection(sectionId);
+        if (etsySectionIds.includes(sectionParam)) {
+          setActiveEtsySection(sectionParam);
         }
       }
       // Auto-expand Etsy section when tab is active
@@ -1973,7 +1983,7 @@ export default function AdminDashboard() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, searchParams]);
 
   // Persist selected shop to localStorage (only when it actually changes)
   useEffect(() => {
@@ -2794,7 +2804,7 @@ export default function AdminDashboard() {
   };
 
   // Create brand tabs dynamically
-  const brandTabs: SidebarTab[] = brands.map(brand => ({
+  const brandTabs: SidebarTab[] = brands.map((brand): SidebarTab => ({
     id: `brand-${brand.toLowerCase().replace(/\s+/g, '-')}` as TabKey,
     label: brand,
     icon: Package,
@@ -2832,6 +2842,7 @@ export default function AdminDashboard() {
       label: 'Etsy Integration', 
       icon: ShoppingCart,
       children: [
+        { id: 'etsy-getting-started', label: 'Getting Started with Etsy', icon: HelpCircle },
         { id: 'etsy-shop-selector', label: 'Shop Selector', icon: ShoppingCart },
         { id: 'etsy-shop-connection', label: 'Shop Connection', icon: LinkIcon },
         { id: 'etsy-shop-overview', label: 'Shop Overview', icon: BarChart3 },
@@ -2877,6 +2888,13 @@ export default function AdminDashboard() {
 
   const isTabActive = (tab: SidebarTab) =>
     tab.id === activeTab || tab.children?.some(child => child.id === activeTab);
+
+  // Helper to check if activeTab is a brand-related tab
+  const isBrandOrStage3Tab = (tab: TabKey): boolean => {
+    if (tab === 'jacket-maker-products' || tab === 'stage3-brand-products') return true;
+    if (typeof tab === 'string' && tab.startsWith('brand-')) return true;
+    return false;
+  };
 
   const shouldShowChildren = (tab: SidebarTab) => {
     if (!tab.children) return false;
@@ -5808,10 +5826,10 @@ export default function AdminDashboard() {
                                   key={child.id}
                                   onClick={() => {
                                     if (tab.id === 'etsy') {
-                                      // For Etsy sections, set the active section instead of changing tab
+                                      // For Etsy sections, navigate to route with section query param
                                       const sectionId = child.id.replace('etsy-', '');
                                       setActiveEtsySection(sectionId);
-                                      window.history.replaceState(null, '', `#etsy-section-${sectionId}`);
+                                      updateQuery({ tab: 'etsy', section: sectionId });
                                     } else {
                                       handleTabChange(child.id);
                                     }
@@ -6257,174 +6275,179 @@ export default function AdminDashboard() {
               {(activeTab as any) === 'etsy' && (
                 <div className="space-y-8">
 
-                  {/* Etsy API Terms Compliance Notice */}
-                  <EtsyTrademarkDisclaimer variant="full" className="mb-6" />
+                  {/* Getting Started with Etsy Section */}
+                  {activeEtsySection === 'getting-started' && (
+                    <div id="etsy-section-getting-started" className="space-y-8">
+                      {/* Etsy API Terms Compliance Notice */}
+                      <EtsyTrademarkDisclaimer variant="full" className="mb-6" />
 
-                  {/* Support Information */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
-                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
-                      <h2 className="text-xl font-semibold text-purple-900">Support & Information</h2>
-                      <p className="text-purple-700/80 mt-1 text-sm">Contact information and compliance details for Etsy integration.</p>
-                    </div>
-                    <div className="p-6">
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Support Email</h3>
-                          <p className="text-sm text-gray-600 mb-2">
-                            For support related to this Etsy integration, Etsy sellers can contact us at:
-                          </p>
-                          <a
-                            href={`mailto:${ETSY_SUPPORT_EMAIL}`}
-                            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
-                          >
-                            <Mail className="h-4 w-4" />
-                            {ETSY_SUPPORT_EMAIL}
-                          </a>
-                          <p className="text-xs text-gray-500 mt-2">
-                            This email is monitored and we respond to all Etsy seller inquiries in a timely manner per Etsy API Terms.
-                          </p>
+                      {/* Support Information */}
+                      <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                        <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                          <h2 className="text-xl font-semibold text-purple-900">Support & Information</h2>
+                          <p className="text-purple-700/80 mt-1 text-sm">Contact information and compliance details for Etsy integration.</p>
                         </div>
-                        <div className="border-t pt-4">
-                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Data Freshness</h3>
-                          <p className="text-sm text-gray-600">
-                            Per Etsy API Terms, listing content is automatically refreshed every 6 hours,
-                            and other Etsy content is refreshed every 24 hours to ensure compliance.
-                          </p>
+                        <div className="p-6">
+                          <div className="space-y-4">
+                            <div>
+                              <h3 className="text-sm font-semibold text-gray-900 mb-2">Support Email</h3>
+                              <p className="text-sm text-gray-600 mb-2">
+                                For support related to this Etsy integration, Etsy sellers can contact us at:
+                              </p>
+                              <a
+                                href={`mailto:${ETSY_SUPPORT_EMAIL}`}
+                                className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                <Mail className="h-4 w-4" />
+                                {ETSY_SUPPORT_EMAIL}
+                              </a>
+                              <p className="text-xs text-gray-500 mt-2">
+                                This email is monitored and we respond to all Etsy seller inquiries in a timely manner per Etsy API Terms.
+                              </p>
+                            </div>
+                            <div className="border-t pt-4">
+                              <h3 className="text-sm font-semibold text-gray-900 mb-2">Data Freshness</h3>
+                              <p className="text-sm text-gray-600">
+                                Per Etsy API Terms, listing content is automatically refreshed every 6 hours,
+                                and other Etsy content is refreshed every 24 hours to ensure compliance.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* How It Works - Info Section */}
-                  <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-lg border-2 border-blue-200 p-6 mb-8">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 bg-blue-100 rounded-xl shrink-0">
-                        <HelpCircle className="h-6 w-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-black text-gray-900 mb-4">How Etsy Policy Checking Works</h3>
-                        <div className="space-y-4 text-sm text-gray-700">
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">1</span>
-                              Product Data Extraction
-                            </h4>
-                            <p className="ml-8 text-gray-600">The system extracts and analyzes three key components from each product:</p>
-                            <ul className="ml-8 mt-2 space-y-1 list-disc list-inside text-gray-600">
-                              <li><strong>Title:</strong> Product name/title text</li>
-                              <li><strong>Description:</strong> Full product description (HTML stripped to plain text)</li>
-                              <li><strong>Image Alt Text:</strong> Image filenames and metadata (if available)</li>
-                            </ul>
+                      {/* How It Works - Info Section */}
+                      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-lg border-2 border-blue-200 p-6 mb-8">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-blue-100 rounded-xl shrink-0">
+                            <HelpCircle className="h-6 w-6 text-blue-600" />
                           </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">2</span>
-                              Policy Violation Detection
-                            </h4>
-                            <p className="ml-8 text-gray-600 mb-2">The system scans for prohibited content using pattern matching:</p>
-                            <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                              <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
-                                <p className="font-semibold text-red-900 text-xs mb-1">❌ Personal Information</p>
-                                <p className="text-xs text-red-700">Phone numbers, emails, addresses, ZIP codes</p>
+                          <div className="flex-1">
+                            <h3 className="text-xl font-black text-gray-900 mb-4">How Etsy Policy Checking Works</h3>
+                            <div className="space-y-4 text-sm text-gray-700">
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">1</span>
+                                  Product Data Extraction
+                                </h4>
+                                <p className="ml-8 text-gray-600">The system extracts and analyzes three key components from each product:</p>
+                                <ul className="ml-8 mt-2 space-y-1 list-disc list-inside text-gray-600">
+                                  <li><strong>Title:</strong> Product name/title text</li>
+                                  <li><strong>Description:</strong> Full product description (HTML stripped to plain text)</li>
+                                  <li><strong>Image Alt Text:</strong> Image filenames and metadata (if available)</li>
+                                </ul>
                               </div>
-                              <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
-                                <p className="font-semibold text-red-900 text-xs mb-1">❌ External Marketplace Links</p>
-                                <p className="text-xs text-red-700">Amazon, eBay, Shopify, Walmart, etc.</p>
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">2</span>
+                                  Policy Violation Detection
+                                </h4>
+                                <p className="ml-8 text-gray-600 mb-2">The system scans for prohibited content using pattern matching:</p>
+                                <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                                  <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                                    <p className="font-semibold text-red-900 text-xs mb-1">❌ Personal Information</p>
+                                    <p className="text-xs text-red-700">Phone numbers, emails, addresses, ZIP codes</p>
+                                  </div>
+                                  <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                                    <p className="font-semibold text-red-900 text-xs mb-1">❌ External Marketplace Links</p>
+                                    <p className="text-xs text-red-700">Amazon, eBay, Shopify, Walmart, etc.</p>
+                                  </div>
+                                  <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                                    <p className="font-semibold text-red-900 text-xs mb-1">❌ Prohibited Content</p>
+                                    <p className="text-xs text-red-700">Counterfeit, weapons, drugs, hate speech</p>
+                                  </div>
+                                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                                    <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Misleading Information</p>
+                                    <p className="text-xs text-yellow-700">Spam phrases, false guarantees</p>
+                                  </div>
+                                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                                    <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Copyright Violations</p>
+                                    <p className="text-xs text-yellow-700">Disney, Marvel, Nintendo, etc.</p>
+                                  </div>
+                                  <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                                    <p className="font-semibold text-blue-900 text-xs mb-1">ℹ️ Spam Keywords</p>
+                                    <p className="text-xs text-blue-700">ALL CAPS, excessive punctuation</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
-                                <p className="font-semibold text-red-900 text-xs mb-1">❌ Prohibited Content</p>
-                                <p className="text-xs text-red-700">Counterfeit, weapons, drugs, hate speech</p>
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">3</span>
+                                  Etsy Handbook Comparison
+                                </h4>
+                                <p className="ml-8 text-gray-600 mb-2">Each product is scored against Etsy's seller handbook guidelines:</p>
+                                <div className="ml-8 grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                                  <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                                    <p className="font-semibold text-xs text-gray-900">Title Requirements</p>
+                                    <p className="text-xs text-gray-600">Max 140 chars, no personal info, descriptive keywords</p>
+                                  </div>
+                                  <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                                    <p className="font-semibold text-xs text-gray-900">Description Requirements</p>
+                                    <p className="text-xs text-gray-600">Min 200 chars, include materials, dimensions, care info</p>
+                                  </div>
+                                  <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
+                                    <p className="font-semibold text-xs text-gray-900">Image Alt Text</p>
+                                    <p className="text-xs text-gray-600">Descriptive, accessible, no personal information</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
-                                <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Misleading Information</p>
-                                <p className="text-xs text-yellow-700">Spam phrases, false guarantees</p>
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">4</span>
+                                  Scoring System
+                                </h4>
+                                <p className="ml-8 text-gray-600 mb-2">Products receive a compliance score (0-100) based on:</p>
+                                <div className="ml-8 grid grid-cols-3 gap-3 mt-2">
+                                  <div className="text-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
+                                    <p className="text-2xl font-black text-green-600">80-100</p>
+                                    <p className="text-xs font-semibold text-green-900 mt-1">Compliant</p>
+                                  </div>
+                                  <div className="text-center p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                                    <p className="text-2xl font-black text-yellow-600">60-79</p>
+                                    <p className="text-xs font-semibold text-yellow-900 mt-1">Needs Work</p>
+                                  </div>
+                                  <div className="text-center p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                                    <p className="text-2xl font-black text-red-600">0-59</p>
+                                    <p className="text-xs font-semibold text-red-900 mt-1">Critical Issues</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
-                                <p className="font-semibold text-yellow-900 text-xs mb-1">⚠️ Copyright Violations</p>
-                                <p className="text-xs text-yellow-700">Disney, Marvel, Nintendo, etc.</p>
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">5</span>
+                                  Google Search Analysis (Optional - SerpAPI)
+                                </h4>
+                                <p className="ml-8 text-gray-600 mb-2">When enabled, the system also performs Google Shopping searches to:</p>
+                                <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                                  <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                                    <p className="font-semibold text-indigo-900 text-xs mb-1">🔍 Search Visibility</p>
+                                    <p className="text-xs text-indigo-700">Checks if your product appears in Google Shopping results for relevant keywords</p>
+                                  </div>
+                                  <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                                    <p className="font-semibold text-indigo-900 text-xs mb-1">📊 Competitor Analysis</p>
+                                    <p className="text-xs text-indigo-700">Compares your product title, price, and ratings with top competitors</p>
+                                  </div>
+                                  <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                                    <p className="font-semibold text-indigo-900 text-xs mb-1">🔑 Keyword Performance</p>
+                                    <p className="text-xs text-indigo-700">Extracts related search terms and trending keywords from Google</p>
+                                  </div>
+                                  <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
+                                    <p className="font-semibold text-indigo-900 text-xs mb-1">⚡ SEO Insights</p>
+                                    <p className="text-xs text-indigo-700">Identifies opportunities to improve search ranking and discoverability</p>
+                                  </div>
+                                </div>
+                                <p className="ml-8 mt-2 text-xs text-gray-500 italic">Note: Requires SERPAPI_KEY in environment variables. Adds ~1 second delay per product for API rate limiting.</p>
                               </div>
-                              <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                                <p className="font-semibold text-blue-900 text-xs mb-1">ℹ️ Spam Keywords</p>
-                                <p className="text-xs text-blue-700">ALL CAPS, excessive punctuation</p>
+                              <div className="bg-blue-100 border-l-4 border-blue-500 p-4 rounded-lg mt-4">
+                                <p className="text-xs font-bold text-blue-900 mb-1">💡 Important Note:</p>
+                                <p className="text-xs text-blue-800">This tool uses pattern matching and Etsy's published guidelines. It cannot guarantee 100% compliance - always review Etsy's latest policies before listing. The Google Search Analysis provides additional insights but does not replace manual review.</p>
                               </div>
                             </div>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">3</span>
-                              Etsy Handbook Comparison
-                            </h4>
-                            <p className="ml-8 text-gray-600 mb-2">Each product is scored against Etsy's seller handbook guidelines:</p>
-                            <div className="ml-8 grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                              <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
-                                <p className="font-semibold text-xs text-gray-900">Title Requirements</p>
-                                <p className="text-xs text-gray-600">Max 140 chars, no personal info, descriptive keywords</p>
-                              </div>
-                              <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
-                                <p className="font-semibold text-xs text-gray-900">Description Requirements</p>
-                                <p className="text-xs text-gray-600">Min 200 chars, include materials, dimensions, care info</p>
-                              </div>
-                              <div className="bg-white border-2 border-gray-200 p-2 rounded-lg">
-                                <p className="font-semibold text-xs text-gray-900">Image Alt Text</p>
-                                <p className="text-xs text-gray-600">Descriptive, accessible, no personal information</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">4</span>
-                              Scoring System
-                            </h4>
-                            <p className="ml-8 text-gray-600 mb-2">Products receive a compliance score (0-100) based on:</p>
-                            <div className="ml-8 grid grid-cols-3 gap-3 mt-2">
-                              <div className="text-center p-3 bg-green-50 border-2 border-green-300 rounded-lg">
-                                <p className="text-2xl font-black text-green-600">80-100</p>
-                                <p className="text-xs font-semibold text-green-900 mt-1">Compliant</p>
-                              </div>
-                              <div className="text-center p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
-                                <p className="text-2xl font-black text-yellow-600">60-79</p>
-                                <p className="text-xs font-semibold text-yellow-900 mt-1">Needs Work</p>
-                              </div>
-                              <div className="text-center p-3 bg-red-50 border-2 border-red-300 rounded-lg">
-                                <p className="text-2xl font-black text-red-600">0-59</p>
-                                <p className="text-xs font-semibold text-red-900 mt-1">Critical Issues</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">5</span>
-                              Google Search Analysis (Optional - SerpAPI)
-                            </h4>
-                            <p className="ml-8 text-gray-600 mb-2">When enabled, the system also performs Google Shopping searches to:</p>
-                            <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                              <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
-                                <p className="font-semibold text-indigo-900 text-xs mb-1">🔍 Search Visibility</p>
-                                <p className="text-xs text-indigo-700">Checks if your product appears in Google Shopping results for relevant keywords</p>
-                              </div>
-                              <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
-                                <p className="font-semibold text-indigo-900 text-xs mb-1">📊 Competitor Analysis</p>
-                                <p className="text-xs text-indigo-700">Compares your product title, price, and ratings with top competitors</p>
-                              </div>
-                              <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
-                                <p className="font-semibold text-indigo-900 text-xs mb-1">🔑 Keyword Performance</p>
-                                <p className="text-xs text-indigo-700">Extracts related search terms and trending keywords from Google</p>
-                              </div>
-                              <div className="bg-indigo-50 border-l-4 border-indigo-400 p-3 rounded">
-                                <p className="font-semibold text-indigo-900 text-xs mb-1">⚡ SEO Insights</p>
-                                <p className="text-xs text-indigo-700">Identifies opportunities to improve search ranking and discoverability</p>
-                              </div>
-                            </div>
-                            <p className="ml-8 mt-2 text-xs text-gray-500 italic">Note: Requires SERPAPI_KEY in environment variables. Adds ~1 second delay per product for API rate limiting.</p>
-                          </div>
-                          <div className="bg-blue-100 border-l-4 border-blue-500 p-4 rounded-lg mt-4">
-                            <p className="text-xs font-bold text-blue-900 mb-1">💡 Important Note:</p>
-                            <p className="text-xs text-blue-800">This tool uses pattern matching and Etsy's published guidelines. It cannot guarantee 100% compliance - always review Etsy's latest policies before listing. The Google Search Analysis provides additional insights but does not replace manual review.</p>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Etsy Listings Section */}
                   {activeEtsySection === 'listings' && (
@@ -11822,7 +11845,7 @@ export default function AdminDashboard() {
                                   setShowProductModal(true);
                                 }}
                                 highlightTone="violet"
-                                disableImageEdit={activeTab === 'jacket-maker-products' || activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products'}
+                                disableImageEdit={isBrandOrStage3Tab(activeTab)}
                               />
                             </div>
                           ))}
@@ -12154,7 +12177,7 @@ export default function AdminDashboard() {
                                     setShowProductModal(true);
                                   }}
                                   highlightTone="violet"
-                                  disableImageEdit={activeTab === 'jacket-maker-products' || activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products'}
+                                  disableImageEdit={isBrandOrStage3Tab(activeTab)}
                                 />
                               </div>
                             ))}
@@ -14647,7 +14670,7 @@ export default function AdminDashboard() {
                       }
 
                       // Check if product is from scraped brands (brands products tab)
-                      const isStage3Product = activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products' || activeTab === 'jacket-maker-products';
+                      const isStage3Product = isBrandOrStage3Tab(activeTab);
 
                       if (isStage3Product) {
                         // Update product
