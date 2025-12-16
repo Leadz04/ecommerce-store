@@ -108,7 +108,6 @@ const ProductSchema = new Schema<IProduct>({
   category: {
     type: String,
     required: false, // Relaxed from enum for scraped data support
-    index: true
   },
   department: {
     type: String,
@@ -118,13 +117,11 @@ const ProductSchema = new Schema<IProduct>({
   subCategory: {
     type: String,
     required: false,
-    index: true
   },
   brand: {
     type: String,
     required: false,
     trim: true,
-    index: true
   },
   rating: {
     type: Number,
@@ -150,7 +147,6 @@ const ProductSchema = new Schema<IProduct>({
   expectedReleaseDate: {
     type: Date,
     required: false,
-    index: true,
   },
   tags: [{
     type: String,

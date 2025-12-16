@@ -69,7 +69,9 @@ import {
   ChevronsDown,
   Target,
   Star,
-  TicketPercent
+  TicketPercent,
+  Link as LinkIcon,
+  Navigation
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -79,6 +81,13 @@ import EmailTrackingDashboard from '@/components/EmailTrackingDashboard';
 import AdminProductCard, { AdminProductCardBadge, AdminProductCardStat } from '@/components/AdminProductCard';
 import ProductEmailMarketing from '@/components/ProductEmailMarketing';
 import CouponManagement from '@/components/CouponManagement';
+import EtsyListingOptimizer from '@/components/EtsyListingOptimizer';
+import EtsyReviewManagement from '@/components/EtsyReviewManagement';
+import EtsyBulkOperations from '@/components/EtsyBulkOperations';
+import EtsyAnalyticsDashboard from '@/components/EtsyAnalyticsDashboard';
+import EtsyRepricingEngine from '@/components/EtsyRepricingEngine';
+import EtsyMarketInsights from '@/components/EtsyMarketInsights';
+import EtsyShopSelector from '@/components/EtsyShopSelector';
 import { useAuthStore } from '@/store/authStore';
 import UserForm from '@/components/UserForm';
 import RoleForm from '@/components/RoleForm';
@@ -92,8 +101,1535 @@ import toast from 'react-hot-toast';
 import ImageEditor from '@/components/ImageEditor';
 import QuickEditModal from '@/components/QuickEditModal';
 
+function formatRelativeTime(dateString?: string | null) {
+  if (!dateString) return 'Never';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
+
+function EtsySyncStatus() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<{
+    connected: boolean;
+    shopName?: string;
+    listingsSynced?: number;
+    ordersPending?: number;
+    lastSyncAt?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/etsy/status', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json.success) {
+          setError('Failed to load Etsy status');
+          return;
+        }
+        if (!json.connected) {
+          setStatus({ connected: false });
+        } else {
+          setStatus({
+            connected: true,
+            shopName: json.shop?.shopName,
+            listingsSynced: json.stats?.listingsSynced ?? 0,
+            ordersPending: json.stats?.ordersPending ?? 0,
+            lastSyncAt: json.shop?.lastSyncAt ?? null,
+          });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError('Failed to load Etsy status');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading Etsy status…</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-red-600">{error}</p>;
+  }
+
+  if (!status?.connected) {
+    return (
+      <p className="text-sm text-gray-600">
+        No active Etsy shop connected yet. Use the &quot;Connect Etsy Shop&quot; button above to link your shop.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <div>
+              <p className="font-medium text-green-900">Shop Connected</p>
+              <p className="text-sm text-green-700">
+                {status.shopName ? `${status.shopName} is connected and active` : 'Etsy shop is connected and active'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <Package className="h-5 w-5 text-blue-600" />
+            <div>
+              <p className="font-medium text-blue-900">Listings Synced</p>
+              <p className="text-sm text-blue-700">
+                {status.listingsSynced ?? 0} products synced to Etsy
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <Clock className="h-5 w-5 text-yellow-600" />
+            <div>
+              <p className="font-medium text-yellow-900">Last Sync</p>
+              <p className="text-sm text-yellow-700">
+                {formatRelativeTime(status.lastSyncAt)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <ShoppingCart className="h-5 w-5 text-purple-600" />
+            <div>
+              <p className="font-medium text-purple-900">Orders Pending</p>
+              <p className="text-sm text-purple-700">
+                {status.ordersPending ?? 0} orders to sync
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EtsyShopOverviewSection({ shopId }: { shopId: string | null }) {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-purple-900">Etsy Shop Overview</h2>
+          <p className="text-purple-700/80 mt-1 text-sm">
+            See your connected shop details, synced listings, orders, and product stats.
+          </p>
+        </div>
+        <EtsyShopOverviewRefreshButton shopId={shopId} onRefresh={handleRefresh} />
+      </div>
+      <div className="p-6">
+        <EtsyShopOverview shopId={shopId} refreshTrigger={refreshTrigger} />
+      </div>
+    </div>
+  );
+}
+
+function EtsyShopOverviewRefreshButton({ shopId, onRefresh }: { shopId: string | null; onRefresh?: () => void }) {
+  const [syncing, setSyncing] = useState(false);
+
+  const refreshFromEtsy = async () => {
+    if (!shopId) {
+      toast.error('Please select a shop first');
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      
+      // Sync all data from Etsy
+      const syncRes = await fetch('/api/etsy/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ type: 'all', shopId }),
+      });
+
+      if (!syncRes.ok) {
+        const errorData = await syncRes.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${syncRes.status}`);
+      }
+
+      const syncResult = await syncRes.json();
+      if (!syncResult.success) {
+        toast.error(syncResult.error || 'Failed to sync data from Etsy');
+        setSyncing(false);
+        return;
+      }
+
+      toast.success('Data synced successfully from Etsy');
+      setSyncing(false);
+      
+      // Trigger refresh callback instead of reloading page
+      if (onRefresh) {
+        // Small delay to ensure sync completes
+        setTimeout(() => {
+          onRefresh();
+        }, 500);
+      } else {
+        // Fallback to page reload if no callback provided
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }
+    } catch (e: any) {
+      console.error('Error syncing from Etsy:', e);
+      toast.error(e?.message || 'Failed to sync data from Etsy');
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={refreshFromEtsy}
+      disabled={syncing || !shopId}
+      className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    >
+      {syncing ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Syncing...</span>
+        </>
+      ) : (
+        <>
+          <RefreshCw className="h-4 w-4" />
+          <span>Refresh from Etsy</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+function EtsyShopOverview({ shopId, refreshTrigger }: { shopId: string | null; refreshTrigger?: number }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<any>(null);
+  const lastShopIdRef = useRef<string | null>(null);
+
+  const loadData = async () => {
+    if (!shopId) {
+      setLoading(false);
+      setData(null);
+      setError(null);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/etsy/status?shopId=${encodeURIComponent(shopId)}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const json = await res.json();
+      
+      if (!json.success) {
+        setError(json.error || 'Failed to load Etsy shop details');
+        setLoading(false);
+        return;
+      }
+      
+      setData(json);
+      setLoading(false);
+    } catch (e: any) {
+      console.error('Error loading shop details:', e);
+      setError(e?.message || 'Failed to load Etsy shop details');
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Always load data when shopId changes or refreshTrigger changes
+    lastShopIdRef.current = shopId;
+    void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId, refreshTrigger]);
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading shop details…</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-red-600">{error}</p>;
+  }
+
+  if (!data?.connected || !data.shop) {
+    return (
+      <p className="text-sm text-gray-600">
+        No active Etsy shop connected yet. Connect your shop above to see detailed stats.
+      </p>
+    );
+  }
+
+  const { shop, stats } = data;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Shop Details</h3>
+        <div className="space-y-2 text-sm text-gray-700">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Name</span>
+            <span>{shop.shopName}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Shop ID</span>
+            <span className="font-mono text-xs bg-purple-50 px-2 py-1 rounded border border-purple-100">
+              {shop.shopId}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Status</span>
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              {shop.isActive ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Connected Since</span>
+            <span>{shop.createdAt ? new Date(shop.createdAt).toLocaleDateString() : 'Unknown'}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Last Sync</span>
+            <span>{formatRelativeTime(shop.lastSyncAt)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Etsy Data</h3>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/40">
+            <p className="text-xs font-medium text-purple-800">Listings Synced</p>
+            <p className="mt-1 text-2xl font-semibold text-purple-900">
+              {stats?.listingsSynced ?? 0}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/40">
+            <p className="text-xs font-medium text-purple-800">Total Orders</p>
+            <p className="mt-1 text-2xl font-semibold text-purple-900">
+              {stats?.totalOrders ?? 0}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/40">
+            <p className="text-xs font-medium text-purple-800">Total Views</p>
+            <p className="mt-1 text-2xl font-semibold text-purple-900">
+              {stats?.totalViews ?? 0}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/40">
+            <p className="text-xs font-medium text-purple-800">Favorites</p>
+            <p className="mt-1 text-2xl font-semibold text-purple-900">
+              {stats?.totalFavorites ?? 0}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">Quick Links</h3>
+        <div className="space-y-2 text-sm">
+          <a
+            href={`https://www.etsy.com/shop/${shop.shopName}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-purple-700 hover:text-purple-900"
+          >
+            <ExternalLink className="h-4 w-4" />
+            View shop on Etsy
+          </a>
+          <p className="text-xs text-gray-500 mt-2">
+            Use the sync controls below to refresh listings, orders, or inventory. Stats will update
+            automatically after each sync.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EtsyListingsSection({ shopId: propShopId }: { shopId: string | null }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [shopId, setShopId] = useState<string | null>(propShopId);
+  const [listings, setListings] = useState<any[]>([]);
+  const [refreshed, setRefreshed] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<any | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [detailsData, setDetailsData] = useState<any | null>(null);
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    image: true,
+    index: true,
+    title: true,
+    price: true,
+    state: true,
+    quantity: true,
+    lastSynced: true,
+  });
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+
+  const columnLabels: Record<string, string> = {
+    image: 'Image',
+    index: '#',
+    title: 'Title',
+    price: 'Price',
+    state: 'Status',
+    quantity: 'Quantity',
+    lastSynced: 'Last Synced',
+  };
+
+  const decodeHtmlEntities = (text: string | undefined | null): string =>
+    (text || '')
+      .replace(/&amp;/g, '&')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
+  const formatCurrency = (value: number | undefined | null, currency?: string) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currency || 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    } catch {
+      return `$${value.toFixed(2)} ${currency || ''}`;
+    }
+  };
+
+  const formatDateTime = (value: string | Date | undefined | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  useEffect(() => {
+    // Only update if propShopId actually changed
+    if (shopId !== propShopId) {
+      setShopId(propShopId);
+    }
+    if (propShopId) {
+      void loadListings(false);
+    } else {
+      setListings([]);
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propShopId]); // Only depend on propShopId, not shopId
+
+  const loadListings = async (forceRefresh = false) => {
+    if (!shopId && !propShopId) {
+      setError('Please select a shop first');
+      setListings([]);
+      setLoading(false);
+      return;
+    }
+
+    const currentShopId = shopId || propShopId;
+    if (!currentShopId) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('token');
+      const listingsRes = await fetch(
+        `/api/etsy/listings?shopId=${encodeURIComponent(currentShopId)}&forceRefresh=${forceRefresh}&includeStale=true`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }
+      );
+      const listingsJson = await listingsRes.json();
+
+      if (!listingsJson.success) {
+        throw new Error(listingsJson.error || 'Failed to load Etsy listings');
+      }
+
+      setListings(listingsJson.listings || []);
+      setRefreshed(!!listingsJson.refreshed);
+    } catch (e: any) {
+      console.error('Failed to load Etsy listings:', e);
+      setError(e?.message || 'Failed to load Etsy listings');
+      setListings([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const openListingDetails = async (listing: any) => {
+    setSelectedListing(listing);
+    setDetailsLoading(true);
+    setDetailsError(null);
+    setDetailsData(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `/api/etsy/listing-details?etsyListingId=${encodeURIComponent(
+          listing.etsyListingId || listing.listing_id
+        )}${shopId ? `&shopId=${encodeURIComponent(shopId || propShopId || '')}` : ''}`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to load listing details');
+      }
+      setDetailsData(json.listing || json);
+    } catch (e: any) {
+      console.error('Failed to load Etsy listing details:', e);
+      setDetailsError(e?.message || 'Failed to load listing details');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const closeDetails = () => {
+    setSelectedListing(null);
+    setDetailsData(null);
+    setDetailsError(null);
+    setDetailsLoading(false);
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-indigo-50/30 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-purple-900">Etsy Listings</h2>
+          <p className="text-purple-700/80 mt-1 text-sm">
+            All listings for your connected Etsy shop{shopId ? ` (Shop ID: ${shopId})` : ''}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => loadListings(true, true)}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span>Refresh from Etsy</span>
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setColumnsMenuOpen((open) => !open)}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50"
+            >
+              Columns
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            {columnsMenuOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-purple-100 rounded-lg shadow-lg z-10 p-2 text-xs space-y-1">
+                <p className="text-[11px] text-gray-500 mb-1">Show / hide columns</p>
+                {Object.entries(columnLabels).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 px-1 py-1 rounded hover:bg-purple-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3 w-3 text-purple-600 border-purple-300 rounded focus:ring-purple-500"
+                      checked={visibleColumns[key]}
+                      onChange={() =>
+                        setVisibleColumns((prev) => ({
+                          ...prev,
+                          [key]: !prev[key],
+                        }))
+                      }
+                    />
+                    <span className="text-gray-900">{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="p-6">
+        {error && (
+          <p className="text-sm text-red-600 mb-4">
+            {error}
+          </p>
+        )}
+
+        {!error && listings.length === 0 && !loading && (
+          <p className="text-sm text-gray-600">
+            No listings found for the connected Etsy shop.
+          </p>
+        )}
+
+        {loading && (
+          <p className="text-sm text-gray-500">
+            Loading listings…
+          </p>
+        )}
+
+        {!loading && listings.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-gray-700">
+              <p>
+                Showing <span className="font-semibold">{listings.length}</span> listing
+                {listings.length === 1 ? '' : 's'}
+                {shopId ? ` for shop ${shopId}` : ''}.
+              </p>
+              {refreshed && (
+                <p className="text-green-700">
+                  Recently refreshed from Etsy to maintain data freshness.
+                </p>
+              )}
+            </div>
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {visibleColumns.image && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 w-20">Image</th>
+                    )}
+                    {visibleColumns.index && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 w-12">#</th>
+                    )}
+                    {visibleColumns.title && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Title</th>
+                    )}
+                    {visibleColumns.price && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Price</th>
+                    )}
+                    {visibleColumns.state && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Status</th>
+                    )}
+                    {visibleColumns.quantity && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Quantity</th>
+                    )}
+                    {visibleColumns.lastSynced && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Last Synced</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {listings.map((listing: any, index: number) => (
+                    <tr
+                      key={listing._id || listing.etsyListingId || listing.listing_id || index}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => openListingDetails(listing)}
+                    >
+                      {visibleColumns.image && (
+                        <td className="px-3 py-2">
+                          {(() => {
+                            const firstImage = listing.images?.[0];
+                            const imageUrl = firstImage?.url || firstImage?.url_fullxfull || firstImage?.url_570xN || firstImage?.url_75x75;
+                            
+                            if (imageUrl) {
+                              return (
+                                <div className="relative w-16 h-16 rounded-md overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0">
+                                  <img
+                                    src={imageUrl}
+                                    alt={decodeHtmlEntities(listing.title) || 'Listing image'}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      // Fallback to placeholder if image fails to load
+                                      (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23e5e7eb" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+                                    }}
+                                  />
+                                  {listing.images && listing.images.length > 1 && (
+                                    <div className="absolute bottom-0 right-0 bg-black/60 text-white text-[10px] px-1 rounded-tl">
+                                      +{listing.images.length - 1}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="w-16 h-16 rounded-md border border-gray-200 bg-gray-100 flex items-center justify-center">
+                                <Package className="h-6 w-6 text-gray-400" />
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
+                      {visibleColumns.index && (
+                        <td className="px-3 py-2 text-xs text-gray-500">
+                          {index + 1}
+                        </td>
+                      )}
+                      {visibleColumns.title && (
+                        <td className="px-3 py-2">
+                          <div
+                            className="font-medium text-gray-900 line-clamp-2"
+                            title={decodeHtmlEntities(listing.title)}
+                          >
+                            {decodeHtmlEntities(listing.title)}
+                          </div>
+                          {listing.etsyListingId && (
+                            <div className="text-xs text-gray-500">
+                              Etsy ID: {listing.etsyListingId}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {visibleColumns.price && (
+                        <td className="px-3 py-2 text-gray-900 whitespace-nowrap">
+                          {formatCurrency(listing.price, listing.currency)}
+                        </td>
+                      )}
+                      {visibleColumns.state && (
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-purple-200 text-purple-700 capitalize">
+                            {listing.state || 'unknown'}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.quantity && (
+                        <td className="px-3 py-2 text-gray-900">
+                          {listing.inventory?.quantity ?? '—'}
+                        </td>
+                      )}
+                      {visibleColumns.lastSynced && (
+                        <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">
+                          {formatDateTime(listing.lastSyncedAt)}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+      {selectedListing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Etsy Listing Details
+                </h3>
+                <p className="text-xs text-gray-600">
+                  ID: {selectedListing.etsyListingId || selectedListing.listing_id}
+                </p>
+              </div>
+              <button
+                onClick={closeDetails}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 overflow-auto text-sm space-y-3">
+              {detailsLoading && (
+                <p className="text-gray-500 flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading details from Etsy…
+                </p>
+              )}
+              {detailsError && (
+                <p className="text-red-600">
+                  {detailsError}
+                </p>
+              )}
+              {!detailsLoading && !detailsError && detailsData && (
+                <>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-1">
+                      {detailsData.title || selectedListing.title}
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-2">
+                      State: <span className="font-medium capitalize">{detailsData.state}</span>
+                    </p>
+                  </div>
+                  {/* Listing Images */}
+                  {(() => {
+                    const images = detailsData.images || selectedListing.images || [];
+                    const hasImages = Array.isArray(images) && images.length > 0;
+                    
+                    if (!hasImages) return null;
+                    
+                    return (
+                      <div>
+                        <div className="font-medium text-gray-800 mb-2">Images ({images.length})</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {images.map((img: any, idx: number) => {
+                            const imageUrl = img.url || img.url_fullxfull || img.url_570xN || img.url_75x75;
+                            if (!imageUrl) return null;
+                            
+                            return (
+                              <div
+                                key={img.listingImageId || img.listing_image_id || idx}
+                                className="relative aspect-square rounded-md overflow-hidden border border-gray-200 bg-gray-100"
+                              >
+                                <img
+                                  src={imageUrl}
+                                  alt={`${detailsData.title || selectedListing.title} - Image ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23e5e7eb" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
+                                  }}
+                                />
+                                {(img.rank !== undefined || idx !== undefined) && (
+                                  <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                                    #{img.rank !== undefined ? img.rank + 1 : idx + 1}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-800">Price</div>
+                      <div className="text-gray-900">
+                        {detailsData.price
+                          ? `$${(detailsData.price.amount / detailsData.price.divisor).toFixed(2)} ${detailsData.price.currency_code
+                          }`
+                          : '—'}
+                      </div>
+                      <div className="font-medium text-gray-800 mt-2">Quantity</div>
+                      <div className="text-gray-900">
+                        {detailsData.quantity ?? '—'}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-800">Tags</div>
+                      <div className="text-xs text-gray-700">
+                        {Array.isArray(detailsData.tags) && detailsData.tags.length
+                          ? detailsData.tags.join(', ')
+                          : '—'}
+                      </div>
+                      <div className="font-medium text-gray-800 mt-2">Category Path</div>
+                      <div className="text-xs text-gray-700">
+                        {Array.isArray(detailsData.category_path) && detailsData.category_path.length
+                          ? detailsData.category_path.join(' › ')
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-800 mb-1">Description</div>
+                    <p className="text-gray-700 whitespace-pre-wrap text-xs max-h-48 overflow-auto border border-gray-100 rounded p-2">
+                      {detailsData.description || 'No description available.'}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-800 mb-1">All Etsy fields</div>
+                    <div className="border border-gray-100 rounded max-h-48 overflow-auto text-[11px]">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-2 py-1 text-left font-semibold text-gray-700 w-1/3">
+                              Field
+                            </th>
+                            <th className="px-2 py-1 text-left font-semibold text-gray-700">
+                              Value
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {Object.entries(detailsData).map(([key, value]) => (
+                            <tr key={key}>
+                              <td className="px-2 py-1 text-gray-700 break-all align-top">
+                                {key}
+                              </td>
+                              <td className="px-2 py-1 text-gray-600 break-all align-top">
+                                {typeof value === 'string' ||
+                                  typeof value === 'number' ||
+                                  typeof value === 'boolean'
+                                  ? String(value)
+                                  : JSON.stringify(value)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <details className="mt-2">
+                    <summary className="text-xs text-gray-600 cursor-pointer">
+                      View raw Etsy JSON
+                    </summary>
+                    <pre className="mt-2 p-2 bg-gray-50 border border-gray-100 rounded text-[11px] overflow-auto max-h-48 text-black">
+                      {JSON.stringify(detailsData, null, 2)}
+                    </pre>
+                  </details>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EtsyCreateListingSection() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [shopId, setShopId] = useState<string | null>(null);
+
+  // Product selection
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('0');
+  const [quantity, setQuantity] = useState('1');
+  const [tags, setTags] = useState('');
+  const [taxonomyId, setTaxonomyId] = useState('');
+  const [materials, setMaterials] = useState('');
+  const [style, setStyle] = useState('');
+  const [shippingTemplateId, setShippingTemplateId] = useState('');
+  const [processingMin, setProcessingMin] = useState('');
+  const [processingMax, setProcessingMax] = useState('');
+  const [language, setLanguage] = useState('en-US');
+  const [whoMade, setWhoMade] = useState<'i_did' | 'collective' | 'someone_else'>('i_did');
+  const [whenMade, setWhenMade] = useState<string>('made_to_order');
+  const [isSupply, setIsSupply] = useState(false);
+  const [isCustomizable, setIsCustomizable] = useState(false);
+  const [isDigital, setIsDigital] = useState(false);
+  const [shouldAutoRenew, setShouldAutoRenew] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [usedManufacturer, setUsedManufacturer] = useState(false);
+  const [isVintage, setIsVintage] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/etsy/status', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (json.success && json.connected && json.shop?.shopId) {
+          setShopId(json.shop.shopId.toString());
+        }
+      } catch {
+        // ignore; user will see connect message if no shop
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!shopId) {
+      setError('No active Etsy shop connected. Connect your shop first.');
+      return;
+    }
+
+    const numericPrice = Number(price);
+    const numericQuantity = Number(quantity || '1');
+    const numericTaxonomyId = taxonomyId ? Number(taxonomyId) : undefined;
+
+    if (!title.trim() || !description.trim() || !numericPrice || !numericTaxonomyId) {
+      setError('Title, description, price, and taxonomy ID are required.');
+      return;
+    }
+
+    const tagList = tags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const materialList = materials
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const styleList = style
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const listingPayload: any = {
+      title: title.trim(),
+      description: description.trim(),
+      quantity: numericQuantity || 1,
+      price: {
+        amount: Math.round(numericPrice * 100),
+        divisor: 100,
+        currency_code: 'USD',
+      },
+      tags: tagList,
+      taxonomy_id: numericTaxonomyId,
+      who_made: whoMade,
+      when_made: whenMade as any,
+      is_supply: isSupply,
+      is_customizable: isCustomizable,
+      is_digital: isDigital,
+      should_auto_renew: shouldAutoRenew,
+      is_private: isPrivate,
+      language,
+      used_manufacturer: usedManufacturer,
+      is_vintage: isVintage,
+    };
+
+    // Collect product images for upload
+    const productImages: string[] = [];
+    if (selectedProduct) {
+      // Add main image
+      if (selectedProduct.image) {
+        productImages.push(selectedProduct.image);
+      }
+      // Add additional images (up to 19 more, total 20 max)
+      if (selectedProduct.images && Array.isArray(selectedProduct.images)) {
+        productImages.push(...selectedProduct.images.slice(0, 19));
+      }
+    }
+
+    if (materialList.length) {
+      listingPayload.materials = materialList;
+    }
+    if (styleList.length) {
+      listingPayload.style = styleList.join(', ');
+    }
+    if (shippingTemplateId) {
+      listingPayload.shipping_template_id = Number(shippingTemplateId);
+    }
+    if (processingMin) {
+      listingPayload.processing_min = Number(processingMin);
+    }
+    if (processingMax) {
+      listingPayload.processing_max = Number(processingMax);
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/etsy/listings/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ shopId, listing: listingPayload }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to create listing');
+      }
+
+      setSuccessMessage('Draft listing created on Etsy successfully.');
+      // Optionally clear fields except taxonomy id
+      setTitle('');
+      setDescription('');
+      setPrice('0');
+      setQuantity('1');
+      setTags('');
+      setMaterials('');
+      setStyle('');
+      setShippingTemplateId('');
+      setProcessingMin('');
+      setProcessingMax('');
+      setLanguage('en-US');
+      setWhoMade('i_did');
+      setWhenMade('made_to_order');
+      setIsSupply(false);
+      setIsCustomizable(false);
+      setIsDigital(false);
+      setShouldAutoRenew(false);
+      setIsPrivate(false);
+      setUsedManufacturer(false);
+      setIsVintage(false);
+    } catch (e: any) {
+      console.error('Failed to create Etsy listing:', e);
+      setError(e?.message || 'Failed to create listing');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-indigo-50/30">
+        <h2 className="text-xl font-semibold text-purple-900">Create Draft Listing on Etsy</h2>
+        <p className="text-purple-700/80 mt-1 text-sm">
+          Create a new Etsy listing in <strong>draft</strong> mode with all key listing attributes.
+        </p>
+      </div>
+      <div className="p-6 space-y-4">
+        {!shopId && (
+          <p className="text-sm text-red-600">
+            No active Etsy shop connected. Connect your shop above before creating listings.
+          </p>
+        )}
+        {error && (
+          <p className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+        {successMessage && (
+          <p className="text-sm text-green-700">
+            {successMessage}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Product Selection */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-800 mb-2">
+              Select Product (Optional - to auto-fill fields)
+            </label>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Search products by name..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              />
+              {productsLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading products...</span>
+                </div>
+              )}
+              {!productsLoading && productSearch && products.length > 0 && (
+                <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                  {products.map((product) => (
+                    <button
+                      key={product._id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProduct(product);
+                        setProductSearch('');
+                        setProducts([]);
+                      }}
+                      className={`w-full text-left px-4 py-2 hover:bg-purple-50 border-b border-gray-100 last:border-b-0 ${
+                        selectedProduct?._id === product._id ? 'bg-purple-100' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {product.image && (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 truncate">{product.name}</div>
+                          <div className="text-sm text-gray-500">${product.price?.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedProduct && (
+                <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {selectedProduct.image && (
+                      <img
+                        src={selectedProduct.image}
+                        alt={selectedProduct.name}
+                        className="w-12 h-12 object-cover rounded"
+                      />
+                    )}
+                    <div>
+                      <div className="font-medium text-gray-900">{selectedProduct.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {selectedProduct.images?.length || 0} image{(selectedProduct.images?.length || 0) !== 1 ? 's' : ''} available
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProduct(null);
+                      setProductSearch('');
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                maxLength={140}
+                placeholder="E.g. Lamb Skin Leather Puffer Vest | Dark Brown"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Taxonomy ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                value={taxonomyId}
+                onChange={(e) => setTaxonomyId(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="E.g. 1429"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Use the numeric taxonomy ID from Etsy&apos;s seller taxonomy (see docs / `etsy_openapi.json`).
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              placeholder="Describe your product, materials, sizing, and key benefits."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Price (USD) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Quantity
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Tags (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="leather jacket, brown vest, winter wear"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Materials (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={materials}
+                onChange={(e) => setMaterials(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="lambskin leather, polyester lining"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Style keywords (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={style}
+                onChange={(e) => setStyle(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="minimalist, streetwear, vintage"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Who made it?
+              </label>
+              <select
+                value={whoMade}
+                onChange={(e) => setWhoMade(e.target.value as any)}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900 font-medium transition-colors hover:border-gray-300"
+              >
+                <option value="i_did" className="text-gray-900">I did</option>
+                <option value="collective" className="text-gray-900">Collective</option>
+                <option value="someone_else" className="text-gray-900">Someone else</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                When was it made?
+              </label>
+              <select
+                value={whenMade}
+                onChange={(e) => setWhenMade(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900 font-medium transition-colors hover:border-gray-300"
+              >
+                <option value="made_to_order" className="text-gray-900">Made to order</option>
+                <option value="2020_2023" className="text-gray-900">2020–2023</option>
+                <option value="2010_2019" className="text-gray-900">2010–2019</option>
+                <option value="2000_2003" className="text-gray-900">2000–2003</option>
+                <option value="1990s" className="text-gray-900">1990s</option>
+                <option value="1980s" className="text-gray-900">1980s</option>
+                <option value="1970s" className="text-gray-900">1970s</option>
+                <option value="1960s" className="text-gray-900">1960s</option>
+                <option value="1950s" className="text-gray-900">1950s</option>
+                <option value="before_2004" className="text-gray-900">Before 2004</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Shipping profile ID
+              </label>
+              <input
+                type="number"
+                value={shippingTemplateId}
+                onChange={(e) => setShippingTemplateId(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="Optional numeric ID"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Processing time min (days)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={processingMin}
+                onChange={(e) => setProcessingMin(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Processing time max (days)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={processingMax}
+                onChange={(e) => setProcessingMax(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Listing language
+              </label>
+              <input
+                type="text"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
+                placeholder="en-US"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-6">
+              <input
+                type="checkbox"
+                checked={shouldAutoRenew}
+                onChange={(e) => setShouldAutoRenew(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Auto-renew listing
+              </label>
+            </div>
+            <div className="flex items-center gap-2 pt-6">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Private listing
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isSupply}
+                onChange={(e) => setIsSupply(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                This is a supply
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isCustomizable}
+                onChange={(e) => setIsCustomizable(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Customizable item
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isDigital}
+                onChange={(e) => setIsDigital(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Digital item
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={usedManufacturer}
+                onChange={(e) => setUsedManufacturer(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Used a production partner / manufacturer
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isVintage}
+                onChange={(e) => setIsVintage(e.target.checked)}
+                className="h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label className="text-sm font-medium text-gray-800">
+                Mark as vintage item
+              </label>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading || !shopId}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span>Create Draft Listing</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Base allowed tabs - brand tabs will be added dynamically
-const baseAllowedTabs = ['users','roles','products','jacket-maker-products','policy-review','orders','reviews','overview','marketing','performance','analytics','etsy','seo','seo-raw','analytics-seo','blogs','keyword-planner','sourcing','email-tracking','support','chat','related-questions','coupons','selected-products'] as const;
+const baseAllowedTabs = ['users', 'roles', 'products', 'jacket-maker-products', 'policy-review', 'orders', 'reviews', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking', 'support', 'chat', 'related-questions', 'coupons', 'selected-products'] as const;
 type BaseTabKey = typeof baseAllowedTabs[number];
 type TabKey = BaseTabKey | string; // Allow dynamic brand tabs
 
@@ -298,7 +1834,7 @@ export default function AdminDashboard() {
   const isAdminUser = normalizedRoleName === 'ADMIN' || normalizedRoleName === 'SUPER_ADMIN';
   const isSuperAdmin = user?.role?.name?.toUpperCase?.() === 'SUPER_ADMIN';
   const initialTabParam = (typeof window !== 'undefined') ? (new URLSearchParams(window.location.search).get('tab') || '') : '';
-  
+
   // For initial tab, just use baseAllowedTabs since brands won't be loaded yet
   const initialTab = (baseAllowedTabs as readonly string[]).includes(initialTabParam) ? (initialTabParam as any) : 'overview';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
@@ -326,7 +1862,7 @@ export default function AdminDashboard() {
   const [relatedQuestionsQuery, setRelatedQuestionsQuery] = useState('');
   const [relatedQuestions, setRelatedQuestions] = useState<any[]>([]);
   const [relatedQuestionsLoading, setRelatedQuestionsLoading] = useState(false);
-  
+
   // Product modal state
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -337,13 +1873,13 @@ export default function AdminDashboard() {
   const [analysisSelectedMeta, setAnalysisSelectedMeta] = useState<Record<string, { name: string; price?: number }>>({});
   const [etsyExportLoading, setEtsyExportLoading] = useState<Record<string, boolean>>({});
   const [etsyProductSearch, setEtsyProductSearch] = useState('');
-  
+
   // Product selection for export
   const [selectedProductsForExport, setSelectedProductsForExport] = useState<Set<string>>(new Set());
   const [selectedProductsDetails, setSelectedProductsDetails] = useState<Record<string, Product>>({});
   const [exportSelectionLoading, setExportSelectionLoading] = useState(false);
   const [loadingStoredSelections, setLoadingStoredSelections] = useState(true);
-  
+
   // LocalStorage key for selected products
   const SELECTED_PRODUCTS_STORAGE_KEY = 'admin_selected_products_for_export';
 
@@ -374,6 +1910,30 @@ export default function AdminDashboard() {
 
   const [etsySyncProductId, setEtsySyncProductId] = useState('');
   const [etsySyncProductOpen, setEtsySyncProductOpen] = useState(false);
+  
+  // Etsy sub-navigation state
+  const [etsySubNavOpen, setEtsySubNavOpen] = useState(false);
+  const [activeEtsySection, setActiveEtsySection] = useState<string>('shop-selector');
+  
+  // Etsy section navigation options
+  const etsySections = [
+    { id: 'shop-selector', label: 'Shop Selector', icon: ShoppingCart },
+    { id: 'shop-connection', label: 'Shop Connection', icon: LinkIcon },
+    { id: 'shop-overview', label: 'Shop Overview', icon: BarChart3 },
+    { id: 'listings', label: 'Listings', icon: Package },
+    { id: 'listing-optimizer', label: 'AI Listing Optimizer', icon: Sparkles },
+    { id: 'review-management', label: 'Review Management', icon: Star },
+    { id: 'bulk-operations', label: 'Bulk Operations', icon: Wrench },
+    { id: 'analytics', label: 'Analytics Dashboard', icon: BarChart3 },
+    { id: 'market-insights', label: 'Marketplace Insights', icon: Target },
+    { id: 'repricing', label: 'Repricing Engine', icon: DollarSign },
+    { id: 'create-listing', label: 'Create Listing', icon: Plus },
+    { id: 'product-analysis', label: 'Product Analysis', icon: FileCheck },
+    { id: 'sync-controls', label: 'Sync Controls', icon: RefreshCw },
+    { id: 'product-sync', label: 'Product Sync', icon: Cloud },
+    { id: 'export-products', label: 'Export Products', icon: Download },
+    { id: 'sync-status', label: 'Sync Status', icon: CheckCircle },
+  ];
   const [etsySyncAction, setEtsySyncAction] = useState<'create' | 'update' | 'delete'>('create');
   const [etsySyncActionOpen, setEtsySyncActionOpen] = useState(false);
   const [etsyExportCategory, setEtsyExportCategory] = useState('all');
@@ -387,6 +1947,45 @@ export default function AdminDashboard() {
   const [policyReviewSearch, setPolicyReviewSearch] = useState('');
   const [policyReviewFilter, setPolicyReviewFilter] = useState<PolicyReviewFilter>('all');
   const [policyReviewStatus, setPolicyReviewStatus] = useState<Record<string, { loading: boolean; error?: string; result?: PolicyReviewResult }>>({});
+
+  // Etsy shop selection state
+  const [selectedEtsyShopId, setSelectedEtsyShopId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedEtsyShopId');
+    }
+    return null;
+  });
+
+  // Initialize active Etsy section from URL hash and auto-expand
+  useEffect(() => {
+    if (activeTab === 'etsy') {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#etsy-section-')) {
+        const sectionId = hash.replace('#etsy-section-', '');
+        const etsySectionIds = ['shop-selector', 'shop-connection', 'shop-overview', 'listings', 'listing-optimizer', 'review-management', 'bulk-operations', 'analytics', 'market-insights', 'repricing', 'create-listing', 'product-analysis', 'sync-controls', 'product-sync', 'export-products', 'sync-status'];
+        if (etsySectionIds.includes(sectionId)) {
+          setActiveEtsySection(sectionId);
+        }
+      }
+      // Auto-expand Etsy section when tab is active
+      if (!collapsedSections.has('etsy')) {
+        setOpenNestedMenu('etsy');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Persist selected shop to localStorage (only when it actually changes)
+  useEffect(() => {
+    const stored = localStorage.getItem('selectedEtsyShopId');
+    if (selectedEtsyShopId !== stored) {
+      if (selectedEtsyShopId) {
+        localStorage.setItem('selectedEtsyShopId', selectedEtsyShopId);
+      } else {
+        localStorage.removeItem('selectedEtsyShopId');
+      }
+    }
+  }, [selectedEtsyShopId]);
   const [policyImprovements, setPolicyImprovements] = useState<Record<string, ProductImprovementState>>({});
   const [rawSearchItems, setRawSearchItems] = useState<any[]>([]);
 
@@ -671,7 +2270,7 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productPage, setProductPage] = useState(1);
   const [productPerPage, setProductPerPage] = useState(20);
-  
+
   // Jacket Maker Products state
   const [jacketMakerProducts, setJacketMakerProducts] = useState<Product[]>([]);
   const [jacketMakerPage, setJacketMakerPage] = useState(1);
@@ -688,7 +2287,7 @@ export default function AdminDashboard() {
   const [jacketMakerSortOrder, setJacketMakerSortOrder] = useState<'asc' | 'desc'>('desc');
   const [jacketMakerBrands, setJacketMakerBrands] = useState<string[]>([]);
   const [jacketMakerCategories, setJacketMakerCategories] = useState<string[]>([]);
-  
+
   // Brand products state (dynamic for all brands)
   const [brands, setBrands] = useState<string[]>([]);
   const [brandCounts, setBrandCounts] = useState<Record<string, number>>({});
@@ -705,7 +2304,7 @@ export default function AdminDashboard() {
   const [brandSortBy, setBrandSortBy] = useState<Record<string, string>>({});
   const [brandSortOrder, setBrandSortOrder] = useState<Record<string, 'asc' | 'desc'>>({});
   const [brandCategories, setBrandCategories] = useState<Record<string, string[]>>({});
-  
+
   const [productEmailStats, setProductEmailStats] = useState<Record<string, {
     totalSent: number;
     totalOpened: number;
@@ -728,7 +2327,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Reviews state
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -745,7 +2344,7 @@ export default function AdminDashboard() {
     images: [] as string[],
   });
   const [deleteReviewConfirm, setDeleteReviewConfirm] = useState<{ reviewId: string; reviewTitle?: string } | null>(null);
-  
+
   // Support Tickets state
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [supportLoading, setSupportLoading] = useState(false);
@@ -760,7 +2359,7 @@ export default function AdminDashboard() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [updatingTicket, setUpdatingTicket] = useState(false);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
-  
+
   // Chat management state
   const [chatConversations, setChatConversations] = useState<any[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
@@ -771,7 +2370,7 @@ export default function AdminDashboard() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatMessage, setChatMessage] = useState('');
   const [sendingChatMessage, setSendingChatMessage] = useState(false);
-  
+
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
@@ -1228,6 +2827,29 @@ export default function AdminDashboard() {
     stage3BrandProductsTab, // Add expandable STAGE3 brand products section
     { id: 'selected-products', label: 'Selected Products', icon: ListChecks, description: 'View and export selected products' },
     { id: 'policy-review', label: 'Policy Review', icon: ShieldCheck },
+    { 
+      id: 'etsy', 
+      label: 'Etsy Integration', 
+      icon: ShoppingCart,
+      children: [
+        { id: 'etsy-shop-selector', label: 'Shop Selector', icon: ShoppingCart },
+        { id: 'etsy-shop-connection', label: 'Shop Connection', icon: LinkIcon },
+        { id: 'etsy-shop-overview', label: 'Shop Overview', icon: BarChart3 },
+        { id: 'etsy-listings', label: 'Listings', icon: Package },
+        { id: 'etsy-listing-optimizer', label: 'AI Listing Optimizer', icon: Sparkles },
+        { id: 'etsy-review-management', label: 'Review Management', icon: Star },
+        { id: 'etsy-bulk-operations', label: 'Bulk Operations', icon: Wrench },
+        { id: 'etsy-analytics', label: 'Analytics Dashboard', icon: BarChart3 },
+        { id: 'etsy-market-insights', label: 'Marketplace Insights', icon: Target },
+        { id: 'etsy-repricing', label: 'Repricing Engine', icon: DollarSign },
+        { id: 'etsy-create-listing', label: 'Create Listing', icon: Plus },
+        { id: 'etsy-product-analysis', label: 'Product Analysis', icon: FileCheck },
+        { id: 'etsy-sync-controls', label: 'Sync Controls', icon: RefreshCw },
+        { id: 'etsy-product-sync', label: 'Product Sync', icon: Cloud },
+        { id: 'etsy-export-products', label: 'Export Products', icon: Download },
+        { id: 'etsy-sync-status', label: 'Sync Status', icon: CheckCircle },
+      ]
+    },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
     { id: 'coupons', label: 'Coupons & Discounts', icon: TicketPercent, description: 'Manage discount codes and promotions' },
@@ -1243,7 +2865,6 @@ export default function AdminDashboard() {
         { id: 'performance', label: 'Performance', icon: BarChart3 },
         { id: 'analytics', label: 'Analytics', icon: Activity },
         { id: 'analytics-seo', label: 'Google & Shopping', icon: AlignLeft },
-        { id: 'etsy', label: 'Etsy Integration', icon: ShoppingCart },
         { id: 'seo', label: 'SEO Research', icon: Search },
         { id: 'seo-raw', label: 'SEO Raw Data', icon: Type },
         { id: 'related-questions', label: 'Related Questions', icon: HelpCircle },
@@ -1463,7 +3084,7 @@ export default function AdminDashboard() {
             price: product.price
           };
         });
-        
+
         localStorage.setItem(SELECTED_PRODUCTS_STORAGE_KEY, JSON.stringify({
           ids: idsArray,
           productInfo: minimalProductInfo
@@ -1491,11 +3112,11 @@ export default function AdminDashboard() {
         }
 
         const storedData = JSON.parse(stored);
-        
+
         // Handle both old format (array of IDs) and new format (object with ids and productInfo)
         let storedIds: string[] = [];
         let storedProductInfo: Record<string, any> = {};
-        
+
         if (Array.isArray(storedData)) {
           // Old format - just array of IDs
           storedIds = storedData;
@@ -1572,7 +3193,7 @@ export default function AdminDashboard() {
 
                 // Find IDs not found in main database
                 const notFoundIds = storedIds.filter(id => !foundMainProducts[id]);
-                
+
                 // Update with main products found
                 if (Object.keys(foundMainProducts).length > 0) {
                   setSelectedProductsDetails(prev => ({
@@ -1692,10 +3313,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab) {
       // Find the parent tab for the active tab
-      const parentTab = sidebarTabs.find(tab => 
+      const parentTab = sidebarTabs.find(tab =>
         tab.children?.some(child => child.id === activeTab)
       );
-      
+
       if (parentTab && !collapsedSections.has(parentTab.id)) {
         // Auto-expand if not manually collapsed
         setOpenNestedMenu(parentTab.id);
@@ -1711,12 +3332,12 @@ export default function AdminDashboard() {
       if (brandTab) {
         const brandName = brandTab;
         const brandTabId = `brand-${brandName.toLowerCase().replace(/\s+/g, '-')}`;
-        
+
         // Only fetch if:
         // 1. This is a different brand tab than last time, OR
         // 2. We haven't loaded products for this brand yet
         const shouldFetch = lastActiveBrandTab.current !== brandTabId || !brandProducts[brandName] || brandProducts[brandName].length === 0;
-        
+
         if (shouldFetch) {
           lastActiveBrandTab.current = brandTabId;
           fetchBrandProducts(brandName);
@@ -2684,7 +4305,7 @@ export default function AdminDashboard() {
       if (reviewStatusFilter !== 'all') params.set('status', reviewStatusFilter);
       params.set('page', reviewPage.toString());
       params.set('limit', '20');
-      
+
       const response = await fetch(`/api/admin/reviews?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2700,18 +4321,18 @@ export default function AdminDashboard() {
           // If response is not JSON, use status text
           errorMessage = response.statusText || errorMessage;
         }
-        
+
         if (response.status === 401) {
           toast.error('Unauthorized. Please log in again.');
           router.push('/login');
           return;
         }
-        
+
         if (response.status === 403) {
           toast.error('Access denied. You do not have permission to view reviews.');
           return;
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -2873,8 +4494,8 @@ export default function AdminDashboard() {
       if (response.ok) {
         const data = await response.json();
         // Filter users with admin permissions
-        const admins = (data.users || []).filter((u: any) => 
-          u.role?.name === 'SUPER_ADMIN' || 
+        const admins = (data.users || []).filter((u: any) =>
+          u.role?.name === 'SUPER_ADMIN' ||
           u.permissions?.some((p: string) => p.includes('ORDER_VIEW_ALL'))
         );
         setAdminUsers(admins);
@@ -3256,6 +4877,30 @@ export default function AdminDashboard() {
     }
     setQuickEditProducts(selectedProducts);
     setShowQuickEditModal(true);
+  };
+
+  const handleProductStatusUpdate = async (productId: string, updates: { status?: string; isActive?: boolean }) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update product status');
+      }
+
+      toast.success('Product updated successfully');
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product status:', error);
+      toast.error('Failed to update product status');
+    }
   };
 
   const handleQuickEditSave = async (updates: { category?: string; subCategory?: string; brand?: string; price?: number; productType?: string; type?: string }) => {
@@ -4156,12 +5801,21 @@ export default function AdminDashboard() {
                               }`}
                           >
                             {tab.children.map((child) => {
-                              const childActive = activeTab === child.id;
+                              const childActive = activeTab === child.id || (tab.id === 'etsy' && activeEtsySection === child.id.replace('etsy-', ''));
                               return (
                                 <button
                                   type="button"
                                   key={child.id}
-                                  onClick={() => handleTabChange(child.id)}
+                                  onClick={() => {
+                                    if (tab.id === 'etsy') {
+                                      // For Etsy sections, set the active section instead of changing tab
+                                      const sectionId = child.id.replace('etsy-', '');
+                                      setActiveEtsySection(sectionId);
+                                      window.history.replaceState(null, '', `#etsy-section-${sectionId}`);
+                                    } else {
+                                      handleTabChange(child.id);
+                                    }
+                                  }}
                                   aria-current={childActive ? 'page' : undefined}
                                   className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${childActive
                                     ? 'bg-blue-600/10 text-blue-700'
@@ -4602,9 +6256,10 @@ export default function AdminDashboard() {
               {/* Etsy Integration Tab */}
               {(activeTab as any) === 'etsy' && (
                 <div className="space-y-8">
+
                   {/* Etsy API Terms Compliance Notice */}
                   <EtsyTrademarkDisclaimer variant="full" className="mb-6" />
-                  
+
                   {/* Support Information */}
                   <div className="bg-white rounded-lg shadow-sm border border-purple-100">
                     <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
@@ -4618,7 +6273,7 @@ export default function AdminDashboard() {
                           <p className="text-sm text-gray-600 mb-2">
                             For support related to this Etsy integration, Etsy sellers can contact us at:
                           </p>
-                          <a 
+                          <a
                             href={`mailto:${ETSY_SUPPORT_EMAIL}`}
                             className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
                           >
@@ -4632,7 +6287,7 @@ export default function AdminDashboard() {
                         <div className="border-t pt-4">
                           <h3 className="text-sm font-semibold text-gray-900 mb-2">Data Freshness</h3>
                           <p className="text-sm text-gray-600">
-                            Per Etsy API Terms, listing content is automatically refreshed every 6 hours, 
+                            Per Etsy API Terms, listing content is automatically refreshed every 6 hours,
                             and other Etsy content is refreshed every 24 hours to ensure compliance.
                           </p>
                         </div>
@@ -4771,8 +6426,128 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                  {/* Etsy Listings Section */}
+                  {activeEtsySection === 'listings' && (
+                    <div id="etsy-section-listings" className="scroll-mt-24">
+                      <EtsyListingsSection shopId={selectedEtsyShopId} />
+                    </div>
+                  )}
+
+                  {/* AI Listing Optimizer */}
+                  {activeEtsySection === 'listing-optimizer' && (
+                    <div id="etsy-section-listing-optimizer" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-purple-900">AI Listing Optimizer</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">
+                          Use AI to optimize your Etsy listing titles, descriptions, and tags for better SEO and conversions.
+                        </p>
+                      </div>
+                      <EtsyShopOverviewRefreshButton shopId={selectedEtsyShopId} />
+                    </div>
+                    <div className="p-6">
+                      <EtsyListingOptimizer shopId={selectedEtsyShopId} />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Review Management */}
+                  {activeEtsySection === 'review-management' && (
+                    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                      <h2 className="text-xl font-semibold text-purple-900">Review Management & Reputation Builder</h2>
+                      <p className="text-purple-700/80 mt-1 text-sm">
+                        Manage reviews, analyze sentiment, and generate professional responses to build your shop reputation.
+                      </p>
+                    </div>
+                    <div className="p-6">
+                      <EtsyReviewManagement />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Bulk Operations Manager */}
+                  {activeEtsySection === 'bulk-operations' && (
+                    <div id="etsy-section-bulk-operations" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-purple-900">Bulk Operations Manager</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">
+                          Edit multiple listings at once - update prices, quantities, tags, processing times, and more.
+                        </p>
+                      </div>
+                      <EtsyShopOverviewRefreshButton shopId={selectedEtsyShopId} />
+                    </div>
+                    <div className="p-6">
+                      <EtsyBulkOperations />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Advanced Analytics Dashboard */}
+                  {activeEtsySection === 'analytics' && (
+                    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-purple-900">Advanced Analytics Dashboard</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">
+                          Comprehensive insights into sales performance, traffic, and shop metrics.
+                        </p>
+                      </div>
+                      <EtsyShopOverviewRefreshButton shopId={selectedEtsyShopId} />
+                    </div>
+                    <div className="p-6">
+                      <EtsyAnalyticsDashboard shopId={selectedEtsyShopId} />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Marketplace Insights */}
+                  {activeEtsySection === 'market-insights' && (
+                    <div id="etsy-section-market-insights" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-indigo-50/40 to-purple-50/30 flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-purple-900">Marketplace Insights</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">
+                          Explore public Etsy listings to benchmark pricing, demand, and competition for your keywords.
+                        </p>
+                      </div>
+                      <EtsyShopOverviewRefreshButton shopId={selectedEtsyShopId} />
+                    </div>
+                    <div className="p-6">
+                      <EtsyMarketInsights />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Smart Repricing Engine */}
+                  {activeEtsySection === 'repricing' && (
+                    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-purple-900">Smart Repricing Engine</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">
+                          AI-powered price optimization and automated repricing rules based on inventory, demand, and performance.
+                        </p>
+                      </div>
+                      <EtsyShopOverviewRefreshButton shopId={selectedEtsyShopId} />
+                    </div>
+                    <div className="p-6">
+                      <EtsyRepricingEngine />
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Create New Etsy Listing (Draft) */}
+                  {activeEtsySection === 'create-listing' && (
+                    <div id="etsy-section-create-listing" className="scroll-mt-24">
+                      <EtsyCreateListingSection />
+                    </div>
+                  )}
+
                   {/* Product Analysis Tool */}
-                  <div className="bg-white rounded-2xl shadow-xl border-2 border-orange-100 overflow-hidden">
+                  {activeEtsySection === 'product-analysis' && (
+                    <div className="bg-white rounded-2xl shadow-xl border-2 border-orange-100 overflow-hidden">
                     <div className="p-4 sm:p-8 border-b-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500">
                       <div className="flex items-center gap-3 sm:gap-4">
                         <div className="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg flex-shrink-0">
@@ -4802,7 +6577,7 @@ export default function AdminDashboard() {
                               placeholder="Search products by name, category, or brand..."
                               value={etsyProductSearch}
                               onChange={(e) => setEtsyProductSearch(e.target.value)}
-                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all bg-white shadow-sm text-sm"
+                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-4 focus:ring-orange-200 transition-all bg-white shadow-sm text-sm text-gray-900"
                             />
                             {etsyProductSearch && (
                               <button
@@ -5339,30 +7114,83 @@ export default function AdminDashboard() {
                       <div id="etsyAnalysisResults" className="hidden mt-10"></div>
                     </div>
                   </div>
-                  {/* Etsy Connection */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                  )}
+
+                  {/* Etsy Shop Selector */}
+                  {activeEtsySection === 'shop-selector' && (
+                    <div id="etsy-section-shop-selector" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
                     <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
-                      <h2 className="text-xl font-semibold text-purple-900">Etsy Shop Connection</h2>
-                      <p className="text-purple-700/80 mt-1 text-sm">Connect your Etsy shop to sync products, orders, and inventory.</p>
+                      <h2 className="text-xl font-semibold text-purple-900">Select Etsy Shop</h2>
+                      <p className="text-purple-700/80 mt-1 text-sm">Choose which shop to manage, or connect a new one.</p>
                     </div>
                     <div className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-900">Connect to Etsy</h3>
-                          <p className="text-gray-600 mt-1">Authorize access to your Etsy shop to enable product and order synchronization.</p>
-                        </div>
-                        <a
-                          href="/api/etsy/auth"
-                          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md"
-                        >
-                          Connect Etsy Shop
-                        </a>
-                      </div>
+                      <EtsyShopSelector
+                        selectedShopId={selectedEtsyShopId}
+                        onShopChange={setSelectedEtsyShopId}
+                        showAddButton={true}
+                      />
                     </div>
                   </div>
+                  )}
+
+                  {/* Shop Connection */}
+                  {activeEtsySection === 'shop-connection' && (
+                    <div id="etsy-section-shop-connection" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
+                      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                        <h2 className="text-xl font-semibold text-purple-900">Etsy Shop Connection</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">Connect your Etsy shop to sync products, orders, and inventory.</p>
+                      </div>
+                      <div className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">Connect to Etsy</h3>
+                            <p className="text-gray-600 mt-1">Authorize access to your Etsy shop to enable product and order synchronization.</p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const token = localStorage.getItem('token');
+                                if (!token) {
+                                  toast.error('Please log in to connect your Etsy shop');
+                                  return;
+                                }
+                                // Fetch auth URL with token, then redirect
+                                const response = await fetch('/api/etsy/auth/init', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json',
+                                  },
+                                });
+                                const data = await response.json();
+                                if (data.authUrl) {
+                                  window.location.href = data.authUrl;
+                                } else {
+                                  toast.error(data.error || 'Failed to initiate Etsy connection');
+                                }
+                              } catch (error) {
+                                toast.error('Failed to connect Etsy shop');
+                              }
+                            }}
+                            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md"
+                          >
+                            Connect Etsy Shop
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Etsy Shop Overview */}
+                  {activeEtsySection === 'shop-overview' && (
+                    <div id="etsy-section-shop-overview" className="scroll-mt-24">
+                    <EtsyShopOverviewSection shopId={selectedEtsyShopId} />
+                  </div>
+                  )}
 
                   {/* Sync Controls */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                  {activeEtsySection === 'sync-controls' && (
+                    <div id="etsy-section-sync-controls" className="bg-white rounded-lg shadow-sm border border-purple-100">
                     <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
                       <h2 className="text-xl font-semibold text-purple-900">Sync Controls</h2>
                       <p className="text-purple-700/80 mt-1 text-sm">Manually trigger synchronization between your store and Etsy.</p>
@@ -5372,10 +7200,19 @@ export default function AdminDashboard() {
                         <button
                           onClick={async () => {
                             try {
+                              if (!selectedEtsyShopId) {
+                                toast.error('Please select a shop first');
+                                return;
+                              }
+
+                              const token = localStorage.getItem('token');
                               const response = await fetch('/api/etsy/sync', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ type: 'listings', shopId: 'your-shop-id' })
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                },
+                                body: JSON.stringify({ type: 'listings', shopId: selectedEtsyShopId })
                               });
                               const result = await response.json();
                               if (result.success) {
@@ -5397,10 +7234,19 @@ export default function AdminDashboard() {
                         <button
                           onClick={async () => {
                             try {
+                              if (!selectedEtsyShopId) {
+                                toast.error('Please select a shop first');
+                                return;
+                              }
+
+                              const token = localStorage.getItem('token');
                               const response = await fetch('/api/etsy/sync', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ type: 'orders', shopId: 'your-shop-id' })
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                },
+                                body: JSON.stringify({ type: 'orders', shopId: selectedEtsyShopId })
                               });
                               const result = await response.json();
                               if (result.success) {
@@ -5422,10 +7268,19 @@ export default function AdminDashboard() {
                         <button
                           onClick={async () => {
                             try {
+                              if (!selectedEtsyShopId) {
+                                toast.error('Please select a shop first');
+                                return;
+                              }
+
+                              const token = localStorage.getItem('token');
                               const response = await fetch('/api/etsy/sync', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ type: 'inventory', shopId: 'your-shop-id' })
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                },
+                                body: JSON.stringify({ type: 'inventory', shopId: selectedEtsyShopId })
                               });
                               const result = await response.json();
                               if (result.success) {
@@ -5446,9 +7301,11 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Product Sync */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                  {activeEtsySection === 'product-sync' && (
+                    <div id="etsy-section-product-sync" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
                     <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
                       <h2 className="text-xl font-semibold text-purple-900">Product Sync to Etsy</h2>
                       <p className="text-purple-700/80 mt-1 text-sm">Sync your store products to Etsy listings.</p>
@@ -5474,8 +7331,61 @@ export default function AdminDashboard() {
                             onSelect={(val) => setEtsySyncAction(val as 'create' | 'update' | 'delete')}
                             className="w-full sm:w-56"
                           />
-                          <button className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-4 py-2 text-center text-white transition-all duration-200 shadow-sm hover:from-purple-700 hover:to-purple-800 hover:shadow-md lg:w-auto">
-                            Sync to Etsy
+                          <button 
+                            onClick={async () => {
+                              if (!etsySyncProductId) {
+                                toast.error('Please select a product to sync');
+                                return;
+                              }
+                              if (!selectedEtsyShopId) {
+                                toast.error('Please select an Etsy shop first');
+                                return;
+                              }
+
+                              try {
+                                setLoading(true);
+                                const token = localStorage.getItem('token');
+                                const res = await fetch('/api/etsy/products/sync-to-etsy', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                                  },
+                                  body: JSON.stringify({
+                                    productId: etsySyncProductId,
+                                    shopId: selectedEtsyShopId,
+                                    action: etsySyncAction,
+                                  }),
+                                });
+
+                                const json = await res.json();
+                                if (!res.ok || !json.success) {
+                                  throw new Error(json.error || `Failed to ${etsySyncAction} product`);
+                                }
+
+                                toast.success(`Product ${etsySyncAction}d successfully${json.result?.etsyListingId ? ` (Listing ID: ${json.result.etsyListingId})` : ''}`);
+                                
+                                // Reset form
+                                setEtsySyncProductId('');
+                                setEtsySyncAction('create');
+                              } catch (e: any) {
+                                console.error(`Failed to ${etsySyncAction} product:`, e);
+                                toast.error(e?.message || `Failed to ${etsySyncAction} product`);
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            disabled={loading || !etsySyncProductId || !selectedEtsyShopId}
+                            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-4 py-2 text-center text-white transition-all duration-200 shadow-sm hover:from-purple-700 hover:to-purple-800 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed lg:w-auto flex items-center justify-center gap-2"
+                          >
+                            {loading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Syncing...</span>
+                              </>
+                            ) : (
+                              <span>Sync to Etsy</span>
+                            )}
                           </button>
                         </div>
                         <div className="text-sm text-gray-600">
@@ -5486,9 +7396,11 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* CSV Export for Etsy */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
+                  {activeEtsySection === 'export-products' && (
+                    <div className="bg-white rounded-lg shadow-sm border border-purple-100">
                     <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
                       <h2 className="text-xl font-semibold text-purple-900">Export Products for Etsy</h2>
                       <p className="text-purple-700/80 mt-1 text-sm">Export your products as CSV file for Etsy bulk import.</p>
@@ -5521,7 +7433,7 @@ export default function AdminDashboard() {
                                 value={etsyExportCustomLimit}
                                 onChange={(e) => setEtsyExportCustomLimit(e.target.value)}
                                 placeholder="Custom limit (1-1000)"
-                                className="w-full rounded-lg border border-purple-200 px-3 py-2 text-sm text-gray-700 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 sm:w-48"
+                                className="w-full rounded-lg border border-purple-200 px-3 py-2 text-sm text-gray-900 bg-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 sm:w-48"
                               />
                             )}
                             <button
@@ -5894,58 +7806,20 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Sync Status */}
-                  <div className="bg-white rounded-lg shadow-sm border border-purple-100">
-                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
-                      <h2 className="text-xl font-semibold text-purple-900">Sync Status</h2>
-                      <p className="text-purple-700/80 mt-1 text-sm">Monitor the status of your Etsy integration.</p>
-                    </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <CheckCircle className="h-5 w-5 text-green-600" />
-                              <div>
-                                <p className="font-medium text-green-900">Shop Connected</p>
-                                <p className="text-sm text-green-700">Etsy shop is connected and active</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <Package className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <p className="font-medium text-blue-900">Listings Synced</p>
-                                <p className="text-sm text-blue-700">12 products synced to Etsy</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <Clock className="h-5 w-5 text-yellow-600" />
-                              <div>
-                                <p className="font-medium text-yellow-900">Last Sync</p>
-                                <p className="text-sm text-yellow-700">2 hours ago</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                              <ShoppingCart className="h-5 w-5 text-purple-600" />
-                              <div>
-                                <p className="font-medium text-purple-900">Orders Pending</p>
-                                <p className="text-sm text-purple-700">3 orders to sync</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                  {activeEtsySection === 'sync-status' && (
+                    <div id="etsy-section-sync-status" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
+                      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                        <h2 className="text-xl font-semibold text-purple-900">Sync Status</h2>
+                        <p className="text-purple-700/80 mt-1 text-sm">Monitor the status of your Etsy integration.</p>
+                      </div>
+                      <div className="p-6">
+                        <EtsySyncStatus />
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -7806,269 +9680,269 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-            {/* No Results */}
-            {analyticsResults.length === 0 && analyticsSearchQuery && !analyticsSeoLoading && (
-              <div className="bg-white rounded-lg shadow-sm border border-purple-100 p-6 text-center">
-                <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Related Questions Tab */}
-        {activeTab === 'related-questions' && (
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-blue-900">Google Related Questions</h2>
-                  <p className="text-blue-700/80 mt-1 text-sm">
-                    Discover questions people ask about your products and niche using Google&apos;s &quot;People also ask&quot; data.
-                  </p>
+                  {/* No Results */}
+                  {analyticsResults.length === 0 && analyticsSearchQuery && !analyticsSeoLoading && (
+                    <div className="bg-white rounded-lg shadow-sm border border-purple-100 p-6 text-center">
+                      <p className="text-purple-600">No analytics results found for "{analyticsSearchQuery}"</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+              )}
 
-            <div className="p-6 space-y-8">
-              {/* Search */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-800 mb-2">Search Term</label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
-                        <input
-                          type="text"
-                          placeholder="e.g. handmade jewelry, sustainable fashion, vintage furniture"
-                          value={relatedQuestionsQuery}
-                          onChange={(e) => setRelatedQuestionsQuery(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              searchRelatedQuestions();
-                            }
-                          }}
-                          className="w-full pl-9 pr-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <button
-                        onClick={searchRelatedQuestions}
-                        disabled={relatedQuestionsLoading || !relatedQuestionsQuery.trim()}
-                        className="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {relatedQuestionsLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            <span>Searching...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Search className="h-4 w-4 mr-2" />
-                            <span>Search</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Usage Tips */}
-                  <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-4">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">Tips for better results</h3>
-                    <ul className="text-sm text-blue-800/90 space-y-1 list-disc list-inside">
-                      <li>Use specific product or niche terms (e.g. &quot;minimalist gold necklace&quot; instead of just &quot;jewelry&quot;).</li>
-                      <li>Include customer intent words like &quot;best&quot;, &quot;how to&quot;, &quot;ideas&quot;, &quot;guide&quot;.</li>
-                      <li>Try both broad and narrow variations of your keywords.</li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Why Related Questions / Helper content */}
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-lg">
-                    <h3 className="font-semibold mb-1">Why Related Questions?</h3>
-                    <p className="text-sm text-blue-50/90">
-                      These are real questions customers ask on Google. Use them to create product descriptions, FAQs, blog posts, and support content
-                      that actually answers what people search for.
-                    </p>
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-blue-100 p-4 space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                        <HelpCircle className="h-4 w-4 text-blue-700" />
-                      </div>
+              {/* Related Questions Tab */}
+              {activeTab === 'related-questions' && (
+                <div className="bg-white rounded-lg shadow-sm border">
+                  <div className="p-6 border-b border-blue-100 bg-gradient-to-r from-blue-50/40 to-indigo-50/30">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-blue-900">Content ideas</p>
-                        <p className="text-xs text-blue-700/80">
-                          Turn questions into product descriptions, FAQs, and blog posts.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <Sparkles className="h-4 w-4 text-indigo-700" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-indigo-900">SEO benefits</p>
-                        <p className="text-xs text-indigo-700/80">
-                          Answering these questions helps you rank for long-tail searches.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                        <Target className="h-4 w-4 text-emerald-700" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-emerald-900">Customer insights</p>
-                        <p className="text-xs text-emerald-700/80">
-                          See what information customers still need before buying.
+                        <h2 className="text-xl font-semibold text-blue-900">Google Related Questions</h2>
+                        <p className="text-blue-700/80 mt-1 text-sm">
+                          Discover questions people ask about your products and niche using Google&apos;s &quot;People also ask&quot; data.
                         </p>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Results */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-blue-900">Related Questions</h3>
-                  <div className="flex items-center space-x-3 text-sm text-blue-700/80">
-                    <span className="flex items-center space-x-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span>New</span>
-                    </span>
-                    <span className="flex items-center space-x-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span>Content opportunities</span>
-                    </span>
-                  </div>
-                </div>
-
-                {relatedQuestionsLoading && (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="flex items-center space-x-3 text-blue-700">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>Fetching related questions...</span>
-                    </div>
-                  </div>
-                )}
-
-                {!relatedQuestionsLoading && relatedQuestions.length === 0 && (
-                  <div className="bg-blue-50 border border-dashed border-blue-200 rounded-xl p-6 text-center">
-                    <p className="text-blue-900 font-medium mb-2">No related questions yet</p>
-                    <p className="text-blue-700/80 text-sm">
-                      Enter a search term above to discover what customers are asking about your products and niche.
-                    </p>
-                  </div>
-                )}
-
-                {!relatedQuestionsLoading && relatedQuestions.length > 0 && (
-                  <>
-                    <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
-                      {relatedQuestions.map((item, index) => (
-                        <div
-                          key={`${item.question || item.title || 'question'}-${index}`}
-                          className="bg-white rounded-xl border border-blue-100 p-4 hover:shadow-md transition-shadow duration-150"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 space-y-2">
-                              <p className="font-medium text-blue-900">{item.question || item.title}</p>
-                              {item.snippet && <p className="text-sm text-blue-800/90">{item.snippet}</p>}
-                              {item.title && (
-                                <p className="text-xs text-blue-700/80">
-                                  Source:{' '}
-                                  <span className="font-medium">
-                                    {item.title.length > 80 ? `${item.title.substring(0, 77)}...` : item.title}
-                                  </span>
-                                </p>
-                              )}
+                  <div className="p-6 space-y-8">
+                    {/* Search */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-blue-800 mb-2">Search Term</label>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
+                              <input
+                                type="text"
+                                placeholder="e.g. handmade jewelry, sustainable fashion, vintage furniture"
+                                value={relatedQuestionsQuery}
+                                onChange={(e) => setRelatedQuestionsQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    searchRelatedQuestions();
+                                  }
+                                }}
+                                className="w-full pl-9 pr-3 py-2 border border-blue-200 rounded-lg bg-white text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
                             </div>
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center space-x-1 text-sm text-blue-700 hover:text-blue-900"
+                            <button
+                              onClick={searchRelatedQuestions}
+                              disabled={relatedQuestionsLoading || !relatedQuestionsQuery.trim()}
+                              className="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {relatedQuestionsLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  <span>Searching...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Search className="h-4 w-4 mr-2" />
+                                  <span>Search</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Usage Tips */}
+                        <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-4">
+                          <h3 className="text-sm font-semibold text-blue-900 mb-2">Tips for better results</h3>
+                          <ul className="text-sm text-blue-800/90 space-y-1 list-disc list-inside">
+                            <li>Use specific product or niche terms (e.g. &quot;minimalist gold necklace&quot; instead of just &quot;jewelry&quot;).</li>
+                            <li>Include customer intent words like &quot;best&quot;, &quot;how to&quot;, &quot;ideas&quot;, &quot;guide&quot;.</li>
+                            <li>Try both broad and narrow variations of your keywords.</li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* Why Related Questions / Helper content */}
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-lg">
+                          <h3 className="font-semibold mb-1">Why Related Questions?</h3>
+                          <p className="text-sm text-blue-50/90">
+                            These are real questions customers ask on Google. Use them to create product descriptions, FAQs, blog posts, and support content
+                            that actually answers what people search for.
+                          </p>
+                        </div>
+
+                        <div className="bg-white rounded-xl border border-blue-100 p-4 space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <HelpCircle className="h-4 w-4 text-blue-700" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-blue-900">Content ideas</p>
+                              <p className="text-xs text-blue-700/80">
+                                Turn questions into product descriptions, FAQs, and blog posts.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                              <Sparkles className="h-4 w-4 text-indigo-700" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-indigo-900">SEO benefits</p>
+                              <p className="text-xs text-indigo-700/80">
+                                Answering these questions helps you rank for long-tail searches.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                              <Target className="h-4 w-4 text-emerald-700" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-emerald-900">Customer insights</p>
+                              <p className="text-xs text-emerald-700/80">
+                                See what information customers still need before buying.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Results */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-blue-900">Related Questions</h3>
+                        <div className="flex items-center space-x-3 text-sm text-blue-700/80">
+                          <span className="flex items-center space-x-1">
+                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                            <span>New</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span>Content opportunities</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {relatedQuestionsLoading && (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="flex items-center space-x-3 text-blue-700">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <span>Fetching related questions...</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {!relatedQuestionsLoading && relatedQuestions.length === 0 && (
+                        <div className="bg-blue-50 border border-dashed border-blue-200 rounded-xl p-6 text-center">
+                          <p className="text-blue-900 font-medium mb-2">No related questions yet</p>
+                          <p className="text-blue-700/80 text-sm">
+                            Enter a search term above to discover what customers are asking about your products and niche.
+                          </p>
+                        </div>
+                      )}
+
+                      {!relatedQuestionsLoading && relatedQuestions.length > 0 && (
+                        <>
+                          <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+                            {relatedQuestions.map((item, index) => (
+                              <div
+                                key={`${item.question || item.title || 'question'}-${index}`}
+                                className="bg-white rounded-xl border border-blue-100 p-4 hover:shadow-md transition-shadow duration-150"
                               >
-                                <span>View source</span>
-                                <ArrowUpRight className="h-4 w-4" />
-                              </a>
-                            )}
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 space-y-2">
+                                    <p className="font-medium text-blue-900">{item.question || item.title}</p>
+                                    {item.snippet && <p className="text-sm text-blue-800/90">{item.snippet}</p>}
+                                    {item.title && (
+                                      <p className="text-xs text-blue-700/80">
+                                        Source:{' '}
+                                        <span className="font-medium">
+                                          {item.title.length > 80 ? `${item.title.substring(0, 77)}...` : item.title}
+                                        </span>
+                                      </p>
+                                    )}
+                                  </div>
+                                  {item.link && (
+                                    <a
+                                      href={item.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center space-x-1 text-sm text-blue-700 hover:text-blue-900"
+                                    >
+                                      <span>View source</span>
+                                      <ArrowUpRight className="h-4 w-4" />
+                                    </a>
+                                  )}
+                                </div>
+
+                                {item.nextPageToken && (
+                                  <div className="mt-3">
+                                    <button
+                                      onClick={() => loadMoreRelatedQuestions(item.nextPageToken!)}
+                                      disabled={relatedQuestionsLoading}
+                                      className="inline-flex items-center space-x-2 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 disabled:opacity-50"
+                                    >
+                                      {relatedQuestionsLoading ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          <span>Loading...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>Load more questions like this</span>
+                                          <ChevronsDown className="h-3 w-3" />
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
 
-                          {item.nextPageToken && (
-                            <div className="mt-3">
-                              <button
-                                onClick={() => loadMoreRelatedQuestions(item.nextPageToken!)}
-                                disabled={relatedQuestionsLoading}
-                                className="inline-flex items-center space-x-2 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 disabled:opacity-50"
-                              >
-                                {relatedQuestionsLoading ? (
-                                  <>
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    <span>Loading...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span>Load more questions like this</span>
-                                    <ChevronsDown className="h-3 w-3" />
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <button
+                              onClick={() => {
+                                if (!relatedQuestions.length) return;
+                                const header = 'question,snippet,link\n';
+                                const csvContent = relatedQuestions
+                                  .map((q) =>
+                                    [
+                                      q.question || q.title || '',
+                                      q.snippet || '',
+                                      q.link || '',
+                                    ]
+                                      .map((field) => `"${String(field).replace(/"/g, '""')}"`)
+                                      .join(',')
+                                  )
+                                  .join('\n');
+                                const blob = new Blob([header + csvContent], { type: 'text/csv' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `related_questions_${relatedQuestionsQuery.replace(/[^a-zA-Z0-9]/g, '_') || 'export'}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                toast.success('Exported questions to CSV');
+                              }}
+                              className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                            >
+                              Export CSV
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRelatedQuestions([]);
+                                setRelatedQuestionsQuery('');
+                                toast.success('Cleared related questions');
+                              }}
+                              className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
+                            >
+                              Clear Results
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <button
-                        onClick={() => {
-                          if (!relatedQuestions.length) return;
-                          const header = 'question,snippet,link\n';
-                          const csvContent = relatedQuestions
-                            .map((q) =>
-                              [
-                                q.question || q.title || '',
-                                q.snippet || '',
-                                q.link || '',
-                              ]
-                                .map((field) => `"${String(field).replace(/"/g, '""')}"`)
-                                .join(',')
-                            )
-                            .join('\n');
-                          const blob = new Blob([header + csvContent], { type: 'text/csv' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `related_questions_${relatedQuestionsQuery.replace(/[^a-zA-Z0-9]/g, '_') || 'export'}.csv`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          toast.success('Exported questions to CSV');
-                        }}
-                        className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
-                      >
-                        Export CSV
-                      </button>
-                      <button
-                        onClick={() => {
-                          setRelatedQuestions([]);
-                          setRelatedQuestionsQuery('');
-                          toast.success('Cleared related questions');
-                        }}
-                        className="px-3 py-2 text-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50"
-                      >
-                        Clear Results
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+                  </div>
+                </div>
+              )}
 
               {activeTab === 'blogs' && (
                 <div className="bg-white rounded-lg shadow-sm border">
@@ -8489,559 +10363,578 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                {/* Action Buttons Section */}
-                <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t-2 border-gray-200">
-                  <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                    <button
-                      onClick={() => fetchProducts()}
-                      className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-                    >
-                      <RefreshCw className="h-5 w-5" />
-                      <span>Refresh</span>
-                    </button>
-                    {selectedProductsForExport.size > 0 && (
-                      <button
-                        onClick={handleBulkEdit}
-                        className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-                      >
-                        <Wrench className="h-5 w-5" />
-                        <span>Bulk Edit ({selectedProductsForExport.size})</span>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <a
-                      href="/api/admin/products/export-csv"
-                      className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-                    >
-                      <Download className="h-5 w-5" />
-                      <span>Export CSV</span>
-                    </a>
-                    <a
-                      href="/api/admin/products/sample-csv"
-                      className="flex items-center justify-center px-5 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium border-2 border-gray-300 shadow-sm hover:shadow-md active:scale-95"
-                    >
-                      Sample CSV
-                    </a>
-                    <label className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium cursor-pointer shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95">
-                      <Download className="h-5 w-5" />
-                      <span>Import CSV</span>
-                      <input
-                        type="file"
-                        accept=".csv,text/csv"
-                        className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              const token = localStorage.getItem('token');
-                              const text = await file.text();
-                              // First do a dry-run to validate mapping
-                              let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
-                                method: 'POST',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'text/csv',
-                                },
-                                body: text,
-                              });
-                              let data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Validation failed');
-                              if (data.warnings?.length) {
-                                toast((t) => (
-                                  <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
-                                ));
-                              }
-                              // Proceed actual import
-                              res = await fetch('/api/admin/products/import-csv', {
-                                method: 'POST',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'text/csv',
-                                },
-                                body: text,
-                              });
-                              data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Import failed');
-                              toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
-                              fetchProducts();
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : 'Import failed');
-                            } finally {
-                              e.currentTarget.value = '';
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      {/* Action Buttons Section */}
+                      <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t-2 border-gray-200">
+                        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                          <button
+                            onClick={() => fetchProducts()}
+                            className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                          >
+                            <RefreshCw className="h-5 w-5" />
+                            <span>Refresh</span>
+                          </button>
+                          {selectedProductsForExport.size > 0 && (
+                            <button
+                              onClick={handleBulkEdit}
+                              className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                            >
+                              <Wrench className="h-5 w-5" />
+                              <span>Bulk Edit ({selectedProductsForExport.size})</span>
+                            </button>
+                          )}
+                        </div>
 
-            {/* Products Table Section */}
-            {loading ? (
-              <div className="p-6">
-                <TableSkeleton rows={8} columns={6} />
-              </div>
-            ) : (
-              <>
-                {/* Desktop Table View */}
-                <div className="hidden lg:block -mx-4 sm:mx-0">
-                  <div className="inline-block w-full align-middle">
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-xl">
-                      <table className="w-full border-collapse border-spacing-0 table-fixed">
-                    <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
-                      <tr className="m-0 p-0">
-                        <th className="w-[3%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
-                          <input
-                            type="checkbox"
-                            checked={products.length > 0 && products.every(p => selectedProductsForExport.has(p._id))}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                const allIds = new Set(products.map(p => p._id));
-                                setSelectedProductsForExport(new Set([...selectedProductsForExport, ...allIds]));
-                                const newDetails: Record<string, Product> = { ...selectedProductsDetails };
-                                products.forEach(p => {
-                                  if (!newDetails[p._id]) {
-                                    newDetails[p._id] = p;
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <a
+                            href="/api/admin/products/export-csv"
+                            className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+                          >
+                            <Download className="h-5 w-5" />
+                            <span>Export CSV</span>
+                          </a>
+                          <a
+                            href="/api/admin/products/sample-csv"
+                            className="flex items-center justify-center px-5 py-3 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium border-2 border-gray-300 shadow-sm hover:shadow-md active:scale-95"
+                          >
+                            Sample CSV
+                          </a>
+                          <label className="flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all font-medium cursor-pointer shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95">
+                            <Download className="h-5 w-5" />
+                            <span>Import CSV</span>
+                            <input
+                              type="file"
+                              accept=".csv,text/csv"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  const text = await file.text();
+                                  // First do a dry-run to validate mapping
+                                  let res = await fetch('/api/admin/products/import-csv?dryRun=true', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                      'Content-Type': 'text/csv',
+                                    },
+                                    body: text,
+                                  });
+                                  let data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || 'Validation failed');
+                                  if (data.warnings?.length) {
+                                    toast((t) => (
+                                      <span className="text-sm">{`Warnings: ${data.warnings.length}. Proceeding with import...`}</span>
+                                    ));
                                   }
-                                });
-                                setSelectedProductsDetails(newDetails);
-                              } else {
-                                const idsToRemove = new Set(products.map(p => p._id));
-                                const newSet = new Set([...selectedProductsForExport].filter(id => !idsToRemove.has(id)));
-                                setSelectedProductsForExport(newSet);
-                                const newDetails: Record<string, Product> = {};
-                                Object.entries(selectedProductsDetails).forEach(([id, product]) => {
-                                  if (!idsToRemove.has(id)) {
-                                    newDetails[id] = product;
-                                  }
-                                });
-                                setSelectedProductsDetails(newDetails);
-                              }
-                            }}
-                            className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Select all products on this page"
-                          />
-                        </th>
-                        <th 
-                          className="w-[27%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('name')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Product</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('name')}
-                            </span>
-                            {productSortBy === 'name' && (
-                              <span className="opacity-100 m-0">{getSortIcon('name')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('category')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Category</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('category')}
-                            </span>
-                            {productSortBy === 'category' && (
-                              <span className="opacity-100 m-0">{getSortIcon('category')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('brand')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Brand</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('brand')}
-                            </span>
-                            {productSortBy === 'brand' && (
-                              <span className="opacity-100 m-0">{getSortIcon('brand')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="w-[10%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('price')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Price</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('price')}
-                            </span>
-                            {productSortBy === 'price' && (
-                              <span className="opacity-100 m-0">{getSortIcon('price')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="w-[8%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('stockCount')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Stock</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('stockCount')}
-                            </span>
-                            {productSortBy === 'stockCount' && (
-                              <span className="opacity-100 m-0">{getSortIcon('stockCount')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th 
-                          className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
-                          onClick={() => handleProductSort('isActive')}
-                        >
-                          <div className="flex items-center space-x-1.5 h-6 m-0">
-                            <span className="m-0 leading-none">Status</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
-                              {getSortIcon('isActive')}
-                            </span>
-                            {productSortBy === 'isActive' && (
-                              <span className="opacity-100 m-0">{getSortIcon('isActive')}</span>
-                            )}
-                          </div>
-                        </th>
-                        <th className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
-                          <div className="h-6 m-0 leading-none">Actions</div>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white m-0 p-0">
-                      {products.map((product, index) => (
-                        <tr key={product._id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} m-0 p-0`} onClick={() => handleEditProduct(product)}>
-                          <td className="w-[3%] px-4 xl:px-6 py-5 align-top m-0 p-0" onClick={(e) => e.stopPropagation()}>
-                            <div className="relative flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={selectedProductsForExport.has(product._id)}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const newSet = new Set(selectedProductsForExport);
-                                  if (e.target.checked) {
-                                    newSet.add(product._id);
-                                    setSelectedProductsDetails({
-                                      ...selectedProductsDetails,
-                                      [product._id]: product
-                                    });
-                                  } else {
-                                    newSet.delete(product._id);
-                                    const newDetails = { ...selectedProductsDetails };
-                                    delete newDetails[product._id];
-                                    setSelectedProductsDetails(newDetails);
-                                  }
-                                  setSelectedProductsForExport(newSet);
-                                }}
-                                className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
-                                title="Select for export"
-                              />
-                              {selectedProductsForExport.has(product._id) && (
-                                <CheckCircle2 className="absolute left-0 top-0 w-4 h-4 text-blue-600 pointer-events-none" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="w-[27%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                            <div className="flex items-center min-w-0 h-6 m-0 p-0">
-                              <div className="flex-shrink-0 h-5 w-5 m-0 p-0">
-                                <img
-                                  className="h-5 w-5 rounded object-cover border border-gray-200 m-0 p-0"
-                                  src={product.image}
-                                  alt={product.name}
-                                />
-                              </div>
-                              <div className="ml-2 min-w-0 flex-1 m-0 p-0">
-                                <div 
-                                  className="text-xs font-semibold text-gray-900 truncate leading-none m-0 p-0 cursor-help"
-                                  title={product.name}
-                                >
-                                  {product.name.length > 50 ? `${product.name.substring(0, 50)}...` : product.name}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="w-[12%] px-4 xl:px-6 py-5 align-top text-gray-700 m-0 p-0">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200 leading-none m-0">
-                              {product.category || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium text-gray-700 truncate m-0 p-0 leading-none">
-                            {product.brand || 'N/A'}
-                          </td>
-                          <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                            <div className="flex flex-col items-start h-auto m-0 p-0">
-                              {product.originalPrice && product.originalPrice > product.price ? (
-                                <>
-                                  <div className="flex items-center h-6 m-0 p-0">
-                                    <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
-                                    <span className="font-semibold text-green-600 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
-                                  </div>
-                                  <div className="flex items-center h-4 m-0 p-0 mt-0.5">
-                                    <span className="text-xs text-gray-400 line-through m-0 leading-none">${(product.originalPrice ?? 0).toFixed(2)}</span>
-                                    <span className="ml-1 text-xs font-medium text-red-600 m-0 leading-none">
-                                      ({Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF)
-                                    </span>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="flex items-center h-6 m-0 p-0">
-                                  <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
-                                  <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                            <div className="flex items-center h-6 m-0 p-0">
-                              <Package className="h-3 w-3 text-indigo-500 mr-0.5 flex-shrink-0 m-0" />
-                              <span className="font-medium text-gray-700 text-xs m-0 leading-none">{product.stockCount}</span>
-                            </div>
-                          </td>
-                          <td className="w-[12%] px-4 xl:px-6 py-5 align-top m-0 p-0">
-                            <div className="flex flex-wrap gap-0.5 items-center h-6 m-0 p-0">
-                              <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${
-                                product.isActive 
-                                  ? 'bg-green-100 text-green-800 border border-green-200' 
-                                  : 'bg-red-100 text-red-800 border border-red-200'
-                              }`}>
-                                {product.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                              {(() => {
-                                const status = (product as any).status || 'draft';
-                                const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
-                                const isScheduled = status === 'published' && publishAt && publishAt > new Date();
-                                const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
-                                const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
-                                const badgeClass = isScheduled
-                                  ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                  : isLive
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  : status === 'archived'
-                                  ? 'bg-gray-100 text-gray-700 border border-gray-200'
-                                  : 'bg-purple-100 text-purple-800 border border-purple-200';
-                                return (
-                                  <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-medium leading-none m-0 ${badgeClass}`}>
-                                    {badgeText}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                          <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium m-0 p-0">
-                            <div className="flex flex-wrap gap-1 items-center m-0 p-0" onClick={(e) => e.stopPropagation()}>
-                              {/* Primary Actions */}
-                              <Link
-                                href={`/products/${product._id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="View product"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Link>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditProduct(product);
-                                }}
-                                className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Edit product"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEmailMarketingProduct(product);
-                                  setShowEmailMarketing(true);
-                                }}
-                                className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Send promotional email"
-                              >
-                                <Mail className="h-3.5 w-3.5" />
-                              </button>
-                              
-                              {/* Copy Actions - Quick Access */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCopyTitle(product);
-                                }}
-                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Copy Title"
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCopyDescription(product);
-                                }}
-                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Copy Description"
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCopyTags(product);
-                                }}
-                                className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Copy Tags"
-                              >
-                                <Tag className="h-3.5 w-3.5" />
-                              </button>
-                              
-                              {/* Copy Menu for Additional Options */}
-                              <div className="relative group copy-menu-container flex-shrink-0">
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
-                                      if (menu.id !== `copy-menu-${product._id}`) {
-                                        menu.classList.add('hidden');
-                                      }
-                                    });
-                                    const menu = document.getElementById(`copy-menu-${product._id}`);
-                                    if (menu) {
-                                      menu.classList.toggle('hidden');
-                                    }
-                                  }}
-                                  className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
-                                  title="More copy options"
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </button>
-                                <div 
-                                  id={`copy-menu-${product._id}`}
-                                  className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="py-1">
-                                    <button
-                                      onClick={() => {
-                                        handleCopySpecs(product);
-                                        const menu = document.getElementById(`copy-menu-${product._id}`);
-                                        if (menu) menu.classList.add('hidden');
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                    >
-                                      <FileText className="h-4 w-4" />
-                                      <span>Copy Specifications</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        handleCopyImageUrls(product);
-                                        const menu = document.getElementById(`copy-menu-${product._id}`);
-                                        if (menu) menu.classList.add('hidden');
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                    >
-                                      <ImageIcon className="h-4 w-4" />
-                                      <span>Copy Image URLs</span>
-                                    </button>
-                                    {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
-                                      <button
-                                        onClick={() => {
-                                          handleCopyAltTexts(product);
-                                          const menu = document.getElementById(`copy-menu-${product._id}`);
-                                          if (menu) menu.classList.add('hidden');
-                                        }}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                                      >
-                                        <Sparkles className="h-4 w-4" />
-                                        <span>Copy Alt Texts</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Image Actions */}
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleGenerateAltText(product._id, product.name);
-                                }}
-                                className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${
-                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                    ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                    : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
-                                }`}
-                                title={
-                                  (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
-                                    ? 'Alt text already generated - Click to regenerate'
-                                    : 'Generate unique alt text for all images'
+                                  // Proceed actual import
+                                  res = await fetch('/api/admin/products/import-csv', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                      'Content-Type': 'text/csv',
+                                    },
+                                    body: text,
+                                  });
+                                  data = await res.json();
+                                  if (!res.ok) throw new Error(data.error || 'Import failed');
+                                  toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+                                  fetchProducts();
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : 'Import failed');
+                                } finally {
+                                  e.currentTarget.value = '';
                                 }
-                              >
-                                <Sparkles className="h-3.5 w-3.5" />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOrganizeProductImages(product._id, product.name);
-                                }}
-                                className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${
-                                  (() => {
-                                    const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                                    const hasCloudinary = allImages.some((url: string) => 
-                                      url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                                    );
-                                    return hasCloudinary
-                                      ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
-                                      : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
-                                  })()
-                                }`}
-                                title={(() => {
-                                  const allImages = [product.image, ...(product.images || [])].filter(Boolean);
-                                  const hasCloudinary = allImages.some((url: string) => 
-                                    url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
-                                  );
-                                  return hasCloudinary
-                                    ? 'Images already organized in Cloudinary'
-                                    : 'Organize images in Cloudinary';
-                                })()}
-                              >
-                                <Cloud className="h-3.5 w-3.5" />
-                              </button>
-                              
-                              {/* Delete Action */}
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteProduct(product._id);
-                                }}
-                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150 flex-shrink-0"
-                                title="Delete product"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                      </table>
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Products Table Section */}
+                  {loading ? (
+                    <div className="p-6">
+                      <TableSkeleton rows={8} columns={6} />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden lg:block -mx-4 sm:mx-0">
+                        <div className="inline-block w-full align-middle">
+                          <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-xl">
+                            <table className="w-full border-collapse border-spacing-0 table-fixed">
+                              <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-blue-200">
+                                <tr className="m-0 p-0">
+                                  <th className="w-[3%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={products.length > 0 && products.every(p => selectedProductsForExport.has(p._id))}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          const allIds = new Set(products.map(p => p._id));
+                                          setSelectedProductsForExport(new Set([...selectedProductsForExport, ...allIds]));
+                                          const newDetails: Record<string, Product> = { ...selectedProductsDetails };
+                                          products.forEach(p => {
+                                            if (!newDetails[p._id]) {
+                                              newDetails[p._id] = p;
+                                            }
+                                          });
+                                          setSelectedProductsDetails(newDetails);
+                                        } else {
+                                          const idsToRemove = new Set(products.map(p => p._id));
+                                          const newSet = new Set([...selectedProductsForExport].filter(id => !idsToRemove.has(id)));
+                                          setSelectedProductsForExport(newSet);
+                                          const newDetails: Record<string, Product> = {};
+                                          Object.entries(selectedProductsDetails).forEach(([id, product]) => {
+                                            if (!idsToRemove.has(id)) {
+                                              newDetails[id] = product;
+                                            }
+                                          });
+                                          setSelectedProductsDetails(newDetails);
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Select all products on this page"
+                                    />
+                                  </th>
+                                  <th
+                                    className="w-[27%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('name')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Product</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('name')}
+                                      </span>
+                                      {productSortBy === 'name' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('name')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[12%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('category')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Category</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('category')}
+                                      </span>
+                                      {productSortBy === 'category' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('category')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('brand')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Brand</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('brand')}
+                                      </span>
+                                      {productSortBy === 'brand' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('brand')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[10%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('price')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Price</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('price')}
+                                      </span>
+                                      {productSortBy === 'price' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('price')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[8%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('stockCount')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Stock</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('stockCount')}
+                                      </span>
+                                      {productSortBy === 'stockCount' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('stockCount')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[8%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider cursor-pointer hover:bg-blue-100/70 transition-all duration-200 group border-b border-gray-200 m-0 p-0 leading-none"
+                                    onClick={() => handleProductSort('isActive')}
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Active</span>
+                                      <span className="opacity-0 group-hover:opacity-100 transition-opacity m-0">
+                                        {getSortIcon('isActive')}
+                                      </span>
+                                      {productSortBy === 'isActive' && (
+                                        <span className="opacity-100 m-0">{getSortIcon('isActive')}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th
+                                    className="w-[10%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none"
+                                  >
+                                    <div className="flex items-center space-x-1.5 h-6 m-0">
+                                      <span className="m-0 leading-none">Listing</span>
+                                    </div>
+                                  </th>
+                                  <th className="w-[14%] px-4 xl:px-6 py-0 text-left text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-200 m-0 p-0 leading-none">
+                                    <div className="h-6 m-0 leading-none">Actions</div>
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white m-0 p-0">
+                                {products.map((product, index) => (
+                                  <tr key={product._id} className={`hover:bg-blue-50/50 transition-colors duration-150 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} m-0 p-0`}>
+                                    <td className="w-[3%] px-4 xl:px-6 py-5 align-top m-0 p-0" onClick={(e) => e.stopPropagation()}>
+                                      <div className="relative flex items-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedProductsForExport.has(product._id)}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            const newSet = new Set(selectedProductsForExport);
+                                            if (e.target.checked) {
+                                              newSet.add(product._id);
+                                              setSelectedProductsDetails({
+                                                ...selectedProductsDetails,
+                                                [product._id]: product
+                                              });
+                                            } else {
+                                              newSet.delete(product._id);
+                                              const newDetails = { ...selectedProductsDetails };
+                                              delete newDetails[product._id];
+                                              setSelectedProductsDetails(newDetails);
+                                            }
+                                            setSelectedProductsForExport(newSet);
+                                          }}
+                                          className="w-4 h-4 text-blue-600 border-2 border-gray-400 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-blue-500 transition-colors"
+                                          title="Select for export"
+                                        />
+                                        {selectedProductsForExport.has(product._id) && (
+                                          <CheckCircle2 className="absolute left-0 top-0 w-4 h-4 text-blue-600 pointer-events-none" />
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="w-[27%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                                      <div className="flex items-center min-w-0 h-6 m-0 p-0">
+                                        <div className="flex-shrink-0 h-5 w-5 m-0 p-0">
+                                          <img
+                                            className="h-5 w-5 rounded object-cover border border-gray-200 m-0 p-0"
+                                            src={product.image}
+                                            alt={product.name}
+                                          />
+                                        </div>
+                                        <div className="ml-2 min-w-0 flex-1 m-0 p-0">
+                                          <div
+                                            className="text-xs font-semibold text-blue-600 truncate leading-none m-0 p-0 cursor-pointer hover:underline"
+                                            title={product.name}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleEditProduct(product);
+                                            }}
+                                          >
+                                            {product.name.length > 50 ? `${product.name.substring(0, 50)}...` : product.name}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="w-[12%] px-4 xl:px-6 py-5 align-top text-gray-700 m-0 p-0">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200 leading-none m-0">
+                                        {product.category || 'N/A'}
+                                      </span>
+                                    </td>
+                                    <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium text-gray-700 truncate m-0 p-0 leading-none">
+                                      {product.brand || 'N/A'}
+                                    </td>
+                                    <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                                      <div className="flex flex-col items-start h-auto m-0 p-0">
+                                        {product.originalPrice && product.originalPrice > product.price ? (
+                                          <>
+                                            <div className="flex items-center h-6 m-0 p-0">
+                                              <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
+                                              <span className="font-semibold text-green-600 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex items-center h-4 m-0 p-0 mt-0.5">
+                                              <span className="text-xs text-gray-400 line-through m-0 leading-none">${(product.originalPrice ?? 0).toFixed(2)}</span>
+                                              <span className="ml-1 text-xs font-medium text-red-600 m-0 leading-none">
+                                                ({Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF)
+                                              </span>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="flex items-center h-6 m-0 p-0">
+                                            <DollarSign className="h-3 w-3 text-green-500 mr-0.5 flex-shrink-0 m-0" />
+                                            <span className="font-semibold text-gray-900 text-xs m-0 leading-none">${(product.price ?? 0).toFixed(2)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                                      <div className="flex items-center h-6 m-0 p-0">
+                                        <Package className="h-3 w-3 text-indigo-500 mr-0.5 flex-shrink-0 m-0" />
+                                        <span className="font-medium text-gray-700 text-xs m-0 leading-none">{product.stockCount}</span>
+                                      </div>
+                                    </td>
+                                    <td className="w-[8%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                                      <div className="flex items-center h-6 m-0 p-0">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleProductStatusUpdate(product._id, { isActive: !product.isActive });
+                                          }}
+                                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${product.isActive ? 'bg-blue-600' : 'bg-gray-200'}`}
+                                          role="switch"
+                                          aria-checked={product.isActive}
+                                          title={product.isActive ? 'Deactivate' : 'Activate'}
+                                        >
+                                          <span className="sr-only">Use setting</span>
+                                          <span
+                                            aria-hidden="true"
+                                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${product.isActive ? 'translate-x-4' : 'translate-x-0'}`}
+                                          />
+                                        </button>
+                                      </div>
+                                    </td>
+                                    <td className="w-[10%] px-4 xl:px-6 py-5 align-top m-0 p-0">
+                                      <div className="flex items-center h-6 m-0 p-0">
+                                        <select
+                                          value={(product as any).status || 'draft'}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={(e) => {
+                                            handleProductStatusUpdate(product._id, { status: e.target.value });
+                                          }}
+                                          className={`block w-full rounded-md border-0 py-1 pl-2 pr-7 text-xs font-semibold ring-1 ring-inset focus:ring-2 focus:ring-indigo-600 sm:text-xs sm:leading-6 cursor-pointer ${(product as any).status === 'published'
+                                            ? 'bg-green-50 text-green-700 ring-green-600/20'
+                                            : (product as any).status === 'archived'
+                                              ? 'bg-gray-50 text-gray-700 ring-gray-600/20'
+                                              : 'bg-yellow-50 text-yellow-700 ring-yellow-600/20'
+                                            }`}
+                                        >
+                                          <option value="draft">Draft</option>
+                                          <option value="published">Published</option>
+                                          <option value="archived">Archived</option>
+                                        </select>
+                                      </div>
+                                    </td>
+                                    <td className="w-[14%] px-4 xl:px-6 py-5 align-top text-xs font-medium m-0 p-0">
+                                      <div className="flex flex-wrap gap-1 items-center m-0 p-0" onClick={(e) => e.stopPropagation()}>
+                                        {/* Primary Actions */}
+                                        <Link
+                                          href={`/products/${product._id}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="View product"
+                                        >
+                                          <ExternalLink className="h-3.5 w-3.5" />
+                                        </Link>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditProduct(product);
+                                          }}
+                                          className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Edit product"
+                                        >
+                                          <Edit className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEmailMarketingProduct(product);
+                                            setShowEmailMarketing(true);
+                                          }}
+                                          className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Send promotional email"
+                                        >
+                                          <Mail className="h-3.5 w-3.5" />
+                                        </button>
+
+                                        {/* Copy Actions - Quick Access */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyTitle(product);
+                                          }}
+                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Copy Title"
+                                        >
+                                          <FileText className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyDescription(product);
+                                          }}
+                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Copy Description"
+                                        >
+                                          <FileText className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyTags(product);
+                                          }}
+                                          className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Copy Tags"
+                                        >
+                                          <Tag className="h-3.5 w-3.5" />
+                                        </button>
+
+                                        {/* Copy Menu for Additional Options */}
+                                        <div className="relative group copy-menu-container flex-shrink-0">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              document.querySelectorAll('[id^="copy-menu-"]').forEach(menu => {
+                                                if (menu.id !== `copy-menu-${product._id}`) {
+                                                  menu.classList.add('hidden');
+                                                }
+                                              });
+                                              const menu = document.getElementById(`copy-menu-${product._id}`);
+                                              if (menu) {
+                                                menu.classList.toggle('hidden');
+                                              }
+                                            }}
+                                            className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded transition-colors duration-150"
+                                            title="More copy options"
+                                          >
+                                            <Copy className="h-3.5 w-3.5" />
+                                          </button>
+                                          <div
+                                            id={`copy-menu-${product._id}`}
+                                            className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 copy-menu-container"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="py-1">
+                                              <button
+                                                onClick={() => {
+                                                  handleCopySpecs(product);
+                                                  const menu = document.getElementById(`copy-menu-${product._id}`);
+                                                  if (menu) menu.classList.add('hidden');
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                              >
+                                                <FileText className="h-4 w-4" />
+                                                <span>Copy Specifications</span>
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  handleCopyImageUrls(product);
+                                                  const menu = document.getElementById(`copy-menu-${product._id}`);
+                                                  if (menu) menu.classList.add('hidden');
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                              >
+                                                <ImageIcon className="h-4 w-4" />
+                                                <span>Copy Image URLs</span>
+                                              </button>
+                                              {(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0 && (
+                                                <button
+                                                  onClick={() => {
+                                                    handleCopyAltTexts(product);
+                                                    const menu = document.getElementById(`copy-menu-${product._id}`);
+                                                    if (menu) menu.classList.add('hidden');
+                                                  }}
+                                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                                                >
+                                                  <Sparkles className="h-4 w-4" />
+                                                  <span>Copy Alt Texts</span>
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Image Actions */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleGenerateAltText(product._id, product.name);
+                                          }}
+                                          className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${(product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                            ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                            : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                                            }`}
+                                          title={
+                                            (product as any).imageAltTexts && (product as any).imageAltTexts.length > 0
+                                              ? 'Alt text already generated - Click to regenerate'
+                                              : 'Generate unique alt text for all images'
+                                          }
+                                        >
+                                          <Sparkles className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOrganizeProductImages(product._id, product.name);
+                                          }}
+                                          className={`p-1 rounded transition-colors duration-150 flex-shrink-0 ${(() => {
+                                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                            const hasCloudinary = allImages.some((url: string) =>
+                                              url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                            );
+                                            return hasCloudinary
+                                              ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                                              : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+                                          })()
+                                            }`}
+                                          title={(() => {
+                                            const allImages = [product.image, ...(product.images || [])].filter(Boolean);
+                                            const hasCloudinary = allImages.some((url: string) =>
+                                              url && (url.includes('cloudinary.com') || url.includes('res.cloudinary.com'))
+                                            );
+                                            return hasCloudinary
+                                              ? 'Images already organized in Cloudinary'
+                                              : 'Organize images in Cloudinary';
+                                          })()}
+                                        >
+                                          <Cloud className="h-3.5 w-3.5" />
+                                        </button>
+
+                                        {/* Delete Action */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteProduct(product._id);
+                                          }}
+                                          className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150 flex-shrink-0"
+                                          title="Delete product"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
 
                       {/* Mobile/Tablet Card View */}
                       <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4">
                         {products.map((product) => (
                           <div
                             key={product._id}
-                            className="bg-white rounded-xl shadow-md border-2 border-gray-200 hover:shadow-xl transition-all duration-200 overflow-hidden active:scale-[0.98] relative"
-                            onClick={() => handleEditProduct(product)}
+                            className="bg-white rounded-xl shadow-md border-2 border-gray-200 hover:shadow-xl transition-all duration-200 overflow-hidden relative"
                           >
                             {/* Selection Checkbox */}
                             <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
@@ -9078,7 +10971,10 @@ export default function AdminDashboard() {
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h3 className="text-sm sm:text-base font-bold text-gray-900 line-clamp-2 mb-1.5">
+                                <h3
+                                  className="text-sm sm:text-base font-bold text-blue-700 line-clamp-2 mb-1.5 cursor-pointer hover:underline"
+                                  onClick={() => handleEditProduct(product)}
+                                >
                                   {product.name}
                                 </h3>
                                 <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">
@@ -9117,32 +11013,39 @@ export default function AdminDashboard() {
                               </div>
 
                               {/* Status */}
-                              <div className="flex flex-wrap gap-2">
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${product.isActive
-                                  ? 'bg-green-100 text-green-800 border border-green-200'
-                                  : 'bg-red-100 text-red-800 border border-red-200'
-                                  }`}>
-                                  {product.isActive ? 'Active' : 'Inactive'}
-                                </span>
-                                {(() => {
-                                  const status = (product as any).status || 'draft';
-                                  const publishAt = (product as any).publishAt ? new Date((product as any).publishAt) : null;
-                                  const isScheduled = status === 'published' && publishAt && publishAt > new Date();
-                                  const isLive = status === 'published' && (!publishAt || publishAt <= new Date());
-                                  const badgeText = isScheduled ? 'Scheduled' : isLive ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1);
-                                  const badgeClass = isScheduled
-                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                    : isLive
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                      : status === 'archived'
-                                        ? 'bg-gray-100 text-gray-700 border border-gray-200'
-                                        : 'bg-purple-100 text-purple-800 border border-purple-200';
-                                  return (
-                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-                                      {badgeText}
-                                    </span>
-                                  );
-                                })()}
+                              <div className="flex flex-col gap-2 mt-2">
+                                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100">
+                                  <span className="text-xs font-semibold text-gray-600">Active</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleProductStatusUpdate(product._id, { isActive: !product.isActive });
+                                    }}
+                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${product.isActive ? 'bg-blue-600' : 'bg-gray-200'}`}
+                                    role="switch"
+                                    aria-checked={product.isActive}
+                                  >
+                                    <span
+                                      aria-hidden="true"
+                                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${product.isActive ? 'translate-x-4' : 'translate-x-0'}`}
+                                    />
+                                  </button>
+                                </div>
+                                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100">
+                                  <span className="text-xs font-semibold text-gray-600">Stage</span>
+                                  <select
+                                    value={(product as any).status || 'draft'}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      handleProductStatusUpdate(product._id, { status: e.target.value });
+                                    }}
+                                    className="block w-32 rounded-md border-gray-300 py-1 pl-2 pr-7 text-xs font-semibold focus:ring-indigo-500 focus:border-indigo-500"
+                                  >
+                                    <option value="draft">Draft</option>
+                                    <option value="published">Published</option>
+                                    <option value="archived">Archived</option>
+                                  </select>
+                                </div>
                               </div>
 
                               {/* Actions */}
@@ -9414,7 +11317,7 @@ export default function AdminDashboard() {
                                   setExportSelectionLoading(true);
                                   const token = localStorage.getItem('token');
                                   const productIds = Array.from(selectedProductsForExport);
-                                  
+
                                   const response = await fetch(
                                     `/api/admin/etsy-export?productIds=${productIds.join(',')}`,
                                     {
@@ -9518,7 +11421,7 @@ export default function AdminDashboard() {
                             if (!brands[brand]) brands[brand] = [];
                             brands[brand].push(product);
                           });
-                          
+
                           // Also show IDs without details - use stored minimal info if available
                           const idsWithoutDetails = Array.from(selectedProductsForExport).filter(id => !selectedProductsDetails[id]);
                           if (idsWithoutDetails.length > 0) {
@@ -9528,7 +11431,7 @@ export default function AdminDashboard() {
                               if (stored) {
                                 const storedData = JSON.parse(stored);
                                 const storedProductInfo = storedData?.productInfo || {};
-                                
+
                                 idsWithoutDetails.forEach(id => {
                                   const info = storedProductInfo[id];
                                   const brand = info?.brand || 'Unknown Brand';
@@ -9606,7 +11509,7 @@ export default function AdminDashboard() {
                               });
                             }
                           }
-                          
+
                           return Object.entries(brands).map(([brand, brandProducts]) => (
                             <div key={brand} className="border border-gray-200 rounded-lg overflow-hidden">
                               <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
@@ -9621,7 +11524,7 @@ export default function AdminDashboard() {
                                       key={product._id}
                                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
                                     >
-                                        <div className="flex items-start space-x-4">
+                                      <div className="flex items-start space-x-4">
                                         {product.image ? (
                                           <img
                                             src={product.image}
@@ -9696,23 +11599,23 @@ export default function AdminDashboard() {
               {/* Jacket Maker Products Tab */}
               {activeTab === 'jacket-maker-products' && (
                 <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
-                    <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Jacket Maker Products</h2>
-                            {selectedProductsForExport.size > 0 && (
-                              <button
-                                onClick={() => setActiveTab('selected-products')}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
-                              >
-                                <ListChecks className="h-4 w-4" />
-                                <span>{selectedProductsForExport.size} Selected</span>
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker - {jacketMakerTotal} total products</p>
+                  <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Jacket Maker Products</h2>
+                          {selectedProductsForExport.size > 0 && (
+                            <button
+                              onClick={() => setActiveTab('selected-products')}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
+                            >
+                              <ListChecks className="h-4 w-4" />
+                              <span>{selectedProductsForExport.size} Selected</span>
+                            </button>
+                          )}
                         </div>
+                        <p className="text-xs sm:text-sm text-gray-600">Products from The Jacket Maker - {jacketMakerTotal} total products</p>
+                      </div>
                       <button
                         onClick={() => fetchJacketMakerProducts()}
                         className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
@@ -10001,23 +11904,23 @@ export default function AdminDashboard() {
 
                 return (
                   <div key={brandTabId} className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
-                      <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-1">
-                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{brand} Products</h2>
-                              {selectedProductsForExport.size > 0 && (
-                                <button
-                                  onClick={() => setActiveTab('selected-products')}
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
-                                >
-                                  <ListChecks className="h-4 w-4" />
-                                  <span>{selectedProductsForExport.size} Selected</span>
-                                </button>
-                              )}
-                            </div>
-                            <p className="text-xs sm:text-sm text-gray-600">Products from {brand} - {total} total products</p>
+                    <div className="p-4 sm:p-6 lg:p-8 border-b-2 border-gray-200 bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{brand} Products</h2>
+                            {selectedProductsForExport.size > 0 && (
+                              <button
+                                onClick={() => setActiveTab('selected-products')}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow-md"
+                              >
+                                <ListChecks className="h-4 w-4" />
+                                <span>{selectedProductsForExport.size} Selected</span>
+                              </button>
+                            )}
                           </div>
+                          <p className="text-xs sm:text-sm text-gray-600">Products from {brand} - {total} total products</p>
+                        </div>
                         <button
                           onClick={() => fetchBrandProducts(brand)}
                           className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold text-sm shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
@@ -10042,12 +11945,12 @@ export default function AdminDashboard() {
                                 const value = e.target.value;
                                 setBrandSearchTerm(prev => ({ ...prev, [brand]: value }));
                                 setBrandPage(prev => ({ ...prev, [brand]: 1 }));
-                                
+
                                 // Clear existing debounce timer
                                 if (brandSearchDebounceRef.current[brand]) {
                                   clearTimeout(brandSearchDebounceRef.current[brand]);
                                 }
-                                
+
                                 // Debounce search - wait 500ms after user stops typing
                                 brandSearchDebounceRef.current[brand] = setTimeout(() => {
                                   fetchBrandProducts(brand, 1);
@@ -10864,8 +12767,8 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-          </div>
-        )}
+                </div>
+              )}
 
               {/* Reviews Tab */}
               {activeTab === 'reviews' && (
@@ -10973,7 +12876,7 @@ export default function AdminDashboard() {
                       <div className="divide-y divide-gray-200">
                         {reviews
                           .filter(review => {
-                            const matchesSearch = 
+                            const matchesSearch =
                               review.userName?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
                               review.productId?.name?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
                               review.comment?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
@@ -11004,11 +12907,10 @@ export default function AdminDashboard() {
                                         {[...Array(5)].map((_, i) => (
                                           <Star
                                             key={i}
-                                            className={`h-4 w-4 ${
-                                              i < review.rating
-                                                ? 'fill-yellow-400 text-yellow-400'
-                                                : 'text-gray-300'
-                                            }`}
+                                            className={`h-4 w-4 ${i < review.rating
+                                              ? 'fill-yellow-400 text-yellow-400'
+                                              : 'text-gray-300'
+                                              }`}
                                           />
                                         ))}
                                         <span className="text-sm text-gray-600 ml-1">{review.rating}/5</span>
@@ -11029,13 +12931,12 @@ export default function AdminDashboard() {
                                           </span>
                                         )}
                                       </div>
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        review.status === 'approved'
-                                          ? 'bg-green-100 text-green-800'
-                                          : review.status === 'rejected'
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${review.status === 'approved'
+                                        ? 'bg-green-100 text-green-800'
+                                        : review.status === 'rejected'
                                           ? 'bg-red-100 text-red-800'
                                           : 'bg-yellow-100 text-yellow-800'
-                                      }`}>
+                                        }`}>
                                         {review.status}
                                       </span>
                                     </div>
@@ -11140,23 +13041,23 @@ export default function AdminDashboard() {
                             </div>
                           ))}
                         {reviews.filter(review => {
-                          const matchesSearch = 
+                          const matchesSearch =
                             review.userName?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
                             review.productId?.name?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
                             review.comment?.toLowerCase().includes(reviewSearchTerm.toLowerCase()) ||
                             review.title?.toLowerCase().includes(reviewSearchTerm.toLowerCase());
                           return matchesSearch;
                         }).length === 0 && (
-                          <div className="p-12 text-center text-gray-500">
-                            <Star className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                            <p className="text-lg font-medium">No reviews found</p>
-                            <p className="text-sm mt-1">
-                              {reviewStatusFilter !== 'all'
-                                ? `No ${reviewStatusFilter} reviews match your search.`
-                                : 'No reviews match your search criteria.'}
-                            </p>
-                          </div>
-                        )}
+                            <div className="p-12 text-center text-gray-500">
+                              <Star className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                              <p className="text-lg font-medium">No reviews found</p>
+                              <p className="text-sm mt-1">
+                                {reviewStatusFilter !== 'all'
+                                  ? `No ${reviewStatusFilter} reviews match your search.`
+                                  : 'No reviews match your search criteria.'}
+                              </p>
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
@@ -11577,7 +13478,7 @@ export default function AdminDashboard() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {supportTickets
                             .filter(ticket => {
-                              const matchesSearch = 
+                              const matchesSearch =
                                 ticket.ticketNumber?.toLowerCase().includes(supportSearchTerm.toLowerCase()) ||
                                 ticket.subject?.toLowerCase().includes(supportSearchTerm.toLowerCase()) ||
                                 ticket.messages?.some((m: any) => m.message?.toLowerCase().includes(supportSearchTerm.toLowerCase()));
@@ -11610,23 +13511,21 @@ export default function AdminDashboard() {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    ticket.status === 'open' ? 'bg-blue-100 text-blue-800' :
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ticket.status === 'open' ? 'bg-blue-100 text-blue-800' :
                                     ticket.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                                    ticket.status === 'waiting_customer' ? 'bg-orange-100 text-orange-800' :
-                                    ticket.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
+                                      ticket.status === 'waiting_customer' ? 'bg-orange-100 text-orange-800' :
+                                        ticket.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                                          'bg-gray-100 text-gray-800'
+                                    }`}>
                                     {ticket.status.replace('_', ' ')}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`text-xs font-medium ${
-                                    ticket.priority === 'urgent' ? 'text-red-600 font-bold' :
+                                  <span className={`text-xs font-medium ${ticket.priority === 'urgent' ? 'text-red-600 font-bold' :
                                     ticket.priority === 'high' ? 'text-orange-600 font-semibold' :
-                                    ticket.priority === 'medium' ? 'text-yellow-600' :
-                                    'text-gray-600'
-                                  }`}>
+                                      ticket.priority === 'medium' ? 'text-yellow-600' :
+                                        'text-gray-600'
+                                    }`}>
                                     {ticket.priority.toUpperCase()}
                                   </span>
                                 </td>
@@ -11961,20 +13860,20 @@ export default function AdminDashboard() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {chatConversations
                             .filter(conversation => {
-                              const matchesSearch = 
+                              const matchesSearch =
                                 conversation.conversationId?.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
                                 conversation.guestEmail?.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
                                 conversation.userInfo?.email?.toLowerCase().includes(chatSearchTerm.toLowerCase());
                               const matchesStatus = chatStatusFilter === 'all' || conversation.status === chatStatusFilter;
-                              const matchesAssigned = 
-                                chatAssignedFilter === 'all' || 
+                              const matchesAssigned =
+                                chatAssignedFilter === 'all' ||
                                 (chatAssignedFilter === 'unassigned' && !conversation.assignedTo) ||
                                 conversation.assignedTo === chatAssignedFilter;
                               return matchesSearch && matchesStatus && matchesAssigned;
                             })
                             .map((conversation) => (
-                              <tr 
-                                key={conversation._id || conversation.conversationId} 
+                              <tr
+                                key={conversation._id || conversation.conversationId}
                                 className={`hover:bg-gray-50 cursor-pointer ${conversation.unreadCount > 0 ? 'bg-blue-50/30' : ''}`}
                                 onClick={() => handleViewConversation(conversation)}
                               >
@@ -12009,11 +13908,10 @@ export default function AdminDashboard() {
                                   )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    conversation.status === 'active' ? 'bg-green-100 text-green-800' :
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${conversation.status === 'active' ? 'bg-green-100 text-green-800' :
                                     conversation.status === 'closed' ? 'bg-gray-100 text-gray-800' :
-                                    'bg-yellow-100 text-yellow-800'
-                                  }`}>
+                                      'bg-yellow-100 text-yellow-800'
+                                    }`}>
                                     {conversation.status || 'pending'}
                                   </span>
                                 </td>
@@ -12073,7 +13971,7 @@ export default function AdminDashboard() {
                           </h2>
                           <p className="text-sm text-gray-600 mt-1">
                             {viewingConversation.userInfo?.name || viewingConversation.guestName || 'Guest'}
-                            {viewingConversation.userInfo?.email || viewingConversation.guestEmail ? 
+                            {viewingConversation.userInfo?.email || viewingConversation.guestEmail ?
                               ` • ${viewingConversation.userInfo?.email || viewingConversation.guestEmail}` : ''}
                           </p>
                         </div>
@@ -12171,32 +14069,28 @@ export default function AdminDashboard() {
                         <div className="space-y-4 max-h-96 overflow-y-auto bg-gray-50 rounded-lg p-4">
                           {chatMessages && chatMessages.length > 0 ? (
                             chatMessages.map((message: any) => (
-                              <div 
-                                key={message._id} 
+                              <div
+                                key={message._id}
                                 className={`flex ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
                               >
                                 <div
-                                  className={`max-w-[75%] rounded-2xl shadow-sm p-4 ${
-                                    message.senderType === 'admin'
-                                      ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tl-sm'
-                                      : 'bg-white text-gray-900 border border-gray-200 rounded-tr-sm'
-                                  }`}
+                                  className={`max-w-[75%] rounded-2xl shadow-sm p-4 ${message.senderType === 'admin'
+                                    ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tl-sm'
+                                    : 'bg-white text-gray-900 border border-gray-200 rounded-tr-sm'
+                                    }`}
                                 >
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className={`text-xs font-semibold ${
-                                      message.senderType === 'admin' ? 'text-white/90' : 'text-gray-600'
-                                    }`}>
+                                    <p className={`text-xs font-semibold ${message.senderType === 'admin' ? 'text-white/90' : 'text-gray-600'
+                                      }`}>
                                       {message.senderType === 'admin' ? 'Admin' : (message.senderName || 'Customer')}
                                     </p>
-                                    <p className={`text-xs ${
-                                      message.senderType === 'admin' ? 'text-white/70' : 'text-gray-500'
-                                    }`}>
+                                    <p className={`text-xs ${message.senderType === 'admin' ? 'text-white/70' : 'text-gray-500'
+                                      }`}>
                                       {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                   </div>
-                                  <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                                    message.senderType === 'admin' ? 'text-white' : 'text-gray-900'
-                                  }`}>
+                                  <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${message.senderType === 'admin' ? 'text-white' : 'text-gray-900'
+                                    }`}>
                                     {message.message}
                                   </p>
                                 </div>
@@ -12391,16 +14285,14 @@ export default function AdminDashboard() {
                               key={rating}
                               type="button"
                               onClick={() => setEditReviewForm({ ...editReviewForm, rating })}
-                              className={`p-2 rounded-lg transition-all transform ${
-                                editReviewForm.rating >= rating
-                                  ? 'text-yellow-500 bg-yellow-50 scale-110'
-                                  : 'text-gray-300 hover:text-gray-400'
-                              } hover:scale-110 active:scale-95`}
+                              className={`p-2 rounded-lg transition-all transform ${editReviewForm.rating >= rating
+                                ? 'text-yellow-500 bg-yellow-50 scale-110'
+                                : 'text-gray-300 hover:text-gray-400'
+                                } hover:scale-110 active:scale-95`}
                             >
                               <Star
-                                className={`h-7 w-7 ${
-                                  editReviewForm.rating >= rating ? 'fill-current' : ''
-                                }`}
+                                className={`h-7 w-7 ${editReviewForm.rating >= rating ? 'fill-current' : ''
+                                  }`}
                               />
                             </button>
                           ))}
@@ -12520,18 +14412,18 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-        {/* Order Detail Modal */}
-        <OrderDetailModal
-          order={viewingOrder}
-          isOpen={!!viewingOrder}
-          onClose={() => {
-            setViewingOrder(null);
-            updateQuery({ orderId: undefined });
-          }}
-          onUpdateStatus={handleUpdateOrderStatus}
-          onDeleteOrder={handleDeleteOrder}
-          onDownloadInvoice={handleDownloadInvoice}
-        />
+              {/* Order Detail Modal */}
+              <OrderDetailModal
+                order={viewingOrder}
+                isOpen={!!viewingOrder}
+                onClose={() => {
+                  setViewingOrder(null);
+                  updateQuery({ orderId: undefined });
+                }}
+                onUpdateStatus={handleUpdateOrderStatus}
+                onDeleteOrder={handleDeleteOrder}
+                onDownloadInvoice={handleDownloadInvoice}
+              />
 
               {/* Product Email Marketing Modal */}
               {showEmailMarketing && (
@@ -12548,306 +14440,306 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-        {/* Product Details Modal - Available for all tabs including brand products */}
-        {showProductModal && selectedProductForModal && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-            onClick={() => setShowProductModal(false)}
-          >
-            <div 
-              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
-                <button
+              {/* Product Details Modal - Available for all tabs including brand products */}
+              {showProductModal && selectedProductForModal && (
+                <div
+                  className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
                   onClick={() => setShowProductModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
                 >
-                  <XCircle className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left Column - Images */}
-                  <div className="space-y-4">
-                    <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50 group/image">
-                      <img
-                        src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
-                        alt={selectedProductForModal.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/placeholder-product.svg';
-                        }}
-                      />
-                      {isAdminUser && (selectedProductForModal.image || selectedProductForModal.images?.[0]) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingImage({
-                              url: selectedProductForModal.image || selectedProductForModal.images?.[0] || '',
-                              imageIndex: 0,
-                              isMain: true
-                            });
-                          }}
-                          className="absolute top-3 left-3 z-10 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110"
-                          title="Edit image (crop & background)"
-                        >
-                          <Edit className="h-4 w-4 text-blue-600" />
-                        </button>
-                      )}
+                  <div
+                    className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+                      <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
+                      <button
+                        onClick={() => setShowProductModal(false)}
+                        className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                      >
+                        <XCircle className="h-6 w-6" />
+                      </button>
                     </div>
-                    {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
-                      <div className="grid grid-cols-4 gap-2">
-                        {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
-                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group/thumb">
+
+                    <div className="p-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Left Column - Images */}
+                        <div className="space-y-4">
+                          <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 bg-gray-50 group/image">
                             <img
-                              src={img}
-                              alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
+                              src={selectedProductForModal.image || selectedProductForModal.images?.[0] || '/placeholder-product.svg'}
+                              alt={selectedProductForModal.name}
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = '/placeholder-product.svg';
                               }}
                             />
-                            {isAdminUser && (
+                            {isAdminUser && (selectedProductForModal.image || selectedProductForModal.images?.[0]) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setEditingImage({
-                                    url: img,
-                                    imageIndex: idx + 1,
-                                    isMain: false
+                                    url: selectedProductForModal.image || selectedProductForModal.images?.[0] || '',
+                                    imageIndex: 0,
+                                    isMain: true
                                   });
                                 }}
-                                className="absolute top-1 right-1 z-10 opacity-0 group-hover/thumb:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-lg hover:bg-white hover:scale-110"
+                                className="absolute top-3 left-3 z-10 opacity-0 group-hover/image:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110"
                                 title="Edit image (crop & background)"
                               >
-                                <Edit className="h-3 w-3 text-blue-600" />
+                                <Edit className="h-4 w-4 text-blue-600" />
                               </button>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Column - Product Info */}
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-3xl font-bold text-gray-900 mb-2">{selectedProductForModal.name}</h3>
-                      {selectedProductForModal.description && (
-                        <p className="text-base text-gray-600 leading-relaxed">{selectedProductForModal.description}</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-baseline space-x-4 pb-4 border-b border-gray-200">
-                      <span className="text-4xl font-bold text-green-600">
-                        ${typeof selectedProductForModal.price === 'number' ? selectedProductForModal.price.toFixed(2) : selectedProductForModal.price || '0.00'}
-                      </span>
-                      {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > (selectedProductForModal.price || 0) && (
-                        <>
-                          <span className="text-2xl text-gray-400 line-through">
-                            ${selectedProductForModal.originalPrice.toFixed(2)}
-                          </span>
-                          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
-                            {Math.round(((selectedProductForModal.originalPrice - (selectedProductForModal.price || 0)) / selectedProductForModal.originalPrice) * 100)}% OFF
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {selectedProductForModal.category && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 border border-purple-200">
-                          <Tag className="h-3.5 w-3.5 mr-1.5" />
-                          {selectedProductForModal.category}
-                        </span>
-                      )}
-                      {selectedProductForModal.brand && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                          {selectedProductForModal.brand}
-                        </span>
-                      )}
-                    </div>
-
-                    {selectedProductForModal.sourceUrl && (
-                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                        <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Source</h4>
-                        <a
-                          href={selectedProductForModal.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-800 underline break-all flex items-center gap-2"
-                        >
-                          <span className="truncate">{selectedProductForModal.sourceUrl}</span>
-                          <ExternalLink className="h-4 w-4 flex-shrink-0" />
-                        </a>
-                      </div>
-                    )}
-
-                    {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Variants</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {selectedProductForModal.variants.map((variant: any, idx: number) => (
-                            <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-gray-900">
-                                  {variant.title || variant.name || `Variant ${idx + 1}`}
-                                </span>
-                                {variant.price && (
-                                  <span className="text-sm text-gray-600">
-                                    ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
-                                  </span>
-                                )}
-                              </div>
-                              {variant.sku && (
-                                <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
-                              )}
+                          {selectedProductForModal.images && selectedProductForModal.images.length > 1 && (
+                            <div className="grid grid-cols-4 gap-2">
+                              {selectedProductForModal.images.slice(0, 4).map((img, idx) => (
+                                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group/thumb">
+                                  <img
+                                    src={img}
+                                    alt={`${selectedProductForModal.name} - Image ${idx + 1}`}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = '/placeholder-product.svg';
+                                    }}
+                                  />
+                                  {isAdminUser && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingImage({
+                                          url: img,
+                                          imageIndex: idx + 1,
+                                          isMain: false
+                                        });
+                                      }}
+                                      className="absolute top-1 right-1 z-10 opacity-0 group-hover/thumb:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-lg hover:bg-white hover:scale-110"
+                                      title="Edit image (crop & background)"
+                                    >
+                                      <Edit className="h-3 w-3 text-blue-600" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      </div>
-                    )}
 
-                    {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
-                      <div className="pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Tags</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedProductForModal.tags.map((tag, index) => (
-                            <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                              <Tag className="h-3 w-3 mr-1" />
-                              {tag}
+                        {/* Right Column - Product Info */}
+                        <div className="space-y-6">
+                          <div>
+                            <h3 className="text-3xl font-bold text-gray-900 mb-2">{selectedProductForModal.name}</h3>
+                            {selectedProductForModal.description && (
+                              <p className="text-base text-gray-600 leading-relaxed">{selectedProductForModal.description}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-baseline space-x-4 pb-4 border-b border-gray-200">
+                            <span className="text-4xl font-bold text-green-600">
+                              ${typeof selectedProductForModal.price === 'number' ? selectedProductForModal.price.toFixed(2) : selectedProductForModal.price || '0.00'}
                             </span>
-                          ))}
+                            {selectedProductForModal.originalPrice && selectedProductForModal.originalPrice > (selectedProductForModal.price || 0) && (
+                              <>
+                                <span className="text-2xl text-gray-400 line-through">
+                                  ${selectedProductForModal.originalPrice.toFixed(2)}
+                                </span>
+                                <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
+                                  {Math.round(((selectedProductForModal.originalPrice - (selectedProductForModal.price || 0)) / selectedProductForModal.originalPrice) * 100)}% OFF
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedProductForModal.category && (
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                <Tag className="h-3.5 w-3.5 mr-1.5" />
+                                {selectedProductForModal.category}
+                              </span>
+                            )}
+                            {selectedProductForModal.brand && (
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                                {selectedProductForModal.brand}
+                              </span>
+                            )}
+                          </div>
+
+                          {selectedProductForModal.sourceUrl && (
+                            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                              <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Source</h4>
+                              <a
+                                href={selectedProductForModal.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 underline break-all flex items-center gap-2"
+                              >
+                                <span className="truncate">{selectedProductForModal.sourceUrl}</span>
+                                <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                              </a>
+                            </div>
+                          )}
+
+                          {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">Variants</h4>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {selectedProductForModal.variants.map((variant: any, idx: number) => (
+                                  <div key={idx} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {variant.title || variant.name || `Variant ${idx + 1}`}
+                                      </span>
+                                      {variant.price && (
+                                        <span className="text-sm text-gray-600">
+                                          ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {variant.sku && (
+                                      <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedProductForModal.tags && selectedProductForModal.tags.length > 0 && (
+                            <div className="pt-4 border-t border-gray-200">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">Tags</h4>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedProductForModal.tags.map((tag, index) => (
+                                  <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                                    <Tag className="h-3 w-3 mr-1" />
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
+
+                      <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end space-x-3 mt-6">
+                        <button
+                          onClick={() => setShowProductModal(false)}
+                          className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={() => setShowProductModal(false)}
-                    className="px-6 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+              {/* Image Editor Modal */}
+              {isAdminUser && editingImage && selectedProductForModal && (
+                <ImageEditor
+                  imageUrl={editingImage.url}
+                  isOpen={!!editingImage}
+                  onClose={() => setEditingImage(null)}
+                  onSave={async (processedUrl) => {
+                    try {
+                      const token = localStorage.getItem('token');
+                      if (!token) {
+                        toast.error('Authentication required');
+                        return;
+                      }
 
-        {/* Image Editor Modal */}
-        {isAdminUser && editingImage && selectedProductForModal && (
-          <ImageEditor
-            imageUrl={editingImage.url}
-            isOpen={!!editingImage}
-            onClose={() => setEditingImage(null)}
-            onSave={async (processedUrl) => {
-              try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                  toast.error('Authentication required');
-                  return;
-                }
+                      // Check if product is from scraped brands (brands products tab)
+                      const isStage3Product = activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products' || activeTab === 'jacket-maker-products';
 
-                // Check if product is from scraped brands (brands products tab)
-                const isStage3Product = activeTab?.startsWith('brand-') || activeTab === 'stage3-brand-products' || activeTab === 'jacket-maker-products';
-                
-                if (isStage3Product) {
-                  // Update product
-                  const response = await fetch(`/api/admin/products/stage3/${selectedProductForModal._id}`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      ...(editingImage.isMain 
-                        ? { image: processedUrl }
-                        : { 
-                            images: selectedProductForModal.images?.map((img, idx) => 
-                              idx === editingImage.imageIndex - 1 ? processedUrl : img
-                            ) || []
-                          }
-                      ),
-                    }),
-                  });
+                      if (isStage3Product) {
+                        // Update product
+                        const response = await fetch(`/api/admin/products/stage3/${selectedProductForModal._id}`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({
+                            ...(editingImage.isMain
+                              ? { image: processedUrl }
+                              : {
+                                images: selectedProductForModal.images?.map((img, idx) =>
+                                  idx === editingImage.imageIndex - 1 ? processedUrl : img
+                                ) || []
+                              }
+                            ),
+                          }),
+                        });
 
-                  if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to update product');
-                  }
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || 'Failed to update product');
+                        }
 
-                  // Update local state
-                  if (editingImage.isMain) {
-                    setSelectedProductForModal({
-                      ...selectedProductForModal,
-                      image: processedUrl
-                    });
-                  } else {
-                    const newImages = [...(selectedProductForModal.images || [])];
-                    newImages[editingImage.imageIndex - 1] = processedUrl;
-                    setSelectedProductForModal({
-                      ...selectedProductForModal,
-                      images: newImages
-                    });
-                  }
-                } else {
-                  // Update regular product
-                  const response = await fetch(`/api/admin/products/${selectedProductForModal._id}`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      ...(editingImage.isMain 
-                        ? { image: processedUrl }
-                        : { 
-                            images: selectedProductForModal.images?.map((img, idx) => 
-                              idx === editingImage.imageIndex - 1 ? processedUrl : img
-                            ) || []
-                          }
-                      ),
-                    }),
-                  });
+                        // Update local state
+                        if (editingImage.isMain) {
+                          setSelectedProductForModal({
+                            ...selectedProductForModal,
+                            image: processedUrl
+                          });
+                        } else {
+                          const newImages = [...(selectedProductForModal.images || [])];
+                          newImages[editingImage.imageIndex - 1] = processedUrl;
+                          setSelectedProductForModal({
+                            ...selectedProductForModal,
+                            images: newImages
+                          });
+                        }
+                      } else {
+                        // Update regular product
+                        const response = await fetch(`/api/admin/products/${selectedProductForModal._id}`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({
+                            ...(editingImage.isMain
+                              ? { image: processedUrl }
+                              : {
+                                images: selectedProductForModal.images?.map((img, idx) =>
+                                  idx === editingImage.imageIndex - 1 ? processedUrl : img
+                                ) || []
+                              }
+                            ),
+                          }),
+                        });
 
-                  if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to update product');
-                  }
+                        if (!response.ok) {
+                          const error = await response.json();
+                          throw new Error(error.error || 'Failed to update product');
+                        }
 
-                  // Update local state
-                  if (editingImage.isMain) {
-                    setSelectedProductForModal({
-                      ...selectedProductForModal,
-                      image: processedUrl
-                    });
-                  } else {
-                    const newImages = [...(selectedProductForModal.images || [])];
-                    newImages[editingImage.imageIndex - 1] = processedUrl;
-                    setSelectedProductForModal({
-                      ...selectedProductForModal,
-                      images: newImages
-                    });
-                  }
-                }
+                        // Update local state
+                        if (editingImage.isMain) {
+                          setSelectedProductForModal({
+                            ...selectedProductForModal,
+                            image: processedUrl
+                          });
+                        } else {
+                          const newImages = [...(selectedProductForModal.images || [])];
+                          newImages[editingImage.imageIndex - 1] = processedUrl;
+                          setSelectedProductForModal({
+                            ...selectedProductForModal,
+                            images: newImages
+                          });
+                        }
+                      }
 
-                toast.success('Product image updated successfully!');
-              } catch (error: any) {
-                console.error('Failed to update product image:', error);
-                toast.error(error.message || 'Failed to update product image');
-              }
-              setEditingImage(null);
-            }}
-            productName={selectedProductForModal.name}
-            folder={selectedProductForModal.brand ? `EverStyleCrafts/${selectedProductForModal.brand}` : 'EverStyleCrafts'}
-          />
-        )}
+                      toast.success('Product image updated successfully!');
+                    } catch (error: any) {
+                      console.error('Failed to update product image:', error);
+                      toast.error(error.message || 'Failed to update product image');
+                    }
+                    setEditingImage(null);
+                  }}
+                  productName={selectedProductForModal.name}
+                  folder={selectedProductForModal.brand ? `EverStyleCrafts/${selectedProductForModal.brand}` : 'EverStyleCrafts'}
+                />
+              )}
             </div>
           </div>
         </div>

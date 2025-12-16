@@ -26,20 +26,17 @@ const EmailPromoDiscountSchema = new Schema<IEmailPromoDiscount>(
     token: {
       type: String,
       required: true,
-      index: true,
     },
     email: {
       type: String,
       required: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
     productId: {
       type: Schema.Types.ObjectId,
       ref: 'Product',
       required: true,
-      index: true,
     },
     discountPercent: {
       type: Number,
@@ -59,7 +56,6 @@ const EmailPromoDiscountSchema = new Schema<IEmailPromoDiscount>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
     status: {
       type: String,

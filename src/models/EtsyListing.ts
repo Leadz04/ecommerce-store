@@ -1,8 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IEtsyListing extends Document {
+  userId: string; // User who owns this listing's shop
   etsyListingId: string;
-  shopId: string;
+  shopId: string; // Etsy shop ID
   productId?: string; // Reference to our internal product
   title: string;
   description: string;
@@ -29,14 +30,17 @@ export interface IEtsyListing extends Document {
   };
   seoTitle?: string;
   seoDescription?: string;
+  views?: number;
+  numFavorers?: number;
   lastSyncedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const EtsyListingSchema = new Schema<IEtsyListing>({
-  etsyListingId: { type: String, required: true, unique: true },
-  shopId: { type: String, required: true },
+  userId: { type: String, required: true, index: true }, // User who owns this listing's shop
+  etsyListingId: { type: String, required: true },
+  shopId: { type: String, required: true, index: true }, // Etsy shop ID
   productId: { type: String, ref: 'Product' },
   title: { type: String, required: true },
   description: { type: String, required: true },
@@ -63,9 +67,16 @@ const EtsyListingSchema = new Schema<IEtsyListing>({
   },
   seoTitle: { type: String },
   seoDescription: { type: String },
+  views: { type: Number, default: 0 },
+  numFavorers: { type: Number, default: 0 },
   lastSyncedAt: { type: Date, default: Date.now }
 }, {
   timestamps: true
 });
+
+// Compound index for efficient queries by user and shop
+EtsyListingSchema.index({ userId: 1, shopId: 1 });
+// Keep etsyListingId unique globally (or make it unique per user+shop if needed)
+EtsyListingSchema.index({ etsyListingId: 1 }, { unique: true });
 
 export default mongoose.models.EtsyListing || mongoose.model<IEtsyListing>('EtsyListing', EtsyListingSchema);

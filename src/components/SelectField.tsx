@@ -61,7 +61,7 @@ export default function SelectField({
         type="button"
         onClick={() => !disabled && onOpenChange(!isOpen)}
         disabled={disabled}
-        className={`w-full flex items-center justify-between px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium transition-colors ${
+        className={`w-full flex items-center justify-between px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900 font-medium transition-colors ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-300'
         }`}
       >
@@ -91,8 +91,8 @@ export default function SelectField({
                   }}
                   className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors ${
                     isSelected
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      ? 'bg-purple-50 text-purple-900 border-l-4 border-purple-500'
+                      : 'text-gray-900 hover:bg-purple-50'
                   }`}
                 >
                   {option.label}

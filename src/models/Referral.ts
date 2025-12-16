@@ -33,12 +33,10 @@ const ReferralSchema = new Schema<IReferral>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     referralCode: {
       type: String,
       required: true,
-      index: true,
     },
     status: {
       type: String,

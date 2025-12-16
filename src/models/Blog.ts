@@ -79,7 +79,6 @@ const BlogSchema = new Schema<IBlog>({
   isDeleted: {
     type: Boolean,
     default: false,
-    index: true,
   },
   deletedAt: {
     type: Date,

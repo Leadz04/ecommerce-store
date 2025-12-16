@@ -1,50 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { EtsyListing, EtsyShop } from '@/models';
+import { EtsyShop, EtsyListing } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
-import { isEtsyDataFresh, needsEtsyDataRefresh } from '@/lib/etsy-compliance';
+import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { needsEtsyDataRefresh } from '@/lib/etsy-compliance';
 
-/**
- * GET /api/etsy/listings
- * 
- * Get Etsy listings with freshness validation per API Terms:
- * - Listing content must not be displayed if older than 6 hours
- * - Automatically refreshes stale data
- */
 export async function GET(request: NextRequest) {
   try {
+    const userId = await getCurrentUserId(request);
     const { searchParams } = new URL(request.url);
     const shopId = searchParams.get('shopId');
     const forceRefresh = searchParams.get('forceRefresh') === 'true';
-
-    await connectDB();
+    const includeStale = searchParams.get('includeStale') === 'true';
 
     if (!shopId) {
       return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
     }
 
-    const shop = await EtsyShop.findOne({ shopId, isActive: true });
+    await connectDB();
+
+    const shop = await getUserShop(userId, shopId);
     if (!shop) {
-      return NextResponse.json({ error: 'Shop not found or inactive' }, { status: 404 });
+      return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
     }
 
-    // Get cached listings
-    let listings = await EtsyListing.find({ shopId }).sort({ lastSyncedAt: -1 });
+    // Build query for listings
+    const query: any = { shopId };
+    if (userId) {
+      query.userId = userId;
+    }
 
-    // Check if data needs refresh (per Etsy API Terms - 6 hours for listings)
-    const needsRefresh = forceRefresh || listings.some(listing => 
+    // Fetch listings from database
+    let dbListings = await EtsyListing.find(query)
+      .sort({ lastSyncedAt: -1 })
+      .lean();
+
+    // Check if we need to refresh from Etsy API
+    let refreshed = false;
+    const needsRefresh = forceRefresh || dbListings.some(listing => 
       needsEtsyDataRefresh(listing.lastSyncedAt, 'listing')
     );
 
-    if (needsRefresh) {
-      // Refresh listings from Etsy API
-      const etsyAPI = new EtsyAPI(shop.accessToken, shop.shopId);
-      const freshListings = await etsyAPI.getListings(shopId);
+    if (needsRefresh && !includeStale) {
+      // Sync from Etsy API if data is stale or force refresh requested
+      const etsyAPI = new EtsyAPI(
+        shop.accessToken,
+        shop.shopId,
+        shop.refreshToken,
+        async (newTokens) => {
+          await EtsyShop.updateOne(
+            { userId: shop.userId, shopId: shop.shopId },
+            {
+              $set: {
+                accessToken: newTokens.access_token,
+                refreshToken: newTokens.refresh_token,
+                tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+              }
+            }
+          );
+        }
+      );
 
+      const etsyListings = await etsyAPI.getListings(shopId);
+      
       // Update database with fresh data
-      for (const listing of freshListings) {
+      for (const listing of etsyListings) {
+        const etsyListingId = listing.listing_id.toString();
+        
+        // Fetch images for the listing
+        let images: Array<{ url: string; rank: number; listingImageId: string }> = [];
+        try {
+          const listingImages = await etsyAPI.getListingImages(etsyListingId);
+          images = listingImages.map((img: any, index: number) => ({
+            url: img.url_fullxfull || img.url_570xN || img.url_75x75 || '',
+            rank: img.rank ?? index,
+            listingImageId: img.listing_image_id?.toString() || `${etsyListingId}-${index}`,
+          })).filter((img: any) => img.url); // Filter out images without URLs
+        } catch (error) {
+          console.warn(`Failed to fetch images for listing ${etsyListingId}:`, error);
+        }
+        
         const listingData = {
-          etsyListingId: listing.listing_id.toString(),
+          userId,
+          etsyListingId,
           shopId: shop.shopId,
           title: listing.title,
           description: listing.description,
@@ -54,39 +92,71 @@ export async function GET(request: NextRequest) {
           tags: listing.tags,
           materials: listing.materials,
           categoryPath: listing.category_path,
+          images,
           inventory: {
             quantity: listing.quantity,
           },
+          views: (listing as any).views ?? 0,
+          numFavorers: (listing as any).num_favorers ?? 0,
           lastSyncedAt: new Date(),
         };
 
         await EtsyListing.findOneAndUpdate(
-          { etsyListingId: listing.listing_id.toString() },
-          listingData,
-          { upsert: true, new: true }
+          { etsyListingId },
+          { $set: listingData },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
         );
       }
 
-      // Get updated listings
-      listings = await EtsyListing.find({ shopId }).sort({ lastSyncedAt: -1 });
+      refreshed = true;
+      
+      // Re-fetch from database after sync
+      dbListings = await EtsyListing.find(query)
+        .sort({ lastSyncedAt: -1 })
+        .lean();
     }
 
-    // Filter out stale listings that couldn't be refreshed
-    const freshListings = listings.filter(listing => 
-      isEtsyDataFresh(listing.lastSyncedAt, 'listing')
-    );
+    // Helper function to decode HTML entities
+    const decodeHtmlEntities = (text: string | undefined | null): string => {
+      if (!text) return '';
+      return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+    };
+
+    // Transform database listings to match expected format
+    const listings = dbListings.map(listing => ({
+      _id: listing._id?.toString(),
+      etsyListingId: listing.etsyListingId,
+      listing_id: parseInt(listing.etsyListingId),
+      title: decodeHtmlEntities(listing.title),
+      description: decodeHtmlEntities(listing.description),
+      tags: (listing.tags || []).map((tag: string) => decodeHtmlEntities(tag)),
+      price: listing.price, // Already a number from database
+      currency: listing.currency || 'USD',
+      quantity: listing.inventory?.quantity ?? 0,
+      inventory: {
+        quantity: listing.inventory?.quantity ?? 0,
+      },
+      images: listing.images || [],
+      views: listing.views ?? 0,
+      num_favorers: listing.numFavorers ?? 0,
+      state: listing.state,
+      lastSyncedAt: listing.lastSyncedAt,
+    }));
 
     return NextResponse.json({
       success: true,
-      listings: freshListings,
-      refreshed: needsRefresh,
-      total: freshListings.length,
+      listings,
+      refreshed,
     });
-
-  } catch (error) {
-    console.error('Error fetching Etsy listings:', error);
+  } catch (error: any) {
+    console.error('[Etsy Listings API] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch listings' },
+      { error: error?.message || 'Failed to fetch listings' },
       { status: 500 }
     );
   }

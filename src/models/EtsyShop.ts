@@ -1,7 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IEtsyShop extends Document {
-  shopId: string;
+  userId: string; // User who owns this shop
+  shopId: string; // Etsy shop ID
   shopName: string;
   accessToken: string;
   refreshToken?: string;
@@ -19,7 +20,8 @@ export interface IEtsyShop extends Document {
 }
 
 const EtsyShopSchema = new Schema<IEtsyShop>({
-  shopId: { type: String, required: true, unique: true },
+  userId: { type: String, required: true, index: true }, // User who owns this shop
+  shopId: { type: String, required: true }, // Etsy shop ID - unique per user
   shopName: { type: String, required: true },
   accessToken: { type: String, required: true },
   refreshToken: { type: String },
@@ -35,5 +37,8 @@ const EtsyShopSchema = new Schema<IEtsyShop>({
 }, {
   timestamps: true
 });
+
+// Compound index: userId + shopId must be unique together
+EtsyShopSchema.index({ userId: 1, shopId: 1 }, { unique: true });
 
 export default mongoose.models.EtsyShop || mongoose.model<IEtsyShop>('EtsyShop', EtsyShopSchema);

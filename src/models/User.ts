@@ -131,7 +131,6 @@ const UserSchema = new Schema<IUser>({
     sparse: true, // Allow null values but enforce uniqueness when present
     uppercase: true,
     trim: true,
-    index: true
   }
 }, {
   timestamps: true

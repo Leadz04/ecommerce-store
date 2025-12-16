@@ -25,7 +25,6 @@ const EmailSubscriberSchema = new Schema<IEmailSubscriber>({
     unique: true,
     lowercase: true,
     trim: true,
-    index: true,
     validate: {
       validator: function(v: string) {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -53,7 +52,6 @@ const EmailSubscriberSchema = new Schema<IEmailSubscriber>({
   },
   lastVisited: {
     type: Date,
-    index: true
   },
   visitCount: {
     type: Number,
@@ -61,7 +59,6 @@ const EmailSubscriberSchema = new Schema<IEmailSubscriber>({
   },
   lastEmailSent: {
     type: Date,
-    index: true
   },
   emailSentCount: {
     type: Number,

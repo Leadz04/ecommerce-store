@@ -1,8 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IEtsyOrder extends Document {
+  userId: string; // User who owns this order's shop
   etsyOrderId: string;
-  shopId: string;
+  shopId: string; // Etsy shop ID
   orderId?: string; // Reference to our internal order
   receiptId: string;
   buyerUserId: string;
@@ -43,8 +44,9 @@ export interface IEtsyOrder extends Document {
 }
 
 const EtsyOrderSchema = new Schema<IEtsyOrder>({
-  etsyOrderId: { type: String, required: true, unique: true },
-  shopId: { type: String, required: true },
+  userId: { type: String, required: true, index: true }, // User who owns this order's shop
+  etsyOrderId: { type: String, required: true },
+  shopId: { type: String, required: true, index: true }, // Etsy shop ID
   orderId: { type: String, ref: 'Order' },
   receiptId: { type: String, required: true },
   buyerUserId: { type: String, required: true },
@@ -83,5 +85,10 @@ const EtsyOrderSchema = new Schema<IEtsyOrder>({
 }, {
   timestamps: true
 });
+
+// Compound index for efficient queries by user and shop
+EtsyOrderSchema.index({ userId: 1, shopId: 1 });
+// Keep etsyOrderId unique globally
+EtsyOrderSchema.index({ etsyOrderId: 1 }, { unique: true });
 
 export default mongoose.models.EtsyOrder || mongoose.model<IEtsyOrder>('EtsyOrder', EtsyOrderSchema);
