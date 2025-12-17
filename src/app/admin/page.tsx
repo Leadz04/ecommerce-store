@@ -6,6 +6,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
 import { requestDeduplicator } from '@/lib/requestDeduplication';
+import { getProductUrl } from '@/lib/productUrl';
 import {
   Users,
   Package,
@@ -71,7 +72,8 @@ import {
   Star,
   TicketPercent,
   Link as LinkIcon,
-  Navigation
+  Navigation,
+  Zap
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import SourcingPanel from './sourcing-panel';
@@ -100,6 +102,7 @@ import { ETSY_SUPPORT_EMAIL } from '@/lib/etsy-compliance';
 import toast from 'react-hot-toast';
 import ImageEditor from '@/components/ImageEditor';
 import QuickEditModal from '@/components/QuickEditModal';
+import EtsyBusinessSuite from '@/components/EtsyBusinessSuite';
 
 function formatRelativeTime(dateString?: string | null) {
   if (!dateString) return 'Never';
@@ -1629,7 +1632,7 @@ function EtsyCreateListingSection() {
 }
 
 // Base allowed tabs - brand tabs will be added dynamically
-const baseAllowedTabs = ['users', 'roles', 'products', 'jacket-maker-products', 'policy-review', 'orders', 'reviews', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking', 'support', 'chat', 'related-questions', 'coupons', 'selected-products'] as const;
+const baseAllowedTabs = ['users', 'roles', 'products', 'jacket-maker-products', 'policy-review', 'orders', 'reviews', 'overview', 'marketing', 'performance', 'analytics', 'etsy', 'etsy-business-suite', 'seo', 'seo-raw', 'analytics-seo', 'blogs', 'keyword-planner', 'sourcing', 'email-tracking', 'support', 'chat', 'related-questions', 'coupons', 'selected-products'] as const;
 type BaseTabKey = typeof baseAllowedTabs[number];
 type TabKey = BaseTabKey | string; // Allow dynamic brand tabs
 
@@ -2860,6 +2863,12 @@ export default function AdminDashboard() {
         { id: 'etsy-export-products', label: 'Export Products', icon: Download },
         { id: 'etsy-sync-status', label: 'Sync Status', icon: CheckCircle },
       ]
+    },
+    { 
+      id: 'etsy-business-suite', 
+      label: 'Etsy Business Suite', 
+      icon: Zap, 
+      description: 'Complete API integration platform' 
     },
     { id: 'orders', label: 'Orders', icon: ShoppingCart },
     { id: 'reviews', label: 'Reviews', icon: Star, description: 'Manage customer reviews' },
@@ -9979,6 +9988,13 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+              {/* Etsy Business Suite Tab */}
+              {activeTab === 'etsy-business-suite' && (
+                <div className="space-y-6">
+                  <EtsyBusinessSuite />
+                </div>
+              )}
+
               {activeTab === 'users' && (
                 <div className="bg-white rounded-lg shadow-sm border">
                   <div className="p-6 border-b border-gray-200">
@@ -12479,7 +12495,7 @@ export default function AdminDashboard() {
                               <div className="text-right text-xs text-gray-500 space-y-1">
                                 <p className="font-mono">#{(product._id || '').slice(-6)}</p>
                                 <Link
-                                  href={`/products/${product._id}`}
+                                  href={getProductUrl(product as any)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-sm hover:text-emerald-900"

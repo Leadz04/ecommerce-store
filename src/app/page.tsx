@@ -37,8 +37,6 @@ const testimonials = [
 export default function Home() {
   const [bestSellers, setBestSellers] = useState<Product[]>([]);
   const [isLoadingBestSellers, setIsLoadingBestSellers] = useState(true);
-  const [newLookProducts, setNewLookProducts] = useState<Product[]>([]);
-  const [isLoadingNewLook, setIsLoadingNewLook] = useState(true);
   const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   useEffect(() => {
@@ -65,37 +63,7 @@ export default function Home() {
       }
     };
 
-    const fetchNewLookProducts = async () => {
-      try {
-        setIsLoadingNewLook(true);
-        const response = await fetch('/api/products?limit=12&inStock=true');
-        if (!response.ok) {
-          setNewLookProducts([]);
-          return;
-        }
-        const data = await response.json();
-        const allProducts = data.products || [];
-        
-        const validProducts = allProducts.filter((product: Product) => {
-          if (!product.image) return false;
-          const imageUrl = product.image.toLowerCase();
-          return !imageUrl.includes('res.cloudinary.com/demo') && 
-                 !imageUrl.includes('images.unsplash.com');
-        });
-        
-        // Randomly shuffle for variety
-        const shuffled = [...validProducts].sort(() => Math.random() - 0.5);
-        setNewLookProducts(shuffled.slice(0, 12));
-      } catch (error) {
-        console.error('Error fetching new look products:', error);
-        setNewLookProducts([]);
-      } finally {
-        setIsLoadingNewLook(false);
-      }
-    };
-
     fetchBestSellers();
-    fetchNewLookProducts();
   }, []);
 
   // Auto-rotate testimonials
@@ -293,47 +261,6 @@ export default function Home() {
           >
             Our Story
           </Link>
-        </div>
-      </section>
-
-      {/* New Look - Product Gallery */}
-      <section className="py-12 sm:py-16 md:py-20 bg-white">
-        <div className="w-full sm:w-[90%] md:w-[85%] lg:w-[80%] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8 sm:mb-10">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-3 sm:mb-4">
-              New Look
-            </h2>
-          </div>
-          
-          {isLoadingNewLook ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {[...Array(8)].map((_, i) => (
-                <ProductCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : newLookProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {newLookProducts.slice(0, 8).map((product) => (
-                <div key={product.id || product._id} className="group relative">
-                  <Link href={`/products/${product.id || product._id}`} className="block">
-                    <div className="relative aspect-square overflow-hidden rounded-lg mb-4">
-                      {product.image && (
-                        <Image
-                          src={product.image}
-                          alt={product.name}
-                          fill
-                          className="object-cover group-hover:scale-110 transition-transform duration-300"
-                        />
-                      )}
-                    </div>
-                    <button className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-800 transition-colors">
-                      Shop The Look
-                    </button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
       </section>
 

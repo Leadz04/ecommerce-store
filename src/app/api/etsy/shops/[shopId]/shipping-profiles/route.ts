@@ -5,22 +5,16 @@ import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
 
 /**
- * DELETE /api/etsy/listings/[listingId]
- * Delete a listing
+ * GET /api/etsy/shops/[shopId]/shipping-profiles
+ * Get shipping profiles for a shop
  */
-export async function DELETE(
+export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ listingId: string }> }
+  { params }: { params: Promise<{ shopId: string }> }
 ) {
   try {
     const userId = await getCurrentUserId(request);
-    const { listingId } = await params;
-    const { searchParams } = new URL(request.url);
-    const shopId = searchParams.get('shopId');
-
-    if (!shopId) {
-      return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
-    }
+    const { shopId } = await params;
 
     await connectDB();
 
@@ -29,7 +23,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
     }
 
-    // Create EtsyAPI instance with token refresh callback
     const etsyAPI = new EtsyAPI(
       shop.accessToken,
       shop.shopId,
@@ -48,21 +41,18 @@ export async function DELETE(
       }
     );
 
-    // Delete listing via Etsy API
-    await etsyAPI['makeRequest'](`/application/shops/${shopId}/listings/${listingId}`, {
-      method: 'DELETE',
-    });
+    const profiles = await etsyAPI.getShippingProfiles(shopId);
 
     return NextResponse.json({
       success: true,
-      message: 'Listing deleted successfully',
+      results: profiles,
     });
   } catch (error: any) {
-    console.error('[Etsy Delete Listing API] Error:', error);
+    console.error('[Etsy Shipping Profiles API] Error:', error);
     return NextResponse.json(
       { 
         success: false,
-        error: error?.message || 'Failed to delete listing' 
+        error: error?.message || 'Failed to fetch shipping profiles' 
       },
       { status: error?.message?.includes('authentication') ? 401 : 500 }
     );
@@ -70,22 +60,17 @@ export async function DELETE(
 }
 
 /**
- * PATCH /api/etsy/listings/[listingId]
- * Update a listing (Etsy uses PATCH method)
+ * POST /api/etsy/shops/[shopId]/shipping-profiles
+ * Create a shipping profile
  */
-export async function PATCH(
+export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ listingId: string }> }
+  { params }: { params: Promise<{ shopId: string }> }
 ) {
   try {
     const userId = await getCurrentUserId(request);
-    const { listingId } = await params;
+    const { shopId } = await params;
     const body = await request.json();
-    const { shopId, ...updateData } = body;
-
-    if (!shopId) {
-      return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
-    }
 
     await connectDB();
 
@@ -94,7 +79,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
     }
 
-    // Create EtsyAPI instance with token refresh callback
     const etsyAPI = new EtsyAPI(
       shop.accessToken,
       shop.shopId,
@@ -113,31 +97,16 @@ export async function PATCH(
       }
     );
 
-    // Convert update data to form-urlencoded format
-    // Handle arrays properly (tags, materials, image_ids, etc.)
+    // Convert to form-urlencoded
     const formData = new URLSearchParams();
-    Object.entries(updateData).forEach(([key, value]) => {
+    Object.entries(body).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        if (Array.isArray(value)) {
-          // For arrays, append each item with the key (Etsy expects comma-separated or multiple entries)
-          if (key === 'tags' || key === 'materials') {
-            // Tags and materials can be comma-separated strings
-            formData.append(key, value.join(','));
-          } else {
-            // For other arrays like image_ids, append each item
-            value.forEach((item) => formData.append(key, String(item)));
-          }
-        } else if (typeof value === 'boolean') {
-          formData.append(key, value ? 'true' : 'false');
-        } else {
-          formData.append(key, String(value));
-        }
+        formData.append(key, String(value));
       }
     });
 
-    // Update listing via Etsy API using PATCH method
-    const updatedListing = await etsyAPI['makeRequest'](`/application/shops/${shopId}/listings/${listingId}`, {
-      method: 'PATCH',
+    const profile = await etsyAPI['makeRequest'](`/application/shops/${shopId}/shipping-profiles`, {
+      method: 'POST',
       body: formData.toString(),
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -146,19 +115,16 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      listing: updatedListing,
+      profile,
     });
   } catch (error: any) {
-    console.error('[Etsy Update Listing API] Error:', error);
+    console.error('[Etsy Create Shipping Profile API] Error:', error);
     return NextResponse.json(
       { 
         success: false,
-        error: error?.message || 'Failed to update listing' 
+        error: error?.message || 'Failed to create shipping profile' 
       },
       { status: error?.message?.includes('authentication') ? 401 : 500 }
     );
   }
 }
-
-// Also support PUT for backwards compatibility
-export const PUT = PATCH;

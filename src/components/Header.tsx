@@ -2,11 +2,94 @@
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit } from 'lucide-react';
+import { ShoppingCart, Search, Menu, X, User, LogOut, Settings, Trash2, Shield, ChevronRight, Edit, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { companyInfo } from '@/data/companyInfo';
+import { getProductUrl } from '@/lib/productUrl';
+
+// Mobile Category Item Component
+const MobileCategoryItem = ({ 
+  title, 
+  categories, 
+  onSelect 
+}: { 
+  title: string; 
+  categories: Record<string, string[]>; 
+  onSelect: (subCat?: string, productType?: string) => void;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
+
+  return (
+    <>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-4 py-4 text-gray-900 hover:bg-gray-50 transition-colors"
+      >
+        <span className="text-sm font-medium">{title}</span>
+        {isExpanded ? (
+          <ChevronUp className="h-4 w-4 text-gray-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className="bg-gray-50">
+          {Object.entries(categories).map(([subCat, items]) => (
+            <div key={subCat}>
+              <button
+                onClick={() => {
+                  if (items.length > 0) {
+                    setExpandedSub(expandedSub === subCat ? null : subCat);
+                  } else {
+                    onSelect(subCat);
+                  }
+                }}
+                className="w-full flex items-center justify-between px-8 py-3 text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <span className="text-sm font-medium">{subCat}</span>
+                {items.length > 0 && (
+                  expandedSub === subCat ? (
+                    <ChevronUp className="h-3 w-3 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-gray-400" />
+                  )
+                )}
+              </button>
+              {expandedSub === subCat && items.length > 0 && (
+                <div className="bg-white pl-12 pr-4 pb-2">
+                  {items.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => onSelect(subCat, item)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded"
+                    >
+                      {item}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => onSelect(subCat)}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 font-medium hover:bg-gray-50 rounded"
+                  >
+                    View All
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() => onSelect()}
+            className="w-full text-left px-8 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-100 transition-colors border-t border-gray-200"
+          >
+            View All {title}
+          </button>
+        </div>
+      )}
+    </>
+  );
+};
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -17,6 +100,7 @@ export default function Header() {
   const [headerSearch, setHeaderSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
+  const [expandedSubs, setExpandedSubs] = useState<Record<string, boolean>>({});
   const { items, getTotalItems, getTotalPrice, removeItem, updateQuantity } = useCartStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -61,279 +145,148 @@ export default function Header() {
     };
   }, []);
 
-  const navigation = [
-    { name: 'Products', href: '/products', hasMegaMenu: false },
-    { name: 'Men', href: '/categories/men', hasMegaMenu: true },
-    { name: 'Women', href: '/categories/women', hasMegaMenu: true },
-    { name: 'Children', href: '/categories/children', hasMegaMenu: true },
-    { name: 'Wool', href: '/categories/wool', hasMegaMenu: true },
-    { name: 'Footwear', href: '/categories/footwear', hasMegaMenu: true },
-    { name: 'Gifts', href: '/categories/gifting', hasMegaMenu: true },
-    { name: 'Accessories', href: '/categories/accessories', hasMegaMenu: true },
-    { name: 'Help', href: '/help', hasMegaMenu: true },
-  ];
+  // Category structures matching brand-products page
+  const menCategories = {
+    'Tops': ['Sweatshirts', 'Polo Shirts', 'Casual Shirts', 'T-Shirts', 'Henleys', 'Button Down Shirts'],
+    'Bottoms': ['Jeans', 'Shorts', 'Pants', 'Trousers'],
+    'Sets': [],
+    'Activewear': [],
+    'Outerwear': ['Sweaters', 'Hoodies/Uppers', 'Jackets', 'Blazers/Coats'],
+    'Accessories': ['Footwear', 'Bags', 'Belts', 'Socks']
+  };
 
-  // Mega-menu data structure
-  const megaMenuData: Record<string, { columns: { title: string; items: { name: string; href: string }[] }[] }> = {
-    'Men': {
-      columns: [
-        {
-          title: 'Jackets & Coats',
-          items: [
-            { name: 'View All', href: '/categories/men' },
-            { name: 'Leather Jackets', href: '/categories/men?search=leather+jacket' },
-            { name: 'Bomber Jackets', href: '/categories/men?search=bomber+jacket' },
-            { name: 'Wool Coats', href: '/categories/men?search=wool+coat' },
-            { name: 'Trucker Jackets', href: '/categories/men?search=trucker+jacket' },
-            { name: 'Blazers', href: '/categories/men?search=blazer' },
-          ]
-        },
-        {
-          title: 'Colors',
-          items: [
-            { name: 'Black', href: '/categories/men?search=black' },
-            { name: 'Brown', href: '/categories/men?search=brown' },
-            { name: 'Blue', href: '/categories/men?search=blue' },
-            { name: 'Beige', href: '/categories/men?search=beige' },
-            { name: 'Green', href: '/categories/men?search=green' },
-            { name: 'Red', href: '/categories/men?search=red' },
-          ]
-        },
-        {
-          title: 'Clothing & Accessories',
-          items: [
-            { name: 'T-Shirts', href: '/categories/men?search=t-shirt' },
-            { name: 'Gloves', href: '/categories/men?search=gloves' },
-            { name: 'Belts', href: '/categories/men?search=belt' },
-            { name: 'Wallets', href: '/categories/men?search=wallet' },
-            { name: 'Bags', href: '/categories/men?search=bag' },
-          ]
-        }
-      ]
-    },
-    'Women': {
-      columns: [
-        {
-          title: 'Jackets & Coat',
-          items: [
-            { name: 'All Collection', href: '/categories/women' },
-            { name: 'Leather Jackets', href: '/categories/women?search=leather+jacket' },
-            { name: 'Black Jackets', href: '/categories/women?search=black+jacket' },
-            { name: 'Brown Jackets', href: '/categories/women?search=brown+jacket' },
-            { name: 'Biker Style Jacket', href: '/categories/women?search=biker+jacket' },
-            { name: 'Red Jackets', href: '/categories/women?search=red+jacket' },
-            { name: 'Hooded Jackets', href: '/categories/women?search=hooded+jacket' },
-            { name: 'Leather Blazer', href: '/categories/women?search=leather+blazer' },
-            { name: 'Leather Coats', href: '/categories/women?search=leather+coat' },
-            { name: 'Shearling Fur Jackets', href: '/categories/women?search=shearling+jacket' },
-            { name: 'Wool Coats', href: '/categories/women?search=wool+coat' },
-            { name: 'Quilted Jackets', href: '/categories/women?search=quilted+jacket' },
-          ]
-        },
-        {
-          title: 'Styles & Fit',
-          items: [
-            { name: 'Cropped Jackets', href: '/categories/women?search=cropped+jacket' },
-            { name: 'Petite Jackets', href: '/categories/women?search=petite+jacket' },
-            { name: 'Tall Leather Jackets', href: '/categories/women?search=tall+leather+jacket' },
-            { name: 'Motorcycle', href: '/categories/women?search=motorcycle+jacket' },
-            { name: 'Bomber', href: '/categories/women?search=bomber+jacket' },
-            { name: 'Blazer', href: '/categories/women?search=blazer' },
-            { name: 'Peplum', href: '/categories/women?search=peplum' },
-            { name: 'Hooded', href: '/categories/women?search=hooded' },
-          ]
-        },
-        {
-          title: 'Color',
-          items: [
-            { name: 'Black', href: '/categories/women?search=black' },
-            { name: 'Brown', href: '/categories/women?search=brown' },
-            { name: 'Red', href: '/categories/women?search=red' },
-            { name: 'Green', href: '/categories/women?search=green' },
-            { name: 'Beige', href: '/categories/women?search=beige' },
-            { name: 'Blue', href: '/categories/women?search=blue' },
-            { name: 'Pink', href: '/categories/women?search=pink' },
-            { name: 'Purple', href: '/categories/women?search=purple' },
-          ]
-        },
-        {
-          title: 'Clothing',
-          items: [
-            { name: 'Varsity Jacket', href: '/categories/women?search=varsity+jacket' },
-            { name: 'Puffer Jacket', href: '/categories/women?search=puffer+jacket' },
-            { name: "Women's T-Shirts", href: '/categories/women?search=t-shirt' },
-          ]
-        }
-      ]
-    },
-    'Children': {
-      columns: [
-        {
-          title: 'Clothing',
-          items: [
-            { name: 'View All', href: '/categories/children' },
-            { name: 'Jackets', href: '/categories/children?search=jacket' },
-            { name: 'Coats', href: '/categories/children?search=coat' },
-            { name: 'T-Shirts', href: '/categories/children?search=t-shirt' },
-          ]
-        },
-        {
-          title: 'Accessories',
-          items: [
-            { name: 'Bags', href: '/categories/children?search=bag' },
-            { name: 'Gloves', href: '/categories/children?search=gloves' },
-            { name: 'Hats', href: '/categories/children?search=hat' },
-          ]
-        },
-        {
-          title: 'By Age',
-          items: [
-            { name: 'Toddler', href: '/categories/children?search=toddler' },
-            { name: 'Kids', href: '/categories/children?search=kids' },
-            { name: 'Teens', href: '/categories/children?search=teens' },
-          ]
-        }
-      ]
-    },
-    'Gifts': {
-      columns: [
-        {
-          title: 'Gift Categories',
-          items: [
-            { name: 'View All', href: '/categories/gifting' },
-            { name: 'Gift Sets', href: '/categories/gifting?search=gift+set' },
-            { name: 'Personalized', href: '/categories/gifting?search=personalized' },
-            { name: 'Luxury Gifts', href: '/categories/gifting?search=luxury' },
-          ]
-        },
-        {
-          title: 'Occasions',
-          items: [
-            { name: 'Birthday', href: '/categories/gifting?search=birthday' },
-            { name: 'Anniversary', href: '/categories/gifting?search=anniversary' },
-            { name: 'Wedding', href: '/categories/gifting?search=wedding' },
-            { name: 'Holiday', href: '/categories/gifting?search=holiday' },
-          ]
-        },
-        {
-          title: 'Price Range',
-          items: [
-            { name: 'Under $50', href: '/categories/gifting?maxPrice=50' },
-            { name: '$50 - $100', href: '/categories/gifting?minPrice=50&maxPrice=100' },
-            { name: '$100 - $200', href: '/categories/gifting?minPrice=100&maxPrice=200' },
-            { name: 'Over $200', href: '/categories/gifting?minPrice=200' },
-          ]
-        }
-      ]
-    },
-    'Accessories': {
-      columns: [
-        {
-          title: 'Bags & Luggage',
-          items: [
-            { name: 'View All', href: '/categories/accessories' },
-            { name: 'Handbags', href: '/categories/accessories?search=handbag' },
-            { name: 'Backpacks', href: '/categories/accessories?search=backpack' },
-            { name: 'Briefcases', href: '/categories/accessories?search=briefcase' },
-            { name: 'Travel Bags', href: '/categories/accessories?search=travel' },
-          ]
-        },
-        {
-          title: 'Leather Goods',
-          items: [
-            { name: 'Wallets', href: '/categories/accessories?search=wallet' },
-            { name: 'Belts', href: '/categories/accessories?search=belt' },
-            { name: 'Gloves', href: '/categories/accessories?search=gloves' },
-            { name: 'Phone Cases', href: '/categories/accessories?search=phone+case' },
-          ]
-        },
-        {
-          title: 'Other',
-          items: [
-            { name: 'Watches', href: '/categories/accessories?search=watch' },
-            { name: 'Jewelry', href: '/categories/accessories?search=jewelry' },
-            { name: 'Sunglasses', href: '/categories/accessories?search=sunglasses' },
-          ]
-        }
-      ]
-    },
-    'Wool': {
-      columns: [
-        {
-          title: 'Wool Coats',
-          items: [
-            { name: 'View All', href: '/categories/wool' },
-            { name: 'Men Wool Coats', href: '/categories/wool?subcategory=men' },
-            { name: 'Women Wool Coats', href: '/categories/wool?subcategory=women' },
-          ]
-        },
-        {
-          title: 'By Category',
-          items: [
-            { name: 'All Wool Products', href: '/categories/wool?search=wool' },
-            { name: 'Wool Jackets', href: '/categories/wool?search=wool+jacket' },
-            { name: 'Wool Coats', href: '/categories/wool?search=wool+coat' },
-            { name: 'Wool Blazers', href: '/categories/wool?search=wool+blazer' },
-          ]
-        },
-        {
-          title: 'Shop By Gender',
-          items: [
-            { name: 'Men\'s Collection', href: '/categories/men?search=wool' },
-            { name: 'Women\'s Collection', href: '/categories/women?search=wool' },
-          ]
-        }
-      ]
-    },
-    'Help': {
-      columns: [
-        {
-          title: 'Support & Policies',
-          items: [
-            { name: 'Customer Care Station', href: '/support' },
-            { name: 'Shipping Policy', href: '/shipping' },
-            { name: 'Return and Exchange', href: '/refund' },
-            { name: 'Sizing Guide', href: '/size-guide' },
-            { name: 'Track Your Order', href: '/orders' },
-            { name: 'Start a Return', href: '/refund' },
-            { name: 'Contact Us', href: '/contact' },
-          ]
-        },
-        {
-          title: 'Buying Guides',
-          items: [
-            { name: 'Celebrities & Leather Jacket', href: '/support/knowledge-base/celebrities-leather-jacket' },
-            { name: 'What is Italian Leather?', href: '/support/knowledge-base/italian-leather' },
-            { name: 'Myths about Leather Jackets', href: '/support/knowledge-base/leather-jacket-myths' },
-            { name: 'Shopping Online vs Offline', href: '/support/knowledge-base/online-vs-offline' },
-            { name: 'Lambskin vs Cowhide Leather', href: '/support/knowledge-base/lambskin-vs-cowhide' },
-            { name: 'Why a $200 Leather Jacket?', href: '/support/knowledge-base/200-dollar-jacket' },
-            { name: 'Keanu Reeves Leather Jacket', href: '/support/knowledge-base/keanu-reeves-jacket' },
-            { name: 'Nvidia CEO & Leather Jacket', href: '/support/knowledge-base/nvidia-ceo-jacket' },
-            { name: 'Sustainable Leather Jacket', href: '/support/knowledge-base/sustainable-leather' },
-            { name: 'Wilsons vs Angel Jackets', href: '/support/knowledge-base/wilsons-vs-angel' },
-            { name: 'Faux Leather vs Real Leather', href: '/support/knowledge-base/faux-vs-real-leather' },
-            { name: "Beckham's Leather Story", href: '/support/knowledge-base/beckham-leather' },
-            { name: 'Angel Jackets vs Ralph Lauren', href: '/support/knowledge-base/angel-vs-ralph-lauren' },
-            { name: 'Angel Jackets vs Banana Republic', href: '/support/knowledge-base/angel-vs-banana-republic' },
-            { name: 'Angel Jackets vs Mango', href: '/support/knowledge-base/angel-vs-mango' },
-          ]
-        },
-        {
-          title: "How To's",
-          items: [
-            { name: 'How to Care Leather Jacket', href: '/support/knowledge-base/care-leather-jacket' },
-            { name: 'Remove Wrinkles from Leather', href: '/support/knowledge-base/remove-wrinkles-leather' },
-            { name: 'How to Care Letterman', href: '/support/knowledge-base/care-letterman' },
-            { name: 'How to Care Suede Leather', href: '/support/knowledge-base/care-suede-leather' },
-            { name: 'How to Identify Real Leather', href: '/support/knowledge-base/identify-real-leather' },
-            { name: 'How to Care Faux Leather', href: '/support/knowledge-base/care-faux-leather' },
-            { name: 'Remove Smell from Leather', href: '/support/knowledge-base/remove-smell-leather' },
-            { name: 'How To Care Leather Skirt', href: '/support/knowledge-base/care-leather-skirt' },
-          ]
-        }
-      ]
+  const womenCategories = {
+    'Tops': ['Sweatshirts', 'Polo Shirts', 'Casual Shirts', 'T-Shirts', 'Blouses', 'Button Down Shirts'],
+    'Bottoms': ['Jeans', 'Shorts', 'Pants', 'Trousers', 'Skirts'],
+    'Sets': [],
+    'Activewear': [],
+    'Outerwear': ['Sweaters', 'Hoodies/Uppers', 'Jackets', 'Blazers/Coats'],
+    'Accessories': ['Footwear', 'Bags', 'Belts', 'Socks']
+  };
+
+  const kidsCategories = {
+    'Boys': ['Sweatshirts', 'Sweaters', 'Uppers', 'Jackets', 'T-Shirts', 'Shirts', 'Jeans', 'Pants', 'Shorts', 'Trousers', 'Tracksuits', 'Shoes', 'Socks'],
+    'Girls': ['Sweaters', 'Sweatshirts', 'Uppers', 'Jackets', 'Tops', 'Dresses', 'Suits', 'Denims', 'Pants', 'Tights', 'Shoes'],
+    'Baby Boys': ['Sweatshirts', 'Sweaters', 'Jackets', 'Uppers', 'T-Shirts', 'Shirts', 'Jeans', 'Pants', 'Trousers', 'Shorts', 'Suits', 'Kurtas'],
+    'Baby Girls': ['Sweatshirts', 'Jackets', 'Uppers', 'Sweaters', 'Tops', 'Dresses', 'Suits', 'Pants', 'Jeans', 'Tights', 'Shorts']
+  };
+
+  const toggleSub = (category: string, sub: string) => {
+    const key = `${category}-${sub}`;
+    setExpandedSubs(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleCategoryClick = (category: string, subCategory?: string, productType?: string) => {
+    if (category === 'Sale') {
+      router.push('/brand-products?onSale=true');
+    } else if (category === 'New In') {
+      router.push('/brand-products');
+    } else {
+      const params = new URLSearchParams();
+      params.set('mainCategory', category);
+      if (subCategory) {
+        params.set('subCategory', subCategory);
+      }
+      if (productType) {
+        params.set('productType', productType);
+      }
+      router.push(`/brand-products?${params.toString()}`);
     }
+    setHoveredNavItem(null);
+  };
+
+  // Hover Dropdown Component for Categories
+  const HoverDropdown = ({ 
+    category, 
+    categories 
+  }: { 
+    category: string; 
+    categories: Record<string, string[]> 
+  }) => {
+    return (
+      <div
+        ref={megaMenuRef}
+        className="absolute top-full left-0 mt-0 bg-white border border-gray-200 shadow-xl z-50 w-80"
+        onMouseEnter={() => setHoveredNavItem(category)}
+        onMouseLeave={() => setHoveredNavItem(null)}
+      >
+        <div className="py-4">
+          {/* Category Header */}
+          <div className="px-6 mb-4">
+            <h3 className="font-bold text-lg text-gray-900">{category}</h3>
+          </div>
+          
+          {/* Category List */}
+          <div className="space-y-0">
+            {Object.entries(categories).map(([subCat, items]) => {
+              const key = `${category}-${subCat}`;
+              const isExpanded = expandedSubs[key] || false;
+              const hasItems = items.length > 0;
+              
+              return (
+                <div key={subCat} className="border-b border-gray-100 last:border-0">
+                  <div className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition-colors">
+                    <button
+                      onClick={() => handleCategoryClick(category, subCat)}
+                      className="flex-1 text-left"
+                    >
+                      <span className="font-semibold text-gray-900">{subCat}</span>
+                    </button>
+                    {hasItems && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSub(category, subCat);
+                        }}
+                        className="ml-2 p-1 hover:bg-gray-200 rounded transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {isExpanded && hasItems && (
+                    <div className="bg-gray-50 pl-6 pr-6 pb-2">
+                      <div className="space-y-1 pt-1">
+                        {items.map((item) => (
+                          <button
+                            key={item}
+                            onClick={() => handleCategoryClick(category, subCat, item)}
+                            className="w-full text-left px-3 py-2 hover:bg-white rounded text-sm text-gray-700 transition-colors"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => handleCategoryClick(category, subCat)}
+                          className="w-full text-left px-3 py-2 hover:bg-white rounded text-sm text-gray-700 font-medium transition-colors"
+                        >
+                          View All
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            
+            {/* View All for entire category */}
+            <div className="px-6 pt-2">
+              <button
+                onClick={() => handleCategoryClick(category)}
+                className="w-full text-left py-2 text-sm font-semibold text-gray-900 hover:text-gray-700 transition-colors"
+              >
+                View All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -402,7 +355,7 @@ export default function Header() {
     router.push(targetUrl);
   };
 
-  const handleCategoryClick = (categoryValue: string) => {
+  const handleSearchCategoryClick = (categoryValue: string) => {
     setSelectedCategory(categoryValue);
     const categorySlug = categories.find(c => c.value === categoryValue)?.slug;
     
@@ -446,62 +399,64 @@ export default function Header() {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6 relative">
-              {navigation.map((item) => (
-                <div
-                  key={item.name}
-                  className="relative"
-                  onMouseEnter={() => item.hasMegaMenu && setHoveredNavItem(item.name)}
-                  onMouseLeave={() => setHoveredNavItem(null)}
-                >
-                  <Link
-                    href={item.href}
-                    className={`text-sm text-gray-600 hover:text-gray-900 transition-colors ${
-                      hoveredNavItem === item.name ? 'text-gray-900' : ''
-                    }`}
-                  >
-                    {item.name}
-                  </Link>
-                  
-                  {/* Mega Menu */}
-                  {item.hasMegaMenu && hoveredNavItem === item.name && megaMenuData[item.name] && (
-                    <div
-                      ref={megaMenuRef}
-                      className="absolute left-1/2 top-full mt-0 w-screen max-w-5xl bg-white border-t border-gray-200 shadow-lg z-50"
-                      style={{ transform: 'translateX(-50%)' }}
-                      onMouseEnter={() => setHoveredNavItem(item.name)}
-                      onMouseLeave={() => setHoveredNavItem(null)}
-                    >
-                      <div className="max-w-7xl mx-auto px-6 py-8">
-                        <h3 className="text-2xl font-bold text-gray-900 mb-6 uppercase">{item.name}</h3>
-                        <div className={`grid gap-8 ${megaMenuData[item.name].columns.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                          {megaMenuData[item.name].columns.map((column, colIndex) => (
-                            <div key={colIndex}>
-                              <h4 className="text-sm font-bold text-gray-900 uppercase mb-4 border-b border-gray-300 pb-2">
-                                {column.title}
-                              </h4>
-                              <ul className="space-y-2">
-                                {column.items.map((subItem, itemIndex) => (
-                                  <li key={itemIndex}>
-                                    <Link
-                                      href={subItem.href}
-                                      className="text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center group"
-                                      onClick={() => setHoveredNavItem(null)}
-                                    >
-                                      <span className="mr-2 text-gray-400 group-hover:text-gray-600">›</span>
-                                      {subItem.name}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+            <nav className="hidden md:flex items-center gap-8 relative">
+              {/* Sale Button */}
+              <button
+                onClick={() => handleCategoryClick('Sale')}
+                className="text-red-600 font-semibold hover:text-red-700 transition-colors text-sm"
+              >
+                Sale
+              </button>
+              
+              {/* New In Button */}
+              <button
+                onClick={() => handleCategoryClick('New In')}
+                className="text-gray-900 font-medium hover:text-gray-700 transition-colors text-sm"
+              >
+                New In
+              </button>
+              
+              {/* Men with Hover Dropdown */}
+              <div 
+                className="relative h-full flex items-center"
+                onMouseEnter={() => setHoveredNavItem('Men')}
+                onMouseLeave={() => setHoveredNavItem(null)}
+              >
+                <button className="text-gray-900 font-medium hover:text-gray-700 transition-colors text-sm py-2">
+                  Men
+                </button>
+                {hoveredNavItem === 'Men' && (
+                  <HoverDropdown category="Men" categories={menCategories} />
+                )}
+              </div>
+
+              {/* Women with Hover Dropdown */}
+              <div 
+                className="relative h-full flex items-center"
+                onMouseEnter={() => setHoveredNavItem('Women')}
+                onMouseLeave={() => setHoveredNavItem(null)}
+              >
+                <button className="text-gray-900 font-medium hover:text-gray-700 transition-colors text-sm py-2">
+                  Women
+                </button>
+                {hoveredNavItem === 'Women' && (
+                  <HoverDropdown category="Women" categories={womenCategories} />
+                )}
+              </div>
+
+              {/* Kids with Hover Dropdown */}
+              <div 
+                className="relative h-full flex items-center"
+                onMouseEnter={() => setHoveredNavItem('Kids')}
+                onMouseLeave={() => setHoveredNavItem(null)}
+              >
+                <button className="text-gray-900 font-medium hover:text-gray-700 transition-colors text-sm py-2">
+                  Kids
+                </button>
+                {hoveredNavItem === 'Kids' && (
+                  <HoverDropdown category="Kids" categories={kidsCategories} />
+                )}
+              </div>
             </nav>
           </div>
 
@@ -678,7 +633,7 @@ export default function Header() {
                       {categories.map((category) => (
                         <button
                           key={category.value}
-                          onClick={() => handleCategoryClick(category.value)}
+                          onClick={() => handleSearchCategoryClick(category.value)}
                           className={`px-4 py-3 text-sm font-medium rounded-lg border-2 transition-all ${
                             selectedCategory === category.value
                               ? 'border-gray-900 bg-gray-900 text-white'
@@ -754,18 +709,67 @@ export default function Header() {
               </div>
               <nav className="flex-1 overflow-y-auto">
                 <ul className="divide-y divide-gray-200">
-                  {navigation.map((item) => (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        className="flex items-center justify-between px-4 py-4 text-gray-900 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        <span className="text-sm">{item.name}</span>
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                      </Link>
-                    </li>
-                  ))}
+                  {/* Sale */}
+                  <li>
+                    <button
+                      onClick={() => {
+                        handleCategoryClick('Sale');
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-4 text-red-600 font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-sm">Sale</span>
+                    </button>
+                  </li>
+                  
+                  {/* New In */}
+                  <li>
+                    <button
+                      onClick={() => {
+                        handleCategoryClick('New In');
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-4 text-gray-900 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-sm font-medium">New In</span>
+                    </button>
+                  </li>
+                  
+                  {/* Men */}
+                  <li>
+                    <MobileCategoryItem
+                      title="Men"
+                      categories={menCategories}
+                      onSelect={(subCat, productType) => {
+                        handleCategoryClick('Men', subCat, productType);
+                        setIsMenuOpen(false);
+                      }}
+                    />
+                  </li>
+                  
+                  {/* Women */}
+                  <li>
+                    <MobileCategoryItem
+                      title="Women"
+                      categories={womenCategories}
+                      onSelect={(subCat, productType) => {
+                        handleCategoryClick('Women', subCat, productType);
+                        setIsMenuOpen(false);
+                      }}
+                    />
+                  </li>
+                  
+                  {/* Kids */}
+                  <li>
+                    <MobileCategoryItem
+                      title="Kids"
+                      categories={kidsCategories}
+                      onSelect={(subCat, productType) => {
+                        handleCategoryClick('Kids', subCat, productType);
+                        setIsMenuOpen(false);
+                      }}
+                    />
+                  </li>
                 </ul>
               </nav>
               <div className="px-4 py-4 border-t border-gray-200">
@@ -833,13 +837,13 @@ export default function Header() {
                   ) : (
                     <div className="space-y-4">
                       {items.map((item) => {
-                        const pid = (item.product as any)._id || (item.product as any).id;
+                        const productUrl = getProductUrl(item.product as any);
                         const totalPrice = item.product.price * item.quantity;
                         const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
                         return (
                           <div key={item.id} className="flex gap-3 pb-4 border-b border-gray-200 last:border-b-0">
                             {/* Product Image */}
-                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
+                            <Link href={productUrl} onClick={() => setIsCartOpen(false)} className="shrink-0">
                               <img 
                                 src={item.product.image} 
                                 alt={item.product.name} 
@@ -850,7 +854,7 @@ export default function Header() {
                             {/* Product Details */}
                             <div className="flex-1 min-w-0">
                               <Link 
-                                href={`/products/${pid}`} 
+                                href={productUrl} 
                                 onClick={() => setIsCartOpen(false)}
                                 className="block font-semibold text-gray-900 hover:text-blue-600 mb-1 text-sm line-clamp-2"
                               >
@@ -1005,13 +1009,13 @@ export default function Header() {
                   ) : (
                     <div className="space-y-6">
                       {items.map((item) => {
-                        const pid = (item.product as any)._id || (item.product as any).id;
+                        const productUrl = getProductUrl(item.product as any);
                         const totalPrice = item.product.price * item.quantity;
                         const hasDiscount = item.product.originalPrice && item.product.originalPrice > item.product.price;
                         return (
                           <div key={item.id} className="flex gap-3 pb-6 border-b border-gray-200 last:border-b-0">
                             {/* Product Image */}
-                            <Link href={`/products/${pid}`} onClick={() => setIsCartOpen(false)} className="shrink-0">
+                            <Link href={productUrl} onClick={() => setIsCartOpen(false)} className="shrink-0">
                               <img 
                                 src={item.product.image} 
                                 alt={item.product.name} 
@@ -1022,7 +1026,7 @@ export default function Header() {
                             {/* Product Details */}
                             <div className="flex-1 min-w-0">
                               <Link 
-                                href={`/products/${pid}`} 
+                                href={productUrl} 
                                 onClick={() => setIsCartOpen(false)}
                                 className="block font-bold text-gray-900 hover:text-blue-600 mb-1"
                               >
@@ -1075,7 +1079,7 @@ export default function Header() {
                             {/* Action Icons */}
                             <div className="flex flex-col gap-3 shrink-0">
                               <Link
-                                href={`/products/${pid}`}
+                                href={productUrl}
                                 onClick={() => setIsCartOpen(false)}
                                 className="p-2 hover:bg-gray-100 rounded transition-colors inline-block"
                                 aria-label="Edit item"

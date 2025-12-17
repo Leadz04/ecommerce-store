@@ -2,12 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, Grid, List, SlidersHorizontal, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import ProductCard from '@/components/brand-products/ProductCard';
-import FilterSidebar from '@/components/brand-products/FilterSidebar';
-import FilterDropdowns from '@/components/brand-products/FilterDropdowns';
-import CategoryNavigation from '@/components/brand-products/CategoryNavigation';
-import ActiveFilters from '@/components/brand-products/ActiveFilters';
 import ProductDetailModal from '@/components/brand-products/ProductDetailModal';
 
 interface Product {
@@ -56,8 +52,6 @@ export default function BrandProductsPage() {
     priceRange: { min: 0, max: 100000, avg: 0 }
   });
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -257,11 +251,8 @@ export default function BrandProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Category Navigation */}
-      <CategoryNavigation onCategorySelect={handleCategorySelect} />
-
       {/* Header */}
-      <div className="bg-white border-b sticky top-[56px] z-30 shadow-sm">
+      <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between gap-4">
             <h1 className="text-xl font-bold text-gray-900">Brand Products</h1>
@@ -282,49 +273,6 @@ export default function BrandProductsPage() {
               />
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             </form>
-
-            {/* View Toggle & Sort */}
-            <div className="flex items-center gap-2">
-              <select
-                value={filters.sortBy}
-                onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              >
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="name-asc">Name: A-Z</option>
-                <option value="name-desc">Name: Z-A</option>
-                <option value="rating">Highest Rated</option>
-              </select>
-
-              <div className="hidden md:flex items-center gap-1 border border-gray-300 rounded-lg p-1 bg-white">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded transition-colors ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                >
-                  <Grid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Advanced Filters Toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center space-x-2 px-5 py-2.5 border-2 border-gray-300 rounded-lg bg-white text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold shadow-sm"
-                title="Advanced Filters"
-              >
-                <SlidersHorizontal className="h-5 w-5" />
-                <span className="hidden sm:inline">FILTER & SORT</span>
-                <SlidersHorizontal className="h-5 w-5 rotate-180 hidden sm:inline" />
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -338,50 +286,8 @@ export default function BrandProductsPage() {
         />
 
         <div className="flex flex-col gap-8">
-          {/* Right Side Filter Overlay */}
-          {showFilters && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 bg-black/50 z-40"
-                onClick={() => setShowFilters(false)}
-              />
-              {/* Filter Panel */}
-              <div className="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
-                {/* White Header with Blue Close Icon */}
-                <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
-                  <button
-                    onClick={() => setShowFilters(false)}
-                    className="p-2 hover:bg-gray-100 rounded transition-colors"
-                    aria-label="Close filters"
-                  >
-                    <X className="h-5 w-5 text-blue-600" />
-                  </button>
-                </div>
-
-                {/* Filter Content */}
-                <div className="overflow-y-auto h-[calc(100vh-64px)] px-6 py-4">
-                  <FilterDropdowns
-                    facets={facets}
-                    filters={filters}
-                    onFilterChange={handleFilterChange}
-                    loading={loading}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-
           {/* Main Content */}
           <div className="flex-1">
-            {/* Active Filters */}
-            <ActiveFilters
-              filters={filters}
-              onRemoveFilter={handleRemoveFilter}
-              onClearAll={handleClearAllFilters}
-            />
 
             {/* Results Summary */}
             <div className="mt-4 mb-6 flex items-center justify-between">
@@ -405,27 +311,20 @@ export default function BrandProductsPage() {
               </div>
             ) : products.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-lg border border-dashed">
-                <p className="text-gray-500 text-lg mb-2">No products found matching your criteria.</p>
+                <p className="text-gray-500 text-lg mb-2">No products found.</p>
                 <p className="text-gray-400 text-sm mb-4">
-                  Try removing some filters or check if the filter values match the product data.
-                  <br />
-                  <span className="text-xs mt-2 block">
-                    Tip: Product types are case-insensitive and support partial matching (e.g., "Leather" matches "Leather Jacket")
-                  </span>
+                  Try adjusting your search or browse by category.
                 </p>
                 <button
                   onClick={handleClearAllFilters}
                   className="text-blue-600 hover:underline font-medium"
                 >
-                  Reset Filters
+                  Clear Search
                 </button>
               </div>
             ) : (
               <>
-                <div className={viewMode === 'grid' 
-                  ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6'
-                  : 'space-y-4'
-                }>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                   {products.map((product) => (
                     <ProductCard 
                       key={product._id} 

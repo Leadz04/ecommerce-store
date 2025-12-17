@@ -721,6 +721,76 @@ export class EtsyAPI {
     );
     return response.results || [];
   }
+
+  // Receipt methods
+  async getShopReceipts(shopId: string, options: {
+    limit?: number;
+    offset?: number;
+    min_created?: number;
+    max_created?: number;
+    min_last_modified?: number;
+    max_last_modified?: number;
+    sort_on?: 'created' | 'updated' | 'receipt_id';
+    sort_order?: 'asc' | 'desc';
+    was_paid?: boolean;
+    was_shipped?: boolean;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.offset) params.append('offset', options.offset.toString());
+    if (options.min_created) params.append('min_created', options.min_created.toString());
+    if (options.max_created) params.append('max_created', options.max_created.toString());
+    if (options.min_last_modified) params.append('min_last_modified', options.min_last_modified.toString());
+    if (options.max_last_modified) params.append('max_last_modified', options.max_last_modified.toString());
+    if (options.sort_on) params.append('sort_on', options.sort_on);
+    if (options.sort_order) params.append('sort_order', options.sort_order);
+    if (options.was_paid !== undefined) params.append('was_paid', options.was_paid.toString());
+    if (options.was_shipped !== undefined) params.append('was_shipped', options.was_shipped.toString());
+
+    const queryString = params.toString();
+    const endpoint = `/application/shops/${shopId}/receipts${queryString ? `?${queryString}` : ''}`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getShopReceipt(shopId: string, receiptId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/receipts/${receiptId}`);
+  }
+
+  // Payment methods
+  async getShopPayments(shopId: string, paymentIds?: number[]): Promise<any> {
+    const params = new URLSearchParams();
+    if (paymentIds && paymentIds.length > 0) {
+      params.append('payment_ids', paymentIds.join(','));
+    }
+    const queryString = params.toString();
+    const endpoint = `/application/shops/${shopId}/payments${queryString ? `?${queryString}` : ''}`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getShopPaymentByReceiptId(shopId: string, receiptId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/receipts/${receiptId}/payments`);
+  }
+
+  // Ledger Entry methods
+  async getShopLedgerEntries(shopId: string, options: {
+    min_created: number;
+    max_created: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('min_created', options.min_created.toString());
+    params.append('max_created', options.max_created.toString());
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.offset) params.append('offset', options.offset.toString());
+
+    const queryString = params.toString();
+    return this.makeRequest(`/application/shops/${shopId}/payment-account/ledger-entries?${queryString}`);
+  }
+
+  async getShopLedgerEntry(shopId: string, ledgerEntryId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/payment-account/ledger-entries/${ledgerEntryId}`);
+  }
 }
 
 // OAuth / PKCE helpers
