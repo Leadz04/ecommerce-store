@@ -1,9 +1,9 @@
 export const companyInfo = {
   name: 'EverStyleCrafts',
   legalName: 'EverStyleCrafts',
-  tagline: 'Premium Leather Goods',
+  tagline: 'Premium handcrafted leather goods from Sialkot',
   description:
-    'Premium Pakistani leather goods, travel accessories & gifts crafted for everyday sophistication.',
+    'EverStyleCrafts curates premium Pakistani leather goods, travel accessories, and gifting essentials crafted for everyday sophistication.',
   email: 'testleadz04@gmail.com',
   phone: '+923042158396',
   supportHours: 'Monday – Saturday, 10:00 AM – 8:00 PM PKT',
@@ -11,13 +11,6 @@ export const companyInfo = {
   returnAddress: 'Al Hayat Center, Shop #12, Daska Road, Sialkot',
   siteUrl: 'https://everstylecrafts.com',
   whatsapp: '+923042158396',
-  socialMedia: {
-    facebook: 'https://facebook.com/everstylecrafts',
-    instagram: 'https://instagram.com/everstylecrafts',
-    twitter: 'https://x.com/everstylecrafts',
-    linkedin: 'https://linkedin.com/company/everstylecrafts',
-    youtube: 'https://youtube.com/@everstylecrafts'
-  },
   domesticShipping: {
     freeThreshold: 'Rs 7,500',
     standardFee: 'Rs 299',

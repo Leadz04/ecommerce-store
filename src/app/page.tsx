@@ -9,8 +9,6 @@ import Link from "next/link";
 import { ArrowRight, Star, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/LoadingSkeleton";
-import AboutOurCraft from "@/components/AboutOurCraft";
-import WhyChooseUs from "@/components/WhyChooseUs";
 import type { Product } from '@/types';
 
 const testimonials = [
@@ -56,7 +54,7 @@ export default function Home() {
         }
         const data = await response.json();
         const products = data.products || [];
-
+        
         // Products are already filtered and sorted by the API
         setBestSellers(products);
       } catch (error) {
@@ -77,14 +75,14 @@ export default function Home() {
         }
         const data = await response.json();
         const allProducts = data.products || [];
-
+        
         const validProducts = allProducts.filter((product: Product) => {
           if (!product.image) return false;
           const imageUrl = product.image.toLowerCase();
-          return !imageUrl.includes('res.cloudinary.com/demo') &&
-            !imageUrl.includes('images.unsplash.com');
+          return !imageUrl.includes('res.cloudinary.com/demo') && 
+                 !imageUrl.includes('images.unsplash.com');
         });
-
+        
         // Randomly shuffle for variety
         const shuffled = [...validProducts].sort(() => Math.random() - 0.5);
         setNewLookProducts(shuffled.slice(0, 12));
@@ -127,11 +125,11 @@ export default function Home() {
             />
           ))}
         </div>
-
+        
         <div className="relative z-10 w-full sm:w-[90%] md:w-[85%] lg:w-[80%] mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-6">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-6">
             Holiday Favorites Sale 30-45% off
-          </h1>
+          </h2>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <div className="bg-green-600 text-white px-6 py-3 rounded-lg font-bold text-lg">
               Guaranteed Christmas Delivery
@@ -172,7 +170,7 @@ export default function Home() {
               Our Best Sellers
             </h2>
           </div>
-
+          
           {isLoadingBestSellers ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[...Array(20)].map((_, i) => (
@@ -217,7 +215,7 @@ export default function Home() {
               WHAT PEOPLE ARE SAYING
             </h2>
           </div>
-
+          
           <div className="relative max-w-4xl mx-auto">
             <div className="relative overflow-hidden rounded-2xl bg-white shadow-xl p-8 sm:p-12 min-h-[300px] flex items-center">
               <div className="w-full transition-all duration-500 ease-in-out">
@@ -239,7 +237,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-
+            
             {/* Navigation buttons */}
             <button
               onClick={() => setTestimonialIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length)}
@@ -255,15 +253,16 @@ export default function Home() {
             >
               <ChevronRight className="h-6 w-6 text-gray-700" />
             </button>
-
+            
             {/* Dots indicator */}
             <div className="flex justify-center gap-2 mt-6">
               {testimonials.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setTestimonialIndex(index)}
-                  className={`w-2 h-2 rounded-full transition-all ${index === testimonialIndex ? 'bg-gray-900 w-8' : 'bg-gray-300'
-                    }`}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    index === testimonialIndex ? 'bg-gray-900 w-8' : 'bg-gray-300'
+                  }`}
                   aria-label={`Go to testimonial ${index + 1}`}
                 />
               ))}
@@ -281,12 +280,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* About Our Craft - SEO Content Section */}
-      <AboutOurCraft />
-
-      {/* Why Choose Us - SEO Content Section */}
-      <WhyChooseUs />
 
       {/* Our Story Section */}
       <section className="py-12 sm:py-16 md:py-20 bg-white">
@@ -311,7 +304,7 @@ export default function Home() {
               New Look
             </h2>
           </div>
-
+          
           {isLoadingNewLook ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[...Array(8)].map((_, i) => (
@@ -353,7 +346,7 @@ export default function Home() {
             </h2>
             <p className="text-gray-600">#FjacketsFamily</p>
           </div>
-
+          
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4">
             {[...Array(10)].map((_, i) => (
               <div key={i} className="relative aspect-square overflow-hidden rounded-lg group cursor-pointer">
@@ -378,7 +371,7 @@ export default function Home() {
               </h2>
             </div>
           </div>
-
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {[
               { title: 'Product Comparison Guide', description: 'Compare different products and find the perfect match', link: '/help' },
