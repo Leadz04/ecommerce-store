@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClientBridge from "@/components/ClientBridge";
 import VisitorEmailTracker from "@/components/VisitorEmailTracker";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { companyInfo } from "@/data/companyInfo";
 
 const geistSans = Geist({
@@ -67,6 +68,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
+        <GoogleAnalytics />
         <ClientBridge>
           <VisitorEmailTracker />
           {children}

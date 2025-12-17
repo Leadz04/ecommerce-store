@@ -43,27 +43,43 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  
+
   /* Font Sizes - Centralized Management */
   /* Reduce all sizes by ~10-15% for a more compact design */
-  --font-size-xs: 0.625rem;      /* 10px (reduced from 12px) */
-  --font-size-sm: 0.8125rem;     /* 13px (reduced from 14px) */
-  --font-size-base: 0.9375rem;   /* 15px (reduced from 16px) */
-  --font-size-lg: 1rem;          /* 16px (reduced from 18px) */
-  --font-size-xl: 1.125rem;      /* 18px (reduced from 20px) */
-  --font-size-2xl: 1.375rem;    /* 22px (reduced from 24px) */
-  --font-size-3xl: 1.75rem;     /* 28px (reduced from 30px) */
-  --font-size-4xl: 2rem;        /* 32px (reduced from 36px) */
-  --font-size-5xl: 2.5rem;      /* 40px (reduced from 48px) */
-  
+  --font-size-xs: 0.625rem;
+  /* 10px (reduced from 12px) */
+  --font-size-sm: 0.8125rem;
+  /* 13px (reduced from 14px) */
+  --font-size-base: 0.9375rem;
+  /* 15px (reduced from 16px) */
+  --font-size-lg: 1rem;
+  /* 16px (reduced from 18px) */
+  --font-size-xl: 1.125rem;
+  /* 18px (reduced from 20px) */
+  --font-size-2xl: 1.375rem;
+  /* 22px (reduced from 24px) */
+  --font-size-3xl: 1.75rem;
+  /* 28px (reduced from 30px) */
+  --font-size-4xl: 2rem;
+  /* 32px (reduced from 36px) */
+  --font-size-5xl: 2.5rem;
+  /* 40px (reduced from 48px) */
+
   /* Line Heights */
-  --line-height-xs: 1rem;       /* 16px */
-  --line-height-sm: 1.25rem;    /* 20px */
-  --line-height-base: 1.5rem;   /* 24px */
-  --line-height-lg: 1.625rem;   /* 26px */
-  --line-height-xl: 1.75rem;    /* 28px */
-  --line-height-2xl: 2rem;      /* 32px */
-  --line-height-3xl: 2.25rem;   /* 36px */
+  --line-height-xs: 1rem;
+  /* 16px */
+  --line-height-sm: 1.25rem;
+  /* 20px */
+  --line-height-base: 1.5rem;
+  /* 24px */
+  --line-height-lg: 1.625rem;
+  /* 26px */
+  --line-height-xl: 1.75rem;
+  /* 28px */
+  --line-height-2xl: 2rem;
+  /* 32px */
+  --line-height-3xl: 2.25rem;
+  /* 36px */
 }
 
 @theme inline {
@@ -76,19 +92,29 @@
   --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  
+
   /* Override Tailwind default font sizes with reduced sizes */
   /* These override the default Tailwind classes: text-xs, text-sm, text-base, etc. */
-  --font-size-xs: 0.625rem;      /* 10px (reduced from 12px) */
-  --font-size-sm: 0.8125rem;     /* 13px (reduced from 14px) */
-  --font-size-base: 0.9375rem;   /* 15px (reduced from 16px) */
-  --font-size-lg: 1rem;          /* 16px (reduced from 18px) */
-  --font-size-xl: 1.125rem;      /* 18px (reduced from 20px) */
-  --font-size-2xl: 1.375rem;    /* 22px (reduced from 24px) */
-  --font-size-3xl: 1.75rem;     /* 28px (reduced from 30px) */
-  --font-size-4xl: 2rem;        /* 32px (reduced from 36px) */
-  --font-size-5xl: 2.5rem;      /* 40px (reduced from 48px) */
-  --font-size-6xl: 3rem;        /* 48px (reduced from 60px) */
+  --font-size-xs: 0.625rem;
+  /* 10px (reduced from 12px) */
+  --font-size-sm: 0.8125rem;
+  /* 13px (reduced from 14px) */
+  --font-size-base: 0.9375rem;
+  /* 15px (reduced from 16px) */
+  --font-size-lg: 1rem;
+  /* 16px (reduced from 18px) */
+  --font-size-xl: 1.125rem;
+  /* 18px (reduced from 20px) */
+  --font-size-2xl: 1.375rem;
+  /* 22px (reduced from 24px) */
+  --font-size-3xl: 1.75rem;
+  /* 28px (reduced from 30px) */
+  --font-size-4xl: 2rem;
+  /* 32px (reduced from 36px) */
+  --font-size-5xl: 2.5rem;
+  /* 40px (reduced from 48px) */
+  --font-size-6xl: 3rem;
+  /* 48px (reduced from 60px) */
 }
 
 /* Light theme (default) */
@@ -267,9 +293,11 @@ body {
   0% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0% 50%;
   }
@@ -282,9 +310,12 @@ body {
 
 /* Pulse animation for loading states */
 @keyframes pulse-slow {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -300,6 +331,7 @@ body {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -315,18 +347,17 @@ body {
   0% {
     background-position: -1000px 0;
   }
+
   100% {
     background-position: 1000px 0;
   }
 }
 
 .shimmer {
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 0px,
-    #e0e0e0 40px,
-    #f0f0f0 80px
-  );
+  background: linear-gradient(90deg,
+      #f0f0f0 0px,
+      #e0e0e0 40px,
+      #f0f0f0 80px);
   background-size: 1000px 100%;
   animation: shimmer 2s infinite;
 }
@@ -337,6 +368,7 @@ body {
     transform: translateY(100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -347,6 +379,7 @@ body {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -362,12 +395,15 @@ body {
 
 /* Hide scrollbar utility */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari and Opera */
+  display: none;
+  /* Chrome, Safari and Opera */
 }
 
 /* Admin tabs scrollbar styling */
@@ -391,4 +427,163 @@ body {
 
 .admin-tabs-scroll::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
+}
+
+/* ========================================
+   MOBILE FRIENDLINESS & SEO OPTIMIZATIONS
+   ======================================== */
+
+/* Ensure minimum font size on mobile for readability */
+@media (max-width: 768px) {
+  body {
+    font-size: 16px !important;
+    /* Minimum 16px to prevent mobile zoom */
+  }
+
+  /* Ensure all text is at least 16px on mobile */
+  .text-xs,
+  .text-sm {
+    font-size: 14px !important;
+  }
+
+  .text-base {
+    font-size: 16px !important;
+  }
+}
+
+/* Minimum tap target size for mobile (48x48px minimum) */
+button,
+a,
+input[type="button"],
+input[type="submit"],
+.btn,
+[role="button"] {
+  min-height: 44px;
+  /* iOS recommended minimum */
+  min-width: 44px;
+  padding: 12px 16px;
+}
+
+/* Ensure links and buttons are easily tappable */
+a:not(.no-tap-target),
+button:not(.no-tap-target) {
+  touch-action: manipulation;
+  /* Prevents double-tap zoom delay */
+  -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
+  /* Visual feedback on tap */
+}
+
+/* Improved touch targets for mobile */
+@media (max-width: 768px) {
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 48px !important;
+    /* Google recommended minimum */
+  }
+
+  /* Spacing between tap targets */
+  button+button,
+  a+a {
+    margin-left: 8px;
+  }
+}
+
+/* ========================================
+   CORE WEB VITALS OPTIMIZATIONS
+   ======================================== */
+
+/* Prevent Cumulative Layout Shift (CLS) */
+img,
+video,
+iframe {
+  /* Reserve space for media to prevent layout shifts */
+  aspect-ratio: attr(width) / attr(height);
+  height: auto;
+  max-width: 100%;
+}
+
+/* Explicit aspect ratio support for Next.js Image components */
+img[width][height] {
+  aspect-ratio: attr(width) / attr(height);
+  height: auto;
+}
+
+/* Prevent layout shift from lazy-loaded images */
+img[loading="lazy"] {
+  content-visibility: auto;
+}
+
+/* Reduce layout thrashing */
+*,
+*::before,
+*::after {
+  contain: layout style paint;
+}
+
+/* Optimize rendering performance */
+.card-hover,
+.btn-hover,
+[class*="hover:"] {
+  will-change: transform;
+  transform: translateZ(0);
+  /* Force GPU acceleration */
+  backface-visibility: hidden;
+}
+
+/* Prevent CLS from dynamic content */
+[data-dynamic-content] {
+  min-height: 100px;
+  /* Reserve minimum space */
+}
+
+/* Optimize animation performance */
+@media (prefers-reduced-motion: no-preference) {
+
+  .animate-gradient,
+  .animate-pulse-slow {
+    contain: strict;
+    content-visibility: auto;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================
+   MOBILE VIEWPORT OPTIMIZATION
+   ======================================== */
+
+/* Prevent horizontal scroll on mobile */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Responsive images */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Prevent text overflow */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

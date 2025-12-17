@@ -7,11 +7,14 @@ import { applyDeduplication } from '@/lib/deduplication';
 let mainConnection: mongoose.Connection | null = null;
 
 async function getMainConnection() {
+  // Return cached connection if available and ready
   if (mainConnection && mainConnection.readyState === 1) {
+    console.log('[API /products] Using cached connection');
     return mainConnection;
   }
 
-  // Use the main database connection (same as users)
+  // Use the main database connection
+  // connectDB() already handles retries, timeouts, and proper error handling
   const mongooseInstance = await connectDB();
   if (!mongooseInstance) {
     throw new Error('MONGODB_URI is not configured');
@@ -19,45 +22,14 @@ async function getMainConnection() {
 
   const connection = mongooseInstance.connection;
 
-  // Wait for connection to be ready if it's connecting (state 2) or disconnected (state 0)
-  if (connection.readyState === 0 || connection.readyState === 2) {
-    // Wait for the connection to be established
-    await new Promise<void>((resolve, reject) => {
-      // Double-check state after Promise creation (handles race condition)
-      if (connection.readyState === 1) {
-        resolve();
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        connection.removeListener('connected', onConnected);
-        connection.removeListener('error', onError);
-        reject(new Error('Database connection timeout - connection not established within 10 seconds'));
-      }, 10000);
-
-      const onConnected = () => {
-        clearTimeout(timeout);
-        connection.removeListener('error', onError);
-        resolve();
-      };
-
-      const onError = (err: Error) => {
-        clearTimeout(timeout);
-        connection.removeListener('connected', onConnected);
-        reject(err);
-      };
-
-      connection.once('connected', onConnected);
-      connection.once('error', onError);
-    });
-  }
-
-  // Final check - ensure connection is ready
+  // Verify connection is ready
+  // connectDB() should have already established the connection
   if (connection.readyState !== 1) {
     throw new Error(`Database connection is not ready. State: ${connection.readyState} (0=disconnected, 1=connected, 2=connecting, 3=disconnecting)`);
   }
 
   mainConnection = connection;
+  console.log('[API /products] Connection established and cached');
   return mainConnection;
 }
 
@@ -251,18 +223,18 @@ export async function GET(request: NextRequest) {
     // Apply deduplication to ensure unique products (by name and brand, or by sourceUrl if available)
     // This handles cases where the same product might have different _id values
     const products = applyDeduplication(productsRaw, 'products');
-    
+
     // Additional deduplication by sourceUrl if available (more reliable for identifying duplicates)
     const seenUrls = new Map<string, any>();
     const uniqueProducts: any[] = [];
-    
+
     for (const product of products) {
       const url = (product as any).sourceUrl || (product as any).url || '';
       const name = (product as any).name || '';
-      
+
       // Create a unique key from URL (if available) or name
       const key = url ? url.toLowerCase().trim() : name.toLowerCase().trim();
-      
+
       if (key && !seenUrls.has(key)) {
         seenUrls.set(key, product);
         uniqueProducts.push(product);
@@ -271,7 +243,7 @@ export async function GET(request: NextRequest) {
         uniqueProducts.push(product);
       }
     }
-    
+
     console.log('[API /products] After deduplication:', uniqueProducts.length, 'unique products');
 
     let total = 0;

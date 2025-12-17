@@ -1,0 +1,50 @@
+# EverStyleCrafts - Premium Leather Goods
+
+> Handcrafted Pakistani leather goods from Sialkot
+
+## About
+
+EverStyleCrafts curates premium Pakistani leather goods, travel accessories, and gifting essentials crafted for everyday sophistication. Based in Sialkot, Pakistan's renowned leather manufacturing hub, we combine traditional craftsmanship with modern design.
+
+## Categories
+
+- Men's Leather Products
+- Women's Leather Collection
+- Children's Leather Goods
+- Leather Accessories
+- Travel & Office Leather
+- Gifting Essentials
+- Wool Products
+- Leather Footwear
+
+## Key Features
+
+- Authentic handcrafted leather from Sialkot artisans
+- Premium full-grain leather materials
+- Fast worldwide shipping (2-4 days Pakistan, 5-12 days international)
+- 30-day free returns
+- Lifetime quality guarantee
+
+## Contact
+
+- Website: https://everstylecrafts.com
+- Email: testleadz04@gmail.com
+- Phone: +92 304 2158396
+- Address: Al Hayat Center, Shop #12, Daska Road, Sialkot, Pakistan
+
+## Resources
+
+- Sitemap: /sitemap.xml
+- Products API: /api/products
+- Product Categories: /categories/men, /categories/women, /categories/children
+- Support: /support
+- FAQ: /faq
+- Size Guide: /size-guide
+
+## Social Media
+
+- Facebook: https://facebook.com/everstylecrafts
+- Instagram: https://instagram.com/everstylecrafts
+- X (Twitter): https://x.com/everstylecrafts
+- LinkedIn: https://linkedin.com/company/everstylecrafts
+- YouTube: https://youtube.com/@everstylecrafts
