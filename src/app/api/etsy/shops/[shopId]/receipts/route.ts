@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { EtsyShop } from '@/models';
+import { EtsyShop, EtsyOrder } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { generateCacheKey, getCachedData, setCachedData, CACHE_TTL } from '@/lib/etsy-cache';
 
 /**
  * GET /api/etsy/shops/[shopId]/receipts
@@ -20,6 +21,7 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const minCreated = searchParams.get('min_created') ? parseInt(searchParams.get('min_created')!, 10) : undefined;
     const maxCreated = searchParams.get('max_created') ? parseInt(searchParams.get('max_created')!, 10) : undefined;
+    const forceRefresh = searchParams.get('forceRefresh') === 'true';
 
     if (!shopId) {
       return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
@@ -51,13 +53,63 @@ export async function GET(
       }
     );
 
-    // Get receipts from Etsy API
-    const options: any = { limit, offset };
-    if (minCreated) options.min_created = minCreated;
-    if (maxCreated) options.max_created = maxCreated;
+    // Invalidate cache if force refresh requested
+    if (forceRefresh) {
+      await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-receipts' });
+    }
 
-    const response = await etsyAPI.getShopReceipts(shopId, options);
-    const receipts = response.results || [];
+    // Check cache first (unless forcing refresh)
+    const cacheKey = generateCacheKey('shop-receipts', { shopId, limit, offset, minCreated, maxCreated });
+    const cachedReceipts = await getCachedData<any[]>(cacheKey, userId);
+    
+    let receipts: any[] = [];
+    if (cachedReceipts && !forceRefresh) {
+      console.log(`[Cache HIT] Receipts for shopId: ${shopId}`);
+      receipts = cachedReceipts;
+    } else {
+      // Get receipts from Etsy API
+      console.log(`[Cache MISS] Fetching receipts from Etsy API for shopId: ${shopId}`);
+      const options: any = { limit, offset };
+      if (minCreated) options.min_created = minCreated;
+      if (maxCreated) options.max_created = maxCreated;
+
+      const response = await etsyAPI.getShopReceipts(shopId, options);
+      receipts = response.results || [];
+      
+      // Save to cache
+      await setCachedData(cacheKey, userId, receipts, CACHE_TTL.RECEIPTS, shopId);
+      
+      // Also save to EtsyOrder collection
+      for (const receipt of receipts) {
+        try {
+          const etsyOrderId = receipt.receipt_id.toString();
+          await EtsyOrder.findOneAndUpdate(
+            { etsyOrderId, userId },
+            {
+              $set: {
+                userId,
+                etsyOrderId,
+                shopId,
+                receiptId: etsyOrderId,
+                buyerUserId: receipt.buyer_user_id?.toString() || '',
+                buyerEmail: receipt.payment_email || '',
+                status: receipt.is_cancelled ? 'cancelled' : receipt.is_delivered ? 'completed' : 'open',
+                paymentStatus: receipt.is_paid ? 'paid' : 'pending',
+                shippingStatus: receipt.is_delivered ? 'delivered' : receipt.is_shipped ? 'shipped' : 'pending',
+                total: receipt.grandtotal ? receipt.grandtotal.amount / receipt.grandtotal.divisor : 0,
+                currency: receipt.grandtotal?.currency_code || 'USD',
+                shippingCost: receipt.total_shipping_cost ? receipt.total_shipping_cost.amount / receipt.total_shipping_cost.divisor : 0,
+                taxCost: receipt.total_tax_cost ? receipt.total_tax_cost.amount / receipt.total_tax_cost.divisor : 0,
+                lastSyncedAt: new Date(),
+              }
+            },
+            { upsert: true, new: true }
+          );
+        } catch (err) {
+          console.warn(`Failed to save receipt ${receipt.receipt_id} to DB:`, err);
+        }
+      }
+    }
 
     // Transform receipts to match component expectations
     const transformedReceipts = receipts.map((receipt: any) => ({

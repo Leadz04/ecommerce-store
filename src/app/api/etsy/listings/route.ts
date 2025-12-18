@@ -4,6 +4,7 @@ import { EtsyShop, EtsyListing } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
 import { needsEtsyDataRefresh } from '@/lib/etsy-compliance';
+import { generateCacheKey, getCachedData, setCachedData, invalidateCache, CACHE_TTL } from '@/lib/etsy-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,19 +31,64 @@ export async function GET(request: NextRequest) {
       query.userId = userId;
     }
 
-    // Fetch listings from database
+    // Invalidate cache if force refresh requested
+    if (forceRefresh) {
+      await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-listings' });
+    }
+
+    // Step 1: Check DB first (unless forcing refresh)
     let dbListings = await EtsyListing.find(query)
       .sort({ lastSyncedAt: -1 })
       .lean();
 
-    // Check if we need to refresh from Etsy API
     let refreshed = false;
-    const needsRefresh = forceRefresh || dbListings.some(listing => 
+    const needsRefresh = forceRefresh || dbListings.length === 0 || dbListings.some(listing => 
       needsEtsyDataRefresh(listing.lastSyncedAt, 'listing')
     );
 
     if (needsRefresh && !includeStale) {
-      // Sync from Etsy API if data is stale or force refresh requested
+      // Step 2: Check cache before API call (if not forcing refresh)
+      const cacheKey = generateCacheKey('shop-listings', { shopId });
+      let useCache = false;
+      
+      if (!forceRefresh) {
+        const cachedListings = await getCachedData<any[]>(cacheKey, userId);
+        if (cachedListings && cachedListings.length > 0) {
+          // Use cached data and update DB
+          console.log(`[Cache HIT] Using cached listings for shopId: ${shopId}`);
+          for (const listing of cachedListings) {
+            try {
+              const etsyListingId = listing.etsyListingId || listing.listing_id?.toString();
+              if (etsyListingId) {
+                await EtsyListing.findOneAndUpdate(
+                  { etsyListingId, userId },
+                  { 
+                    $set: {
+                      userId,
+                      etsyListingId,
+                      shopId,
+                      title: listing.title,
+                      description: listing.description,
+                      price: listing.price || 0,
+                      currency: listing.currency || 'USD',
+                      state: listing.state,
+                      tags: listing.tags || [],
+                      lastSyncedAt: new Date(),
+                    }
+                  },
+                  { upsert: true, new: true }
+                );
+              }
+            } catch (err) {
+              console.warn(`Failed to update listing from cache:`, err);
+            }
+          }
+          useCache = true;
+        }
+      }
+
+      if (!useCache) {
+        // Step 3: Fetch from Etsy API
       const etsyAPI = new EtsyAPI(
         shop.accessToken,
         shop.shopId,
@@ -63,7 +109,7 @@ export async function GET(request: NextRequest) {
 
       const etsyListings = await etsyAPI.getListings(shopId);
       
-      // Update database with fresh data
+        // Step 4: Update database with fresh data
       for (const listing of etsyListings) {
         const etsyListingId = listing.listing_id.toString();
         
@@ -75,7 +121,7 @@ export async function GET(request: NextRequest) {
             url: img.url_fullxfull || img.url_570xN || img.url_75x75 || '',
             rank: img.rank ?? index,
             listingImageId: img.listing_image_id?.toString() || `${etsyListingId}-${index}`,
-          })).filter((img: any) => img.url); // Filter out images without URLs
+            })).filter((img: any) => img.url);
         } catch (error) {
           console.warn(`Failed to fetch images for listing ${etsyListingId}:`, error);
         }
@@ -108,9 +154,22 @@ export async function GET(request: NextRequest) {
         );
       }
 
+        // Step 5: Update cache
+        await setCachedData(cacheKey, userId, etsyListings.map(l => ({
+          etsyListingId: l.listing_id.toString(),
+          listing_id: l.listing_id,
+          title: l.title,
+          description: l.description,
+          price: l.price.amount / l.price.divisor,
+          currency: l.price.currency_code,
+          state: l.state,
+          tags: l.tags,
+        })), CACHE_TTL.LISTING, shopId);
+
       refreshed = true;
+      }
       
-      // Re-fetch from database after sync
+      // Re-fetch from database after sync/cache update
       dbListings = await EtsyListing.find(query)
         .sort({ lastSyncedAt: -1 })
         .lean();

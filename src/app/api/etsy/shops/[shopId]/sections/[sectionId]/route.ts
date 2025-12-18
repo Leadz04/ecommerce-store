@@ -3,93 +3,19 @@ import connectDB from '@/lib/mongodb';
 import { EtsyShop } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
-import { generateCacheKey, getCachedData, setCachedData, invalidateCache, CACHE_TTL } from '@/lib/etsy-cache';
+import { invalidateCache } from '@/lib/etsy-cache';
 
 /**
- * GET /api/etsy/shops/[shopId]/sections
- * Get shop sections
+ * PUT /api/etsy/shops/[shopId]/sections/[sectionId]
+ * Update a shop section
  */
-export async function GET(
+export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ shopId: string }> }
+  { params }: { params: Promise<{ shopId: string; sectionId: string }> }
 ) {
   try {
     const userId = await getCurrentUserId(request);
-    const { shopId } = await params;
-    const { searchParams } = new URL(request.url);
-    const forceRefresh = searchParams.get('forceRefresh') === 'true';
-
-    await connectDB();
-
-    const shop = await getUserShop(userId, shopId);
-    if (!shop) {
-      return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
-    }
-
-    const etsyAPI = new EtsyAPI(
-      shop.accessToken,
-      shop.shopId,
-      shop.refreshToken,
-      async (newTokens) => {
-        await EtsyShop.updateOne(
-          { userId: shop.userId, shopId: shop.shopId },
-          {
-            $set: {
-              accessToken: newTokens.access_token,
-              refreshToken: newTokens.refresh_token,
-              tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
-            }
-          }
-        );
-      }
-    );
-
-    // Check cache first
-    const cacheKey = generateCacheKey('shop-sections', { shopId });
-    const cachedSections = await getCachedData<any[]>(cacheKey, userId);
-    
-    if (cachedSections) {
-      return NextResponse.json({
-        success: true,
-        results: cachedSections,
-      });
-    }
-    
-    // Fetch from Etsy API
-    const response = await etsyAPI['makeRequest'](`/application/shops/${shopId}/sections`);
-    const sections = response.results || [];
-    
-    // Save to cache
-    await setCachedData(cacheKey, userId, sections, CACHE_TTL.SHOP_SECTIONS, shopId);
-
-    return NextResponse.json({
-      success: true,
-      results: sections,
-      fromCache: false,
-    });
-  } catch (error: any) {
-    console.error('[Etsy Shop Sections API] Error:', error);
-    return NextResponse.json(
-      { 
-        success: false,
-        error: error?.message || 'Failed to fetch shop sections' 
-      },
-      { status: error?.message?.includes('authentication') ? 401 : 500 }
-    );
-  }
-}
-
-/**
- * POST /api/etsy/shops/[shopId]/sections
- * Create a shop section
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ shopId: string }> }
-) {
-  try {
-    const userId = await getCurrentUserId(request);
-    const { shopId } = await params;
+    const { shopId, sectionId } = await params;
     const body = await request.json();
     const { title } = body;
 
@@ -125,15 +51,15 @@ export async function POST(
     const formData = new URLSearchParams();
     formData.append('title', title);
 
-    const section = await etsyAPI['makeRequest'](`/application/shops/${shopId}/sections`, {
-      method: 'POST',
+    const section = await etsyAPI['makeRequest'](`/application/shops/${shopId}/sections/${sectionId}`, {
+      method: 'PUT',
       body: formData.toString(),
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
 
-    // Invalidate cache after creating new section
+    // Invalidate cache after updating section
     await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-sections' });
 
     return NextResponse.json({
@@ -141,11 +67,71 @@ export async function POST(
       section,
     });
   } catch (error: any) {
-    console.error('[Etsy Create Shop Section API] Error:', error);
+    console.error('[Etsy Update Shop Section API] Error:', error);
     return NextResponse.json(
       { 
         success: false,
-        error: error?.message || 'Failed to create shop section' 
+        error: error?.message || 'Failed to update shop section' 
+      },
+      { status: error?.message?.includes('authentication') ? 401 : 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/etsy/shops/[shopId]/sections/[sectionId]
+ * Delete a shop section
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ shopId: string; sectionId: string }> }
+) {
+  try {
+    const userId = await getCurrentUserId(request);
+    const { shopId, sectionId } = await params;
+
+    await connectDB();
+
+    const shop = await getUserShop(userId, shopId);
+    if (!shop) {
+      return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
+    }
+
+    const etsyAPI = new EtsyAPI(
+      shop.accessToken,
+      shop.shopId,
+      shop.refreshToken,
+      async (newTokens) => {
+        await EtsyShop.updateOne(
+          { userId: shop.userId, shopId: shop.shopId },
+          {
+            $set: {
+              accessToken: newTokens.access_token,
+              refreshToken: newTokens.refresh_token,
+              tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+            }
+          }
+        );
+      }
+    );
+
+    await etsyAPI['makeRequest'](`/application/shops/${shopId}/sections/${sectionId}`, {
+      method: 'DELETE',
+    });
+
+    // Invalidate cache after deleting section
+    await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-sections' });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Shop section deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('[Etsy Delete Shop Section API] Error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: error?.message || 'Failed to delete shop section' 
       },
       { status: error?.message?.includes('authentication') ? 401 : 500 }
     );

@@ -38,23 +38,30 @@ async function generateSlugs() {
     // Connect to MongoDB
     const mongoUri = process.env.MONGODB_URI;
     if (!mongoUri) {
-      console.error('MONGODB_URI not found in environment variables');
+      console.error('❌ MONGODB_URI not found in environment variables');
       process.exit(1);
     }
 
     await mongoose.connect(mongoUri);
-    console.log('Connected to MongoDB');
+    console.log('✅ Connected to MongoDB\n');
 
-    // Get all products without slugs
-    const productsWithoutSlugs = await Product.find({ 
+    // Get all products WITHOUT slugs (more efficient query)
+    const productsWithoutSlugs = await Product.find({
       $or: [
         { slug: { $exists: false } },
         { slug: null },
         { slug: '' }
       ]
     }).select('_id name slug');
+    
+    console.log(`📦 Found ${productsWithoutSlugs.length} products without slugs`);
 
-    console.log(`Found ${productsWithoutSlugs.length} products without slugs`);
+    // Get all existing slugs in one query for faster lookup
+    const existingSlugs = await Product.find({ 
+      slug: { $exists: true, $ne: null, $ne: '' } 
+    }).select('slug').lean();
+    const slugSet = new Set(existingSlugs.map(p => p.slug));
+    console.log(`📋 Found ${slugSet.size} existing slugs in database\n`);
 
     let updated = 0;
     let skipped = 0;
@@ -62,54 +69,74 @@ async function generateSlugs() {
 
     for (const product of productsWithoutSlugs) {
       try {
+        const productNum = updated + skipped + errors + 1;
+        console.log(`[${productNum}/${productsWithoutSlugs.length}] Processing product: ${product._id}`);
+        console.log(`  Name: "${product.name || 'N/A'}"`);
+        
+        // Double-check: Skip if product already has a valid slug (shouldn't happen but safety check)
+        if (product.slug && product.slug.trim() !== '') {
+          console.log(`  ⏭️  Skipping - already has slug: "${product.slug}"`);
+          skipped++;
+          continue;
+        }
+        
         if (!product.name) {
-          console.log(`Skipping product ${product._id} - no name`);
+          console.log(`  ❌ Skipping - no name`);
           skipped++;
           continue;
         }
 
         // Generate base slug
         const baseSlug = generateSlug(product.name);
+        console.log(`  Base slug: "${baseSlug}"`);
         
         if (!baseSlug) {
-          console.log(`Skipping product ${product._id} - could not generate slug from name: "${product.name}"`);
+          console.log(`  ❌ Skipping - could not generate slug from name`);
           skipped++;
           continue;
         }
 
-        // Check if slug already exists
+        // Use base slug, append product ID if slug already exists (much faster than sequential checks)
         let slug = baseSlug;
-        let counter = 1;
         
-        while (await Product.findOne({ slug, _id: { $ne: product._id } })) {
-          slug = `${baseSlug}-${counter}`;
-          counter++;
+        if (slugSet.has(slug)) {
+          // Append last 6 characters of product ID to make it unique
+          const productIdSuffix = product._id.toString().slice(-6);
+          slug = `${baseSlug}-${productIdSuffix}`;
+          console.log(`  ⚠️  Base slug taken, using: "${slug}" (appended product ID)`);
         }
+
+        // Add the new slug to our set so subsequent products know it's taken
+        slugSet.add(slug);
 
         // Update product with slug
         await Product.findByIdAndUpdate(product._id, { slug });
         updated++;
+        console.log(`  ✅ Updated with slug: "${slug}"`);
         
         if (updated % 100 === 0) {
-          console.log(`Progress: ${updated} products updated...`);
+          console.log(`\n📊 Progress: ${updated} updated, ${skipped} skipped, ${errors} errors\n`);
         }
       } catch (error) {
-        console.error(`Error processing product ${product._id}:`, error.message);
+        console.error(`  ❌ Error processing product ${product._id}:`, error.message);
         errors++;
       }
     }
 
-    console.log('\n=== Migration Complete ===');
-    console.log(`Updated: ${updated}`);
-    console.log(`Skipped: ${skipped}`);
-    console.log(`Errors: ${errors}`);
-    console.log(`Total processed: ${productsWithoutSlugs.length}`);
+    console.log('\n' + '='.repeat(50));
+    console.log('=== Migration Complete ===');
+    console.log('='.repeat(50));
+    console.log(`Total products without slugs: ${productsWithoutSlugs.length}`);
+    console.log(`✅ Updated: ${updated}`);
+    console.log(`⏭️  Skipped (no name or already had slug): ${skipped}`);
+    console.log(`❌ Errors: ${errors}`);
+    console.log(`Total processed: ${updated + skipped + errors}`);
 
     await mongoose.disconnect();
-    console.log('Disconnected from MongoDB');
+    console.log('\n✅ Disconnected from MongoDB');
     process.exit(0);
   } catch (error) {
-    console.error('Migration error:', error);
+    console.error('\n❌ Migration error:', error);
     await mongoose.disconnect();
     process.exit(1);
   }

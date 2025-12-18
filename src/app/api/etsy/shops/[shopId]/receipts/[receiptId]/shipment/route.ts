@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { EtsyShop } from '@/models';
+import { EtsyShop, EtsyOrder } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { invalidateCache } from '@/lib/etsy-cache';
 
 /**
  * POST /api/etsy/shops/[shopId]/receipts/[receiptId]/shipment
@@ -63,6 +64,15 @@ export async function POST(
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
+
+    // Update DB order shipping status
+    await EtsyOrder.findOneAndUpdate(
+      { receiptId, userId },
+      { $set: { shippingStatus: 'shipped', lastSyncedAt: new Date() } }
+    );
+    
+    // Invalidate receipts cache
+    await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-receipts' });
 
     return NextResponse.json({
       success: true,

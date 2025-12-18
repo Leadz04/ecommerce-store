@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import { EtsyShop } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { generateCacheKey, getCachedData, setCachedData, CACHE_TTL } from '@/lib/etsy-cache';
 
 /**
  * GET /api/etsy/shop/[shopId]
@@ -27,27 +28,43 @@ export async function GET(
       return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
     }
 
-    // Create EtsyAPI instance with token refresh callback
-    const etsyAPI = new EtsyAPI(
-      shop.accessToken,
-      shop.shopId,
-      shop.refreshToken,
-      async (newTokens) => {
-        await EtsyShop.updateOne(
-          { userId: shop.userId, shopId: shop.shopId },
-          {
-            $set: {
-              accessToken: newTokens.access_token,
-              refreshToken: newTokens.refresh_token,
-              tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+    // Check cache first
+    const cacheKey = generateCacheKey('shop-info', { shopId });
+    const cachedShopInfo = await getCachedData<any>(cacheKey, userId);
+    
+    let shopInfo: any;
+    if (cachedShopInfo) {
+      console.log(`[Cache HIT] Shop info for shopId: ${shopId}`);
+      shopInfo = cachedShopInfo;
+    } else {
+      console.log(`[Cache MISS] Fetching shop info from Etsy API for shopId: ${shopId}`);
+      
+      // Create EtsyAPI instance with token refresh callback
+      const etsyAPI = new EtsyAPI(
+        shop.accessToken,
+        shop.shopId,
+        shop.refreshToken,
+        async (newTokens) => {
+          await EtsyShop.updateOne(
+            { userId: shop.userId, shopId: shop.shopId },
+            {
+              $set: {
+                accessToken: newTokens.access_token,
+                refreshToken: newTokens.refresh_token,
+                tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+              }
             }
-          }
-        );
-      }
-    );
+          );
+        }
+      );
 
-    // Get shop info from Etsy API
-    const shopInfo = await etsyAPI.getShopInfo(shopId);
+      // Get shop info from Etsy API
+      shopInfo = await etsyAPI.getShopInfo(shopId);
+      
+      // Save to cache
+      await setCachedData(cacheKey, userId, shopInfo, CACHE_TTL.SHOP, shopId);
+      console.log(`[Cache SET] Shop info cached for shopId: ${shopId}`);
+    }
 
     // Transform to match component expectations
     const shopData = {

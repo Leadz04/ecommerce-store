@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import { EtsyShop } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { generateCacheKey, getCachedData, setCachedData, CACHE_TTL } from '@/lib/etsy-cache';
 
 /**
  * GET /api/etsy/shops/[shopId]/reviews
@@ -20,6 +21,7 @@ export async function GET(
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const minCreated = searchParams.get('min_created') ? parseInt(searchParams.get('min_created')!, 10) : undefined;
     const maxCreated = searchParams.get('max_created') ? parseInt(searchParams.get('max_created')!, 10) : undefined;
+    const forceRefresh = searchParams.get('forceRefresh') === 'true';
 
     if (!shopId) {
       return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
@@ -51,10 +53,25 @@ export async function GET(
       }
     );
 
-    // Get reviews from Etsy API using the existing method
-    // Note: The existing getShopReviews method doesn't support min_created/max_created filters
-    // but we'll use it for now and extend if needed
-    const reviews = await etsyAPI.getShopReviews(shopId, limit, offset);
+    // Invalidate cache if force refresh requested
+    if (forceRefresh) {
+      await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-reviews' });
+    }
+
+    // Check cache first (unless forcing refresh)
+    const cacheKey = generateCacheKey('shop-reviews', { shopId, limit, offset, minCreated, maxCreated });
+    const cachedReviews = await getCachedData<any[]>(cacheKey, userId);
+    
+    let reviews: any[] = [];
+    if (cachedReviews && !forceRefresh) {
+      reviews = cachedReviews;
+    } else {
+      // Get reviews from Etsy API using the existing method
+      reviews = await etsyAPI.getShopReviews(shopId, limit, offset);
+      
+      // Save to cache
+      await setCachedData(cacheKey, userId, reviews, CACHE_TTL.REVIEWS, shopId);
+    }
     
     // Filter by date range if provided
     let filteredReviews = reviews;

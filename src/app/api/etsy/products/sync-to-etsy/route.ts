@@ -204,7 +204,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     quantity: product.stockCount || product.inventory || 1,
     tags: Array.isArray(product.tags) ? product.tags : [],
     materials: materials.length > 0 ? materials : [],
-    taxonomy_id: 1429, // Default: Clothing > Apparel (users should customize this)
+    taxonomy_id: 691, // Default: Clothing/Apparel (users should customize this)
     who_made: 'i_did' as const,
     when_made: 'made_to_order' as const,
     is_supply: false,

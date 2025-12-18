@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import { EtsyShop } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { generateCacheKey, getCachedData, setCachedData, CACHE_TTL } from '@/lib/etsy-cache';
 
 /**
  * GET /api/etsy/shops/[shopId]/payments
@@ -18,6 +19,7 @@ export async function GET(
     const { shopId } = await params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '100', 10);
+    const forceRefresh = searchParams.get('forceRefresh') === 'true';
 
     if (!shopId) {
       return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
@@ -49,6 +51,24 @@ export async function GET(
       }
     );
 
+    // Invalidate cache if force refresh requested
+    if (forceRefresh) {
+      await invalidateCache(userId, { shopId, cacheKeyPattern: 'shop-payments' });
+    }
+
+    // Check cache first (unless forcing refresh)
+    const cacheKey = generateCacheKey('shop-payments', { shopId, limit });
+    const cachedPayments = await getCachedData<any[]>(cacheKey, userId);
+    
+    if (cachedPayments && !forceRefresh) {
+      return NextResponse.json({
+        success: true,
+        results: cachedPayments,
+        count: cachedPayments.length,
+        fromCache: true,
+      });
+    }
+    
     // Get recent receipts to fetch payments for them
     const receiptsResponse = await etsyAPI.getShopReceipts(shopId, { limit: limit });
     const receipts = receiptsResponse.results || [];
@@ -83,10 +103,14 @@ export async function GET(
       updateTimestamp: payment.update_timestamp,
     }));
 
+    // Save to cache
+    await setCachedData(cacheKey, userId, transformedPayments, CACHE_TTL.PAYMENTS, shopId);
+
     return NextResponse.json({
       success: true,
       results: transformedPayments,
       count: transformedPayments.length,
+      fromCache: false,
     });
   } catch (error: any) {
     console.error('[Etsy Shop Payments API] Error:', error);

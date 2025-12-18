@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { EtsyShop } from '@/models';
+import { EtsyShop, EtsyListing } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
 import { getCurrentUserId, getUserShop } from '@/lib/etsy-auth-helper';
+import { invalidateCache } from '@/lib/etsy-cache';
 
 /**
  * DELETE /api/etsy/listings/[listingId]
@@ -52,6 +53,12 @@ export async function DELETE(
     await etsyAPI['makeRequest'](`/application/shops/${shopId}/listings/${listingId}`, {
       method: 'DELETE',
     });
+
+    // Remove from DB
+    await EtsyListing.deleteOne({ etsyListingId: listingId, userId });
+    
+    // Invalidate all caches related to this listing
+    await invalidateCache(userId, { shopId, listingId });
 
     return NextResponse.json({
       success: true,
@@ -143,6 +150,29 @@ export async function PATCH(
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
+
+    // Update DB
+    const etsyListingId = listingId;
+    await EtsyListing.findOneAndUpdate(
+      { etsyListingId, userId },
+      {
+        $set: {
+          title: updatedListing.title || updateData.title,
+          description: updatedListing.description || updateData.description,
+          price: updatedListing.price?.amount ? updatedListing.price.amount / updatedListing.price.divisor : 0,
+          currency: updatedListing.price?.currency_code || 'USD',
+          state: updatedListing.state || updateData.state,
+          tags: updatedListing.tags || updateData.tags || [],
+          materials: updatedListing.materials || updateData.materials || [],
+          inventory: { quantity: updatedListing.quantity || updateData.quantity || 0 },
+          lastSyncedAt: new Date(),
+        }
+      },
+      { upsert: true, new: true }
+    );
+    
+    // Invalidate all caches related to this listing
+    await invalidateCache(userId, { shopId, listingId });
 
     return NextResponse.json({
       success: true,

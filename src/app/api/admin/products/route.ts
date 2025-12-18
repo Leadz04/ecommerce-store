@@ -5,6 +5,7 @@ import { PERMISSIONS } from '@/lib/permissions';
 import { AuditLog } from '@/models';
 import { applyDeduplication } from '@/lib/deduplication';
 import Product from '@/models/Product';
+import { batchCheckSyncStatus, getProductEtsyListings } from '@/lib/etsy-product-tracker';
 
 // GET /api/admin/products - Get all products with pagination and filtering from main database
 export async function GET(request: NextRequest) {
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
     const isActive = searchParams.get('isActive') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const includeEtsySync = searchParams.get('includeEtsySync') === 'true';
+    const etsyShopId = searchParams.get('etsyShopId') || undefined;
 
     // Build query
     const query: any = {};
@@ -151,6 +154,62 @@ export async function GET(request: NextRequest) {
 
     // Apply deduplication to ensure unique products
     const products = applyDeduplication(productsRaw, 'products');
+
+    // Add Etsy sync status if requested
+    if (includeEtsySync && products.length > 0) {
+      const productIds = products.map(p => p._id.toString());
+      const syncStatusMap = await batchCheckSyncStatus(productIds, etsyShopId);
+      
+      // Enrich products with sync status
+      const enrichedProducts = await Promise.all(
+        products.map(async (product) => {
+          const productId = product._id.toString();
+          const isSynced = syncStatusMap.get(productId) || false;
+          
+          let etsyListings: any[] = [];
+          if (isSynced) {
+            // Get listing details for synced products
+            etsyListings = await getProductEtsyListings(productId, etsyShopId);
+          }
+          
+          return {
+            ...product,
+            etsySync: {
+              isSynced,
+              listings: etsyListings.map(listing => ({
+                etsyListingId: listing.etsyListingId,
+                shopId: listing.shopId,
+                state: listing.state,
+                lastSyncedAt: listing.lastSyncedAt,
+              })),
+            },
+          };
+        })
+      );
+      
+      const total = await Product.countDocuments(query);
+      const totalPages = Math.ceil(total / limit);
+
+      // Get unique categories and brands for filters
+      const categories = await Product.distinct('category');
+      const brands = await Product.distinct('brand');
+
+      return NextResponse.json({
+        products: enrichedProducts,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        },
+        filters: {
+          categories,
+          brands
+        }
+      });
+    }
 
     const total = await Product.countDocuments(query);
     const totalPages = Math.ceil(total / limit);

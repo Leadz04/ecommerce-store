@@ -323,8 +323,8 @@ function EtsyShopOverviewRefreshButton({ shopId, onRefresh }: { shopId: string |
   return (
     <button
       onClick={refreshFromEtsy}
-      disabled={syncing || !shopId}
-      className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      disabled={syncing}
+      className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {syncing ? (
         <>
@@ -340,6 +340,92 @@ function EtsyShopOverviewRefreshButton({ shopId, onRefresh }: { shopId: string |
     </button>
   );
 }
+
+/**
+ * Generic refresh button for Etsy sections
+ * Refreshes a specific endpoint with forceRefresh=true
+ */
+function EtsySectionRefreshButton({ 
+  shopId, 
+  endpoint, 
+  label = 'Refresh from Etsy',
+  onRefresh 
+}: { 
+  shopId: string | null; 
+  endpoint: string;
+  label?: string;
+  onRefresh?: () => void;
+}) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!shopId) {
+      toast.error('Please select a shop first');
+      return;
+    }
+
+    try {
+      setRefreshing(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(endpoint, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to refresh data from Etsy');
+      }
+
+      toast.success('Data refreshed successfully from Etsy');
+      
+      // Trigger refresh callback if provided
+      if (onRefresh) {
+        setTimeout(() => {
+          onRefresh();
+        }, 500);
+      } else {
+        // Reload the page to show fresh data
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }
+    } catch (e: any) {
+      console.error('Error refreshing from Etsy:', e);
+      toast.error(e?.message || 'Failed to refresh data from Etsy');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleRefresh}
+      disabled={refreshing || !shopId}
+      className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {refreshing ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Refreshing...</span>
+        </>
+      ) : (
+        <>
+          <RefreshCw className="h-4 w-4" />
+          <span>{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
 
 function EtsyShopOverview({ shopId, refreshTrigger }: { shopId: string | null; refreshTrigger?: number }) {
   const [loading, setLoading] = useState(true);
@@ -494,6 +580,625 @@ function EtsyShopOverview({ shopId, refreshTrigger }: { shopId: string | null; r
   );
 }
 
+/**
+ * Product Sync to Etsy Section Component
+ * Displays products with search/filter functionality and allows syncing to Etsy
+ */
+function EtsyProductSyncSection({ shopId }: { shopId: string | null }) {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedIsActive, setSelectedIsActive] = useState('all');
+  const [productPage, setProductPage] = useState(1);
+  const [productPerPage, setProductPerPage] = useState(20);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [totalProductPages, setTotalProductPages] = useState(1);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [syncAction, setSyncAction] = useState<'create' | 'update' | 'delete'>('create');
+  const [syncing, setSyncing] = useState(false);
+  const [viewingProduct, setViewingProduct] = useState<any | null>(null);
+
+  // Fetch products
+  const fetchProducts = async (pageToFetch?: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('token');
+      const page = pageToFetch || productPage;
+      const limit = productPerPage;
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      if (searchTerm) params.append('search', searchTerm);
+      if (selectedCategory) params.append('category', selectedCategory);
+      if (selectedBrand) params.append('brand', selectedBrand);
+      if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedIsActive && selectedIsActive !== 'all') params.append('isActive', selectedIsActive);
+
+      const res = await fetch(`/api/admin/products?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
+
+      const json = await res.json();
+      const items = Array.isArray(json.products) ? json.products : [];
+      setProducts(items);
+
+      const total = Number(json.pagination?.total ?? json.total ?? items.length);
+      const pages = Number(json.pagination?.totalPages ?? json.pagination?.pages ?? Math.ceil(total / limit));
+      
+      setTotalProducts(total);
+      setTotalProductPages(pages);
+      setProductPage(page);
+
+      // Update brands list
+      if (json.filters?.brands) {
+        setAvailableBrands(json.filters.brands);
+      }
+    } catch (e: any) {
+      console.error('Error fetching products:', e);
+      setError(e?.message || 'Failed to fetch products');
+      toast.error(e?.message || 'Failed to fetch products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productPage, productPerPage, selectedCategory, selectedBrand, selectedStatus, selectedIsActive]);
+
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (productPage === 1) {
+        fetchProducts(1);
+      } else {
+        setProductPage(1);
+      }
+    }, 500);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
+
+  // Sync product to Etsy
+  const handleSyncProduct = async (product: any) => {
+    if (!shopId) {
+      toast.error('Please select an Etsy shop first');
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/etsy/products/sync-to-etsy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          productId: product._id,
+          shopId: shopId,
+          action: syncAction,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `Failed to ${syncAction} product`);
+      }
+
+      toast.success(`Product ${syncAction}d successfully${json.result?.etsyListingId ? ` (Listing ID: ${json.result.etsyListingId})` : ''}`);
+      setSelectedProduct(null);
+      setViewingProduct(null);
+      fetchProducts(); // Refresh list
+    } catch (e: any) {
+      console.error(`Failed to ${syncAction} product:`, e);
+      toast.error(e?.message || `Failed to ${syncAction} product`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div id="etsy-section-product-sync" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24 overflow-visible">
+      <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-purple-900">Product Sync to Etsy</h2>
+          <p className="text-purple-700/80 mt-1 text-sm">Select products from your store and sync them to Etsy listings.</p>
+        </div>
+        {shopId && (
+          <EtsySectionRefreshButton 
+            shopId={shopId} 
+            endpoint={`/api/etsy/listings?shopId=${encodeURIComponent(shopId)}&forceRefresh=true`}
+            label="Refresh"
+          />
+        )}
+      </div>
+
+      <div className="p-6 overflow-visible">
+        {!shopId && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-yellow-800 text-sm font-medium">
+              Please select an Etsy shop first from the Shop Selector section.
+            </p>
+          </div>
+        )}
+
+        {/* Search and Filters */}
+        <div className="space-y-4 mb-6">
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Search Products</label>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search by name, description, or brand..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setProductPage(1); }}
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              <SelectField
+                options={[
+                  { value: '', label: 'All Categories' },
+                  { value: 'Men', label: 'Men' },
+                  { value: 'Women', label: 'Women' },
+                  { value: 'Children', label: 'Children' },
+                  { value: 'Office & Travel', label: 'Office & Travel' },
+                  { value: 'Accessories', label: 'Accessories' },
+                ]}
+                value={selectedCategory}
+                isOpen={openSelect === 'category'}
+                onOpenChange={(open) => setOpenSelect(open ? 'category' : null)}
+                onSelect={(value) => { setSelectedCategory(value); setProductPage(1); }}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
+              <SelectField
+                options={[
+                  { value: '', label: 'All Brands' },
+                  ...availableBrands.map(brand => ({ value: brand, label: brand })),
+                ]}
+                value={selectedBrand}
+                isOpen={openSelect === 'brand'}
+                onOpenChange={(open) => setOpenSelect(open ? 'brand' : null)}
+                onSelect={(value) => { setSelectedBrand(value); setProductPage(1); }}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <SelectField
+                options={[
+                  { value: '', label: 'All Statuses' },
+                  { value: 'draft', label: 'Draft' },
+                  { value: 'published', label: 'Published' },
+                  { value: 'archived', label: 'Archived' },
+                ]}
+                value={selectedStatus}
+                isOpen={openSelect === 'status'}
+                onOpenChange={(open) => setOpenSelect(open ? 'status' : null)}
+                onSelect={(value) => { setSelectedStatus(value); setProductPage(1); }}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Active</label>
+              <SelectField
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+                value={selectedIsActive}
+                isOpen={openSelect === 'isActive'}
+                onOpenChange={(open) => setOpenSelect(open ? 'isActive' : null)}
+                onSelect={(value) => { setSelectedIsActive(value as 'all' | 'active' | 'inactive'); setProductPage(1); }}
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Sync Action Selector */}
+        <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-semibold text-gray-700">Sync Action:</label>
+              <SelectField
+                options={[
+                  { value: 'create', label: 'Create' },
+                  { value: 'update', label: 'Update' },
+                  { value: 'delete', label: 'Delete' },
+                ]}
+                value={syncAction}
+                isOpen={openSelect === 'syncAction'}
+                onOpenChange={(open) => setOpenSelect(open ? 'syncAction' : null)}
+                onSelect={(val) => setSyncAction(val as 'create' | 'update' | 'delete')}
+                className="w-48"
+              />
+            <div className="text-xs text-gray-600 flex-1">
+              <span className="font-medium">Create:</span> Upload new • <span className="font-medium">Update:</span> Modify existing • <span className="font-medium">Delete:</span> Remove
+            </div>
+          </div>
+        </div>
+
+        {/* Products Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-gray-100 rounded-lg h-64 animate-pulse" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-600">{error}</div>
+        ) : products.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">No products found</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+              {products.map((product) => (
+                <AdminProductCard
+                  key={product._id}
+                  product={product}
+                  primaryAction={{
+                    label: `Sync ${syncAction === 'create' ? 'to' : syncAction === 'update' ? '' : 'from'} Etsy`,
+                    onClick: () => handleSyncProduct(product),
+                    loading: syncing && selectedProduct?._id === product._id,
+                    disabled: !shopId || syncing,
+                  }}
+                  actionButtons={
+                    <button
+                      onClick={() => setViewingProduct(product)}
+                      className="px-3 py-1.5 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  }
+                />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {(totalProductPages > 1 || totalProducts > 0) && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 mt-6 border-t border-gray-200 overflow-visible">
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto overflow-visible">
+                  <div className="text-sm text-gray-600 text-center sm:text-left">
+                    Showing {((productPage - 1) * productPerPage) + 1} to {Math.min(productPage * productPerPage, totalProducts)} of {totalProducts} products
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Show:</label>
+                    <div className="relative z-50">
+                      <SelectField
+                        options={[
+                          { value: '20', label: '20' },
+                          { value: '50', label: '50' },
+                          { value: '75', label: '75' },
+                          { value: '100', label: '100' },
+                        ]}
+                        value={productPerPage.toString()}
+                        isOpen={openSelect === 'perPage'}
+                        onOpenChange={(open) => setOpenSelect(open ? 'perPage' : null)}
+                        onSelect={(value) => {
+                          setProductPerPage(parseInt(value, 10));
+                          setProductPage(1); // Reset to first page when changing limit
+                        }}
+                        className="w-20"
+                      />
+                    </div>
+                    <span className="text-sm text-gray-600 whitespace-nowrap">per page</span>
+                  </div>
+                </div>
+                {totalProductPages > 1 && (
+                  <div className="flex gap-2 w-full sm:w-auto justify-center">
+                    <button
+                      onClick={() => setProductPage(p => Math.max(1, p - 1))}
+                      disabled={productPage === 1}
+                      className="px-4 py-2 min-w-[100px] border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors font-medium text-gray-700"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setProductPage(p => Math.min(totalProductPages, p + 1))}
+                      disabled={productPage === totalProductPages}
+                      className="px-4 py-2 min-w-[100px] border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors font-medium text-gray-700"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Product Details Modal */}
+      {viewingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setViewingProduct(null)}>
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-black">{viewingProduct.name}</h3>
+              <button onClick={() => setViewingProduct(null)} className="text-black hover:text-gray-700">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Product ID */}
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <h4 className="text-sm font-semibold text-black mb-1">Product ID</h4>
+                <p className="text-sm text-black font-mono">{viewingProduct._id || 'N/A'}</p>
+              </div>
+
+              {/* Product Images Gallery */}
+              {(viewingProduct.images && viewingProduct.images.length > 0) || viewingProduct.image ? (
+                <div>
+                  <h4 className="text-lg font-semibold text-black mb-4">Product Images</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {/* Main image if exists */}
+                    {viewingProduct.image && (
+                      <div className="relative group">
+                        <img 
+                          src={viewingProduct.image} 
+                          alt={viewingProduct.name} 
+                          className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-purple-500 transition-colors"
+                        />
+                        <span className="absolute top-2 left-2 px-2 py-1 bg-purple-600 text-white text-xs font-semibold rounded">Main</span>
+                      </div>
+                    )}
+                    {/* Additional images */}
+                    {viewingProduct.images && Array.isArray(viewingProduct.images) && viewingProduct.images.map((img: string | { url?: string; image?: string }, index: number) => {
+                      const imageUrl = typeof img === 'string' ? img : (img.url || img.image || '');
+                      if (!imageUrl) return null;
+                      return (
+                        <div key={index} className="relative group">
+                          <img 
+                            src={imageUrl} 
+                            alt={`${viewingProduct.name} - Image ${index + 1}`} 
+                            className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 hover:border-purple-500 transition-colors cursor-pointer"
+                            onClick={() => window.open(imageUrl, '_blank')}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Product Description */}
+              <div>
+                <h4 className="text-lg font-semibold text-black mb-2">Description</h4>
+                <p className="text-black leading-relaxed whitespace-pre-wrap">{viewingProduct.description || viewingProduct.descriptionHtml || 'No description available'}</p>
+              </div>
+
+              {/* Product Details Grid - Row 1 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-black mb-2">Price</h4>
+                  <p className="text-lg font-bold text-black">${(viewingProduct.price || 0).toFixed(2)}</p>
+                  {viewingProduct.originalPrice && viewingProduct.originalPrice > (viewingProduct.price || 0) && (
+                    <p className="text-sm text-black line-through mt-1">${viewingProduct.originalPrice.toFixed(2)}</p>
+                  )}
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-black mb-2">Stock</h4>
+                  <p className="text-lg font-bold text-black">{viewingProduct.stockCount || 0}</p>
+                  <p className="text-xs text-black mt-1">{viewingProduct.inStock ? 'In Stock' : 'Out of Stock'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-black mb-2">Brand</h4>
+                  <p className="text-base text-black">{viewingProduct.brand || 'N/A'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-black mb-2">Category</h4>
+                  <p className="text-base text-black">{viewingProduct.category || 'N/A'}</p>
+                </div>
+              </div>
+
+              {/* Product Details Grid - Row 2 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {viewingProduct.department && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Department</h4>
+                    <p className="text-base text-black">{viewingProduct.department}</p>
+                  </div>
+                )}
+                {viewingProduct.subCategory && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Sub Category</h4>
+                    <p className="text-base text-black">{viewingProduct.subCategory}</p>
+                  </div>
+                )}
+                {viewingProduct.productType && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Product Type</h4>
+                    <p className="text-base text-black">{viewingProduct.productType}</p>
+                  </div>
+                )}
+                {viewingProduct.status && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Status</h4>
+                    <p className="text-base text-black capitalize">{viewingProduct.status}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rating & Reviews */}
+              {(viewingProduct.rating || viewingProduct.reviewCount) && (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-black mb-2">Rating & Reviews</h4>
+                  <div className="flex items-center gap-2">
+                    {viewingProduct.rating && (
+                      <p className="text-base text-black">Rating: {viewingProduct.rating.toFixed(1)}</p>
+                    )}
+                    {viewingProduct.reviewCount && (
+                      <p className="text-base text-black">({viewingProduct.reviewCount} reviews)</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Specifications */}
+              {viewingProduct.specifications && Object.keys(viewingProduct.specifications).length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-black mb-3">Specifications</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.entries(viewingProduct.specifications).map(([key, value]) => (
+                      <div key={key} className="p-3 bg-gray-50 rounded-lg">
+                        <h5 className="text-sm font-semibold text-black mb-1">{key}</h5>
+                        <p className="text-sm text-black">{String(value) || 'N/A'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Variants */}
+              {viewingProduct.variants && viewingProduct.variants.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-black mb-3">Variants</h4>
+                  <div className="space-y-2">
+                    {viewingProduct.variants.map((variant: any, index: number) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-black">{variant.title || `Variant ${index + 1}`}</p>
+                            {variant.sku && <p className="text-xs text-black">SKU: {variant.sku}</p>}
+                          </div>
+                          <div className="text-right">
+                            {variant.price && <p className="text-sm font-bold text-black">${variant.price.toFixed(2)}</p>}
+                            {variant.inventory !== null && variant.inventory !== undefined && (
+                              <p className="text-xs text-black">Stock: {variant.inventory}</p>
+                            )}
+                            {variant.available !== undefined && (
+                              <p className={`text-xs ${variant.available ? 'text-green-600' : 'text-red-600'}`}>
+                                {variant.available ? 'Available' : 'Unavailable'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Product Tags */}
+              {viewingProduct.tags && viewingProduct.tags.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-black mb-3">Tags</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingProduct.tags.map((tag: string, i: number) => (
+                      <span key={i} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded-lg text-sm font-medium border border-purple-200">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Additional Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {viewingProduct.sourceUrl && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Source URL</h4>
+                    <a href={viewingProduct.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-all">
+                      {viewingProduct.sourceUrl}
+                    </a>
+                  </div>
+                )}
+                {viewingProduct.slug && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Slug</h4>
+                    <p className="text-sm text-black">{viewingProduct.slug}</p>
+                  </div>
+                )}
+                {viewingProduct.isActive !== undefined && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Active Status</h4>
+                    <p className={`text-sm font-semibold ${viewingProduct.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                      {viewingProduct.isActive ? 'Active' : 'Inactive'}
+                    </p>
+                  </div>
+                )}
+                {viewingProduct.etsyExported !== undefined && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-semibold text-black mb-2">Etsy Export Status</h4>
+                    <p className={`text-sm font-semibold ${viewingProduct.etsyExported ? 'text-green-600' : 'text-gray-600'}`}>
+                      {viewingProduct.etsyExported ? 'Exported to Etsy' : 'Not Exported'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Dates */}
+              {(viewingProduct.createdAt || viewingProduct.updatedAt) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {viewingProduct.createdAt && (
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <h4 className="text-sm font-semibold text-black mb-2">Created At</h4>
+                      <p className="text-sm text-black">{new Date(viewingProduct.createdAt).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {viewingProduct.updatedAt && (
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <h4 className="text-sm font-semibold text-black mb-2">Updated At</h4>
+                      <p className="text-sm text-black">{new Date(viewingProduct.updatedAt).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setSelectedProduct(viewingProduct);
+                    handleSyncProduct(viewingProduct);
+                  }}
+                  disabled={!shopId || syncing}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {syncing ? 'Syncing...' : `Sync ${syncAction === 'create' ? 'to' : syncAction === 'update' ? '' : 'from'} Etsy`}
+                </button>
+                <button
+                  onClick={() => setViewingProduct(null)}
+                  className="px-4 py-2 border border-gray-300 text-black rounded-lg hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EtsyListingsSection({ shopId: propShopId }: { shopId: string | null }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -574,6 +1279,19 @@ function EtsyListingsSection({ shopId: propShopId }: { shopId: string | null }) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propShopId]); // Only depend on propShopId, not shopId
+
+  // Listen for refresh event
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (shopId || propShopId) {
+        void loadListings(true);
+      }
+    };
+    window.addEventListener('refreshListings', handleRefresh);
+    return () => {
+      window.removeEventListener('refreshListings', handleRefresh);
+    };
+  }, [shopId, propShopId]);
 
   const loadListings = async (forceRefresh = false) => {
     if (!shopId && !propShopId) {
@@ -1347,7 +2065,7 @@ function EtsyCreateListingSection() {
                 value={taxonomyId}
                 onChange={(e) => setTaxonomyId(e.target.value)}
                 className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 bg-white"
-                placeholder="E.g. 1429"
+                placeholder="E.g. 691"
               />
               <p className="mt-1 text-xs text-gray-500">
                 Use the numeric taxonomy ID from Etsy&apos;s seller taxonomy (see docs / `etsy_openapi.json`).
@@ -5672,7 +6390,7 @@ export default function AdminDashboard() {
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(prev => !prev)}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 sm:px-3 sm:py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-h-[44px] sm:min-h-0"
               aria-expanded={mobileSidebarOpen}
               aria-controls="admin-sidebar"
             >
@@ -5684,7 +6402,7 @@ export default function AdminDashboard() {
             <div
               role="presentation"
               aria-hidden="true"
-              className="fixed inset-0 z-30 bg-black/40 md:hidden"
+              className="fixed inset-0 z-30 bg-black/40 md:hidden transition-opacity"
               onClick={() => setMobileSidebarOpen(false)}
             />
           )}
@@ -5692,14 +6410,14 @@ export default function AdminDashboard() {
           <aside
             id="admin-sidebar"
             aria-label="Admin navigation"
-            className={`md:w-64 lg:w-72 xl:w-80 ${mobileSidebarOpen
-              ? 'fixed inset-y-4 left-4 right-4 z-40 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl md:relative md:block md:h-full md:max-h-none md:p-0 md:border-0 md:shadow-none'
+            className={`w-full sm:w-auto md:w-64 lg:w-72 xl:w-80 ${mobileSidebarOpen
+              ? 'fixed inset-y-2 left-2 right-2 sm:inset-y-4 sm:left-4 sm:right-4 z-40 max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-3 sm:p-4 shadow-2xl md:relative md:block md:h-full md:max-h-none md:p-0 md:border-0 md:shadow-none md:rounded-none'
               : 'hidden md:block md:sticky md:top-6'
               }`}
           >
             <div className={`space-y-6 ${mobileSidebarOpen ? '' : 'md:sticky md:top-6'}`}>
               {mobileSidebarOpen && (
-                <div className="flex items-center justify-between gap-2 rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-2 md:hidden">
+                <div className="flex items-center justify-between gap-2 rounded-xl sm:rounded-2xl border border-gray-100 bg-gray-50/70 px-3 sm:px-4 py-2.5 sm:py-2 md:hidden">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     {isNestedTab && parentTab && (
                       <button
@@ -5708,7 +6426,7 @@ export default function AdminDashboard() {
                           handleTabChange(parentTab.id);
                           setOpenNestedMenu(parentTab.id);
                         }}
-                        className="flex items-center justify-center p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0"
+                        className="flex items-center justify-center p-2 sm:p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0 min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0"
                         aria-label={`Back to ${parentTab.label}`}
                       >
                         <ChevronLeft className="h-5 w-5" />
@@ -5721,7 +6439,7 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     onClick={() => setMobileSidebarOpen(false)}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 flex-shrink-0 px-2 py-1.5 rounded-lg hover:bg-white/70 transition-colors min-h-[44px] sm:min-h-0 flex items-center justify-center"
                   >
                     Close
                   </button>
@@ -5737,14 +6455,14 @@ export default function AdminDashboard() {
                 <div className="px-5 py-4 border-b border-gray-100">
                   <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gray-500">Navigate</p>
                 </div>
-                <div className="p-3 flex flex-col gap-1.5">
+                <div className="p-2 sm:p-3 flex flex-col gap-1.5">
                   {sidebarTabs.map((tab) => {
                     const active = isTabActive(tab);
                     const childrenVisible = shouldShowChildren(tab);
                     return (
                       <div key={tab.id} className="space-y-1.5">
                         <div
-                          className={`flex items-center gap-2 rounded-xl px-3 py-3 text-sm transition-all border ${active
+                          className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:py-3 text-sm transition-all border ${active
                             ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 shadow-sm'
                             : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                             }`}
@@ -5776,7 +6494,7 @@ export default function AdminDashboard() {
                             aria-current={tab.id === activeTab ? 'page' : undefined}
                             aria-expanded={tab.children ? childrenVisible : undefined}
                             aria-controls={tab.children ? `sidebar-section-${tab.id}` : undefined}
-                            className="flex flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                            className="flex flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-h-[44px] sm:min-h-0"
                           >
                             <tab.icon className={`h-4 w-4 ${active ? 'text-blue-600' : 'text-gray-400'}`} />
                             <div className="flex-1">
@@ -5806,7 +6524,7 @@ export default function AdminDashboard() {
                                   setOpenNestedMenu(tab.id);
                                 }
                               }}
-                              className="p-1 rounded-lg hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                              className="p-2 sm:p-1 rounded-lg hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 flex items-center justify-center"
                               aria-label={`${childrenVisible ? 'Collapse' : 'Expand'} ${tab.label} submenu`}
                               aria-expanded={childrenVisible}
                               aria-controls={`sidebar-section-${tab.id}`}
@@ -5824,7 +6542,7 @@ export default function AdminDashboard() {
                             role="region"
                             aria-label={`${tab.label} submenu`}
                             aria-hidden={!childrenVisible}
-                            className={`ml-9 flex flex-col gap-1 border-l border-gray-100 pl-3 transition-all duration-200 ${childrenVisible ? 'mt-1 mb-2 opacity-100' : 'max-h-0 overflow-hidden opacity-0'
+                            className={`ml-6 sm:ml-9 flex flex-col gap-1.5 sm:gap-1 border-l border-gray-100 pl-2 sm:pl-3 transition-all duration-200 ${childrenVisible ? 'mt-1 mb-2 opacity-100' : 'max-h-0 overflow-hidden opacity-0'
                               }`}
                           >
                             {tab.children.map((child) => {
@@ -5834,6 +6552,11 @@ export default function AdminDashboard() {
                                   type="button"
                                   key={child.id}
                                   onClick={() => {
+                                    // Close mobile sidebar when selecting a child item
+                                    setMobileSidebarOpen(false);
+                                    // Collapse the parent dropdown section when a child is selected
+                                    setCollapsedSections(prev => new Set(prev).add(tab.id));
+                                    setOpenNestedMenu(null);
                                     if (tab.id === 'etsy') {
                                       // For Etsy sections, navigate to route with section query param
                                       const sectionId = child.id.replace('etsy-', '');
@@ -5844,7 +6567,7 @@ export default function AdminDashboard() {
                                     }
                                   }}
                                   aria-current={childActive ? 'page' : undefined}
-                                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${childActive
+                                  className={`flex items-center gap-2 rounded-lg px-3 py-2.5 sm:py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-h-[44px] sm:min-h-0 ${childActive
                                     ? 'bg-blue-600/10 text-blue-700'
                                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
@@ -6461,6 +7184,21 @@ export default function AdminDashboard() {
                   {/* Etsy Listings Section */}
                   {activeEtsySection === 'listings' && (
                     <div id="etsy-section-listings" className="scroll-mt-24">
+                      <div className="bg-white rounded-lg shadow-sm border border-purple-100 mb-6">
+                        <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                          <div>
+                            <h2 className="text-xl font-semibold text-purple-900">Etsy Listings</h2>
+                            <p className="text-purple-700/80 mt-1 text-sm">
+                              View and manage all your Etsy listings. Data is cached for performance and refreshed automatically.
+                            </p>
+                          </div>
+                          <EtsySectionRefreshButton 
+                            shopId={selectedEtsyShopId} 
+                            endpoint={`/api/etsy/listings?shopId=${selectedEtsyShopId}&forceRefresh=true`}
+                            label="Refresh Listings"
+                          />
+                        </div>
+                      </div>
                       <EtsyListingsSection shopId={selectedEtsyShopId} />
                     </div>
                   )}
@@ -6486,11 +7224,20 @@ export default function AdminDashboard() {
                   {/* Review Management */}
                   {activeEtsySection === 'review-management' && (
                     <div className="bg-white rounded-lg shadow-sm border border-purple-100">
-                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
+                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30 flex items-center justify-between gap-4">
+                      <div>
                       <h2 className="text-xl font-semibold text-purple-900">Review Management & Reputation Builder</h2>
                       <p className="text-purple-700/80 mt-1 text-sm">
                         Manage reviews, analyze sentiment, and generate professional responses to build your shop reputation.
                       </p>
+                      </div>
+                      {selectedEtsyShopId && (
+                        <EtsySectionRefreshButton 
+                          shopId={selectedEtsyShopId} 
+                          endpoint={`/api/etsy/shops/${encodeURIComponent(selectedEtsyShopId)}/reviews?forceRefresh=true`}
+                          label="Refresh Reviews"
+                        />
+                      )}
                     </div>
                     <div className="p-6">
                       <EtsyReviewManagement />
@@ -7337,97 +8084,7 @@ export default function AdminDashboard() {
 
                   {/* Product Sync */}
                   {activeEtsySection === 'product-sync' && (
-                    <div id="etsy-section-product-sync" className="bg-white rounded-lg shadow-sm border border-purple-100 scroll-mt-24">
-                    <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50/40 to-pink-50/30">
-                      <h2 className="text-xl font-semibold text-purple-900">Product Sync to Etsy</h2>
-                      <p className="text-purple-700/80 mt-1 text-sm">Sync your store products to Etsy listings.</p>
-                    </div>
-                    <div className="p-6">
-                      <div className="space-y-4">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                          <SelectField
-                            value={etsySyncProductId}
-                            options={etsyProductOptions}
-                            isOpen={etsySyncProductOpen}
-                            onOpenChange={setEtsySyncProductOpen}
-                            onSelect={(val) => setEtsySyncProductId(val)}
-                            placeholder="Select a product to sync"
-                            className="flex-1 min-w-[240px]"
-                            disabled={!etsyProductOptions.length}
-                          />
-                          <SelectField
-                            value={etsySyncAction}
-                            options={ETSY_SYNC_ACTION_OPTIONS}
-                            isOpen={etsySyncActionOpen}
-                            onOpenChange={setEtsySyncActionOpen}
-                            onSelect={(val) => setEtsySyncAction(val as 'create' | 'update' | 'delete')}
-                            className="w-full sm:w-56"
-                          />
-                          <button 
-                            onClick={async () => {
-                              if (!etsySyncProductId) {
-                                toast.error('Please select a product to sync');
-                                return;
-                              }
-                              if (!selectedEtsyShopId) {
-                                toast.error('Please select an Etsy shop first');
-                                return;
-                              }
-
-                              try {
-                                setLoading(true);
-                                const token = localStorage.getItem('token');
-                                const res = await fetch('/api/etsy/products/sync-to-etsy', {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                                  },
-                                  body: JSON.stringify({
-                                    productId: etsySyncProductId,
-                                    shopId: selectedEtsyShopId,
-                                    action: etsySyncAction,
-                                  }),
-                                });
-
-                                const json = await res.json();
-                                if (!res.ok || !json.success) {
-                                  throw new Error(json.error || `Failed to ${etsySyncAction} product`);
-                                }
-
-                                toast.success(`Product ${etsySyncAction}d successfully${json.result?.etsyListingId ? ` (Listing ID: ${json.result.etsyListingId})` : ''}`);
-                                
-                                // Reset form
-                                setEtsySyncProductId('');
-                                setEtsySyncAction('create');
-                              } catch (e: any) {
-                                console.error(`Failed to ${etsySyncAction} product:`, e);
-                                toast.error(e?.message || `Failed to ${etsySyncAction} product`);
-                              } finally {
-                                setLoading(false);
-                              }
-                            }}
-                            disabled={loading || !etsySyncProductId || !selectedEtsyShopId}
-                            className="w-full rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-4 py-2 text-center text-white transition-all duration-200 shadow-sm hover:from-purple-700 hover:to-purple-800 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed lg:w-auto flex items-center justify-center gap-2"
-                          >
-                            {loading ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Syncing...</span>
-                              </>
-                            ) : (
-                              <span>Sync to Etsy</span>
-                            )}
-                          </button>
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          <p>• <strong>Create:</strong> Upload a new product to Etsy</p>
-                          <p>• <strong>Update:</strong> Modify an existing Etsy listing</p>
-                          <p>• <strong>Delete:</strong> Remove a product from Etsy</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    <EtsyProductSyncSection shopId={selectedEtsyShopId} />
                   )}
 
                   {/* CSV Export for Etsy */}
