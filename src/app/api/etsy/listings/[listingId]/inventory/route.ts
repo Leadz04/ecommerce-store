@@ -125,3 +125,84 @@ export async function GET(
     );
   }
 }
+
+/**
+ * PUT /api/etsy/listings/[listingId]/inventory
+ * Update inventory (products/variations) for a listing
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ listingId: string }> }
+) {
+  try {
+    const userId = await getCurrentUserId(request);
+    const { listingId } = await params;
+    const { searchParams } = new URL(request.url);
+    const shopId = searchParams.get('shopId');
+    const body = await request.json();
+
+    if (!shopId) {
+      return NextResponse.json({ error: 'shopId is required' }, { status: 400 });
+    }
+
+    await connectDB();
+
+    const shop = await getUserShop(userId, shopId);
+    if (!shop) {
+      return NextResponse.json({ error: 'Shop not found, inactive, or access denied' }, { status: 404 });
+    }
+
+    const etsyAPI = new EtsyAPI(
+      shop.accessToken,
+      shop.shopId,
+      shop.refreshToken,
+      async (newTokens) => {
+        await EtsyShop.updateOne(
+          { userId: shop.userId, shopId: shop.shopId },
+          {
+            $set: {
+              accessToken: newTokens.access_token,
+              refreshToken: newTokens.refresh_token,
+              tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+            }
+          }
+        );
+      }
+    );
+
+    // Update inventory via Etsy API
+    console.log('[Etsy Update Inventory API] Updating inventory for listing:', listingId);
+    console.log('[Etsy Update Inventory API] Inventory data:', JSON.stringify(body, null, 2));
+    
+    const updatedInventory = await etsyAPI.updateListingInventory(listingId, body);
+    
+    // Update DB
+    await EtsyListing.findOneAndUpdate(
+      { etsyListingId: listingId, userId },
+      {
+        $set: {
+          inventory: updatedInventory,
+          lastSyncedAt: new Date(),
+        }
+      }
+    );
+    
+    // Invalidate cache
+    const cacheKey = generateCacheKey('listing-inventory', { listingId });
+    await setCachedData(cacheKey, userId, updatedInventory, CACHE_TTL.LISTING_INVENTORY, shopId, listingId);
+
+    return NextResponse.json({
+      success: true,
+      inventory: updatedInventory,
+    });
+  } catch (error: any) {
+    console.error('[Etsy Update Inventory API] Error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: error?.message || 'Failed to update listing inventory' 
+      },
+      { status: error?.message?.includes('authentication') ? 401 : 500 }
+    );
+  }
+}

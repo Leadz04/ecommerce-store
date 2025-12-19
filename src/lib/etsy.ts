@@ -331,6 +331,21 @@ export class EtsyPublicAPI {
   static async getSellerTaxonomyNodes(): Promise<any> {
     return this.request('/application/seller-taxonomy/nodes');
   }
+
+  // Get a single listing with full details (public API)
+  static async getListing(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}`);
+  }
+
+  // Get images for a listing (public API)
+  static async getListingImages(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}/images`);
+  }
+
+  // Get videos for a listing (public API)
+  static async getListingVideos(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}/videos`);
+  }
 }
 
 export class EtsyAPI {
@@ -701,9 +716,33 @@ export class EtsyAPI {
   }
 
   async updateListingInventory(listingId: string, inventoryData: any): Promise<any> {
+    // Etsy API expects JSON format for inventory updates
+    // Ensure all required fields are present
+    const payload: any = {
+      products: inventoryData.products || [],
+    };
+    
+    if (inventoryData.price_on_property) {
+      payload.price_on_property = inventoryData.price_on_property;
+    }
+    if (inventoryData.quantity_on_property) {
+      payload.quantity_on_property = inventoryData.quantity_on_property;
+    }
+    if (inventoryData.sku_on_property) {
+      payload.sku_on_property = inventoryData.sku_on_property;
+    }
+    if (inventoryData.readiness_state_on_property) {
+      payload.readiness_state_on_property = inventoryData.readiness_state_on_property;
+    }
+    
+    console.log('[EtsyAPI] Updating inventory with payload:', JSON.stringify(payload, null, 2));
+    
     return this.makeRequest(`/application/listings/${listingId}/inventory`, {
       method: 'PUT',
-      body: JSON.stringify(inventoryData),
+      body: JSON.stringify(payload),
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
   }
 
@@ -839,7 +878,7 @@ export async function getEtsyAuthUrl(userId?: string): Promise<string> {
     response_type: 'code',
     redirect_uri: redirectUri,
     client_id: clientId,
-    scope: 'listings_r listings_w shops_r shops_w transactions_r transactions_w',
+    scope: 'listings_r listings_w listings_d shops_r shops_w transactions_r transactions_w',
     state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',

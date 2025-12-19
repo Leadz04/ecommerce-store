@@ -50,7 +50,8 @@ export async function DELETE(
     );
 
     // Delete listing via Etsy API
-    await etsyAPI['makeRequest'](`/application/shops/${shopId}/listings/${listingId}`, {
+    // According to Etsy OpenAPI spec, delete endpoint is /application/listings/{listing_id} (without shop_id)
+    await etsyAPI['makeRequest'](`/application/listings/${listingId}`, {
       method: 'DELETE',
     });
 
@@ -123,6 +124,18 @@ export async function PATCH(
     // Convert update data to form-urlencoded format
     // Handle arrays properly (tags, materials, image_ids, etc.)
     const formData = new URLSearchParams();
+    
+    // Log the update data for debugging
+    console.log('[Etsy Update API] Received update data keys:', Object.keys(updateData));
+    console.log('[Etsy Update API] Update data sample:', {
+      title: updateData.title,
+      description: updateData.description ? `${updateData.description.substring(0, 50)}...` : '(empty)',
+      price: updateData.price,
+      quantity: updateData.quantity,
+      image_ids_count: Array.isArray(updateData.image_ids) ? updateData.image_ids.length : 0,
+      tags_count: Array.isArray(updateData.tags) ? updateData.tags.length : 0,
+    });
+    
     Object.entries(updateData).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
         if (Array.isArray(value)) {
@@ -130,8 +143,34 @@ export async function PATCH(
           if (key === 'tags' || key === 'materials') {
             // Tags and materials can be comma-separated strings
             formData.append(key, value.join(','));
+          } else if (key === 'image_ids') {
+            // For image_ids, Etsy expects each ID as a separate entry with the same key
+            // Format: image_ids=123&image_ids=456&image_ids=789
+            // URLSearchParams handles multiple values correctly, but we need to ensure all are added
+            console.log(`[Etsy Update API] Processing image_ids array:`, value);
+            let addedCount = 0;
+            const validIds: number[] = [];
+            value.forEach((item) => {
+              const id = typeof item === 'number' ? item : parseInt(String(item), 10);
+              if (!isNaN(id) && id > 0) {
+                formData.append(key, String(id));
+                validIds.push(id);
+                addedCount++;
+                console.log(`[Etsy Update API] Added image_id: ${id}`);
+              } else {
+                console.warn(`[Etsy Update API] Skipped invalid image_id:`, item);
+              }
+            });
+            console.log(`[Etsy Update API] Added ${addedCount} image_ids to form data:`, validIds);
+            
+            // Verify all image_ids are in formData
+            const allImageIds = formData.getAll(key);
+            console.log(`[Etsy Update API] Verified image_ids in formData:`, allImageIds);
+            if (allImageIds.length !== validIds.length) {
+              console.error(`[Etsy Update API] WARNING: Expected ${validIds.length} image_ids but formData has ${allImageIds.length}`);
+            }
           } else {
-            // For other arrays like image_ids, append each item
+            // For other arrays, append each item
             value.forEach((item) => formData.append(key, String(item)));
           }
         } else if (typeof value === 'boolean') {
@@ -142,13 +181,60 @@ export async function PATCH(
       }
     });
 
+    // Log the final form data being sent - verify image_ids are included
+    const imageIdsInFormData = formData.getAll('image_ids');
+    console.log('[Etsy Update API] Image IDs retrieved from formData:', imageIdsInFormData);
+    
+    // Manually construct query string to ensure all image_ids are included
+    // URLSearchParams.toString() should work, but let's verify and manually construct if needed
+    let formDataString = formData.toString();
+    
+    // Verify all image_ids are in the string
+    const imageIdMatches = formDataString.match(/image_ids=\d+/g);
+    console.log('[Etsy Update API] Image IDs found in formData string:', imageIdMatches);
+    
+    // If image_ids are missing or incomplete, manually reconstruct
+    if (imageIdsInFormData.length > 0) {
+      const expectedImageIdParams = imageIdsInFormData.map(id => `image_ids=${id}`).join('&');
+      const actualImageIdParams = imageIdMatches?.join('&') || '';
+      
+      if (expectedImageIdParams !== actualImageIdParams) {
+        console.warn('[Etsy Update API] Image IDs mismatch detected. Reconstructing form data...');
+        // Remove existing image_ids from string and add them manually
+        formDataString = formDataString.replace(/image_ids=\d+&?/g, '');
+        // Remove trailing & if present
+        formDataString = formDataString.replace(/&$/, '');
+        // Add all image_ids at the end
+        if (formDataString) formDataString += '&';
+        formDataString += expectedImageIdParams;
+        console.log('[Etsy Update API] Reconstructed form data string with image_ids');
+      }
+    }
+    
+    console.log('[Etsy Update API] Final form data being sent:', formDataString.substring(0, 500) + (formDataString.length > 500 ? '...' : ''));
+    console.log('[Etsy Update API] Form data length:', formDataString.length);
+    
     // Update listing via Etsy API using PATCH method
     const updatedListing = await etsyAPI['makeRequest'](`/application/shops/${shopId}/listings/${listingId}`, {
       method: 'PATCH',
-      body: formData.toString(),
+      body: formDataString,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
+    });
+    
+    // Log the response to see if images were updated
+    console.log('[Etsy Update API] Update response - checking images:', {
+      listing_id: updatedListing.listing_id,
+      has_images: !!updatedListing.images,
+      images_count: updatedListing.images?.length || 0,
+      image_ids: updatedListing.images?.map((img: any) => img.listing_image_id) || [],
+    });
+    
+    console.log('[Etsy Update API] Update successful, response:', {
+      listing_id: updatedListing.listing_id,
+      title: updatedListing.title,
+      state: updatedListing.state,
     });
 
     // Update DB

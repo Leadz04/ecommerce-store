@@ -505,6 +505,26 @@ export default function EtsyBusinessSuite() {
     type: 'physical',
   });
   
+  // Size/Variation state
+  const [sizeVariations, setSizeVariations] = useState<{
+    enabled: boolean;
+    propertyId: string;
+    propertyName: string;
+    scaleId?: number;
+    values: Array<{
+      valueId: number;
+      value: string;
+      price: string;
+      quantity: string;
+      sku?: string;
+    }>;
+  }>({
+    enabled: false,
+    propertyId: '',
+    propertyName: '',
+    values: [],
+  });
+  
   // Images and videos state
   const [listingImages, setListingImages] = useState<any[]>([]);
   const [listingVideos, setListingVideos] = useState<any[]>([]);
@@ -648,7 +668,7 @@ export default function EtsyBusinessSuite() {
       const url = taxonomyType === 'seller' && selectedShopId
         ? `/api/etsy/taxonomy/nodes/${taxonomyId}/properties?type=${taxonomyType}&shopId=${selectedShopId}`
         : `/api/etsy/taxonomy/nodes/${taxonomyId}/properties?type=${taxonomyType}`;
-      
+
       const response = await fetch(url, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
@@ -665,6 +685,60 @@ export default function EtsyBusinessSuite() {
       setIsLoadingTaxonomy(false);
     }
   };
+  
+  // Load available properties for size variations when taxonomy_id changes
+  useEffect(() => {
+    if (listingFormData.taxonomy_id && selectedShopId && (showCreateListing || editingListing)) {
+      const loadProperties = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          console.log('[Size Variations] Loading properties for taxonomy:', listingFormData.taxonomy_id);
+          const propsRes = await fetch(`/api/etsy/taxonomy/${listingFormData.taxonomy_id}/properties?shopId=${selectedShopId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const propsData = await parseJsonResponse<any>(propsRes);
+          console.log('[Size Variations] Properties response:', propsData);
+          if (propsData.success) {
+            const allProperties = propsData.results || [];
+            // Filter to only show properties that support variations
+            // Also prioritize size-related properties
+            const variationProperties = allProperties.filter((prop: any) => 
+              prop.supports_variations !== false // Include if true or undefined
+            );
+            
+            // Sort: size-related properties first, then others
+            const sortedProperties = variationProperties.sort((a: any, b: any) => {
+              const aName = (a.name || a.property_name || a.display_name || '').toLowerCase();
+              const bName = (b.name || b.property_name || b.display_name || '').toLowerCase();
+              const aIsSize = aName.includes('size');
+              const bIsSize = bName.includes('size');
+              
+              if (aIsSize && !bIsSize) return -1;
+              if (!aIsSize && bIsSize) return 1;
+              return aName.localeCompare(bName);
+            });
+            
+            setAvailableProperties(sortedProperties);
+            console.log('[Size Variations] Loaded properties:', sortedProperties.length, 'out of', allProperties.length, 'total');
+            console.log('[Size Variations] Properties:', sortedProperties.map((p: any) => ({
+              id: p.property_id || p.id,
+              name: p.name || p.property_name || p.display_name,
+              supports_variations: p.supports_variations
+            })));
+          } else {
+            console.error('[Size Variations] Failed to load properties:', propsData.error);
+            setAvailableProperties([]);
+          }
+        } catch (err) {
+          console.error('[Size Variations] Error loading taxonomy properties:', err);
+          setAvailableProperties([]);
+        }
+      };
+      loadProperties();
+    } else {
+      setAvailableProperties([]);
+    }
+  }, [listingFormData.taxonomy_id, selectedShopId, showCreateListing, editingListing]);
 
   // Toggle node expansion
   const toggleNode = (nodeId: number) => {
@@ -954,6 +1028,35 @@ export default function EtsyBusinessSuite() {
         listingPayload.productImages = newImageUrls.filter(url => url.trim());
       }
       
+      // Add size variations/inventory if enabled
+      if (sizeVariations.enabled && sizeVariations.propertyId && sizeVariations.values.length > 0) {
+        const propertyId = parseInt(sizeVariations.propertyId);
+        const products = sizeVariations.values.map((sizeVal) => ({
+          property_values: [{
+            property_id: propertyId,
+            value_ids: [sizeVal.valueId],
+            values: [sizeVal.value],
+            scale_id: sizeVariations.scaleId || null,
+            property_name: sizeVariations.propertyName,
+          }],
+          offerings: [{
+            price: parseFloat(sizeVal.price) || parseFloat(listingFormData.price) || 0,
+            quantity: parseInt(sizeVal.quantity) || 1,
+            is_enabled: true,
+          }],
+          sku: sizeVal.sku || null,
+        }));
+        
+        listingPayload.inventory = {
+          products,
+          price_on_property: [propertyId], // Price varies by this property
+          quantity_on_property: [propertyId], // Quantity varies by this property
+          sku_on_property: sizeVariations.values.some(v => v.sku) ? [propertyId] : [],
+        };
+        
+        console.log('[Create Listing] Adding size variations:', listingPayload.inventory);
+      }
+      
       const response = await fetch('/api/etsy/listings/create', {
         method: 'POST',
         headers: {
@@ -1004,6 +1107,12 @@ export default function EtsyBusinessSuite() {
         setNewImageUrls(['']);
         setListingInventory(null);
         setAvailableProperties([]);
+        setSizeVariations({
+          enabled: false,
+          propertyId: '',
+          propertyName: '',
+          values: [],
+        });
         setListingsPage(1); // Reset to first page
         loadDashboardStats(); // Refresh listings
       } else {
@@ -1026,16 +1135,58 @@ export default function EtsyBusinessSuite() {
       setLoading(true);
       const token = localStorage.getItem('token');
       
+      // First, ensure we have current images loaded - ALWAYS fetch fresh images before updating
+      let currentImages = listingImages;
+      try {
+        console.log(`[Update Listing] Fetching current images for listing ${listing.listingId}...`);
+        const imagesRes = await fetch(`/api/etsy/listings/${listing.listingId}/images?shopId=${selectedShopId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const imagesData = await parseJsonResponse<any>(imagesRes);
+        if (imagesData.success && imagesData.results) {
+          currentImages = imagesData.results;
+          setListingImages(currentImages);
+          console.log(`[Update Listing] ✓ Successfully loaded ${currentImages.length} images`);
+          console.log(`[Update Listing] Image data structure:`, currentImages.map((img: any, idx: number) => ({
+            index: idx,
+            listing_image_id: img.listing_image_id,
+            listingImageId: img.listingImageId,
+            image_id: img.image_id,
+            id: img.id,
+            allKeys: Object.keys(img),
+            url: img.url_fullxfull || img.url_570xN
+          })));
+          
+          // Verify we can extract IDs
+          const testIds = currentImages.map((img: any) => img.listing_image_id || img.listingImageId || img.image_id || img.id).filter(Boolean);
+          console.log(`[Update Listing] Test extraction - found ${testIds.length} IDs:`, testIds);
+        } else {
+          console.error(`[Update Listing] ✗ Failed to load images:`, imagesData);
+          currentImages = []; // Ensure it's an array
+        }
+      } catch (err) {
+        console.error('Could not fetch current images:', err);
+        // Don't fail the update if images can't be loaded, but warn
+        if (!currentImages || currentImages.length === 0) {
+          console.error(`[Update Listing] CRITICAL: No images available for listing ${listing.listingId}. Images will be removed!`);
+        }
+      }
+      
       // Prepare update data with all fields
       const updateData: any = {
         shopId: selectedShopId,
       };
       
-      // Basic fields
+      // Basic fields - always include required fields
       if (listingFormData.title) updateData.title = listingFormData.title;
-      if (listingFormData.description) updateData.description = listingFormData.description;
+      // Description should always be included if it exists (even if empty)
+      if (listingFormData.description !== undefined && listingFormData.description !== null) {
+        updateData.description = listingFormData.description;
+      }
       if (listingFormData.price) updateData.price = parseFloat(listingFormData.price);
-      if (listingFormData.quantity) updateData.quantity = listingFormData.quantity;
+      if (listingFormData.quantity !== undefined && listingFormData.quantity !== null) {
+        updateData.quantity = parseInt(String(listingFormData.quantity)) || 1;
+      }
       if (listingFormData.taxonomy_id) updateData.taxonomy_id = parseInt(listingFormData.taxonomy_id);
       
       // Tags and materials
@@ -1047,45 +1198,140 @@ export default function EtsyBusinessSuite() {
       if (listingFormData.when_made) updateData.when_made = listingFormData.when_made;
       updateData.is_supply = listingFormData.is_supply;
       
-      // Shipping and sections
-      if (listingFormData.shipping_profile_id) updateData.shipping_profile_id = parseInt(listingFormData.shipping_profile_id);
-      if (listingFormData.shop_section_id) updateData.shop_section_id = parseInt(listingFormData.shop_section_id);
-      if (listingFormData.return_policy_id) updateData.return_policy_id = parseInt(listingFormData.return_policy_id);
+      // Shipping and sections - include if they have values
+      if (listingFormData.shipping_profile_id && listingFormData.shipping_profile_id !== '') {
+        updateData.shipping_profile_id = parseInt(listingFormData.shipping_profile_id);
+      }
+      if (listingFormData.shop_section_id && listingFormData.shop_section_id !== '') {
+        updateData.shop_section_id = parseInt(listingFormData.shop_section_id);
+      }
+      if (listingFormData.return_policy_id && listingFormData.return_policy_id !== '') {
+        updateData.return_policy_id = parseInt(listingFormData.return_policy_id);
+      }
       
       // Processing times
-      if (listingFormData.processing_min) updateData.processing_min = parseInt(listingFormData.processing_min);
-      if (listingFormData.processing_max) updateData.processing_max = parseInt(listingFormData.processing_max);
+      if (listingFormData.processing_min && listingFormData.processing_min !== '') {
+        updateData.processing_min = parseInt(listingFormData.processing_min);
+      }
+      if (listingFormData.processing_max && listingFormData.processing_max !== '') {
+        updateData.processing_max = parseInt(listingFormData.processing_max);
+      }
       
       // Item weight and dimensions
-      if (listingFormData.item_weight) updateData.item_weight = parseFloat(listingFormData.item_weight);
-      if (listingFormData.item_weight_unit) updateData.item_weight_unit = listingFormData.item_weight_unit;
-      if (listingFormData.item_length) updateData.item_length = parseFloat(listingFormData.item_length);
-      if (listingFormData.item_width) updateData.item_width = parseFloat(listingFormData.item_width);
-      if (listingFormData.item_height) updateData.item_height = parseFloat(listingFormData.item_height);
-      if (listingFormData.item_dimensions_unit) updateData.item_dimensions_unit = listingFormData.item_dimensions_unit;
+      if (listingFormData.item_weight && listingFormData.item_weight !== '') {
+        updateData.item_weight = parseFloat(listingFormData.item_weight);
+      }
+      if (listingFormData.item_weight_unit && listingFormData.item_weight_unit !== '') {
+        updateData.item_weight_unit = listingFormData.item_weight_unit;
+      }
+      if (listingFormData.item_length && listingFormData.item_length !== '') {
+        updateData.item_length = parseFloat(listingFormData.item_length);
+      }
+      if (listingFormData.item_width && listingFormData.item_width !== '') {
+        updateData.item_width = parseFloat(listingFormData.item_width);
+      }
+      if (listingFormData.item_height && listingFormData.item_height !== '') {
+        updateData.item_height = parseFloat(listingFormData.item_height);
+      }
+      if (listingFormData.item_dimensions_unit && listingFormData.item_dimensions_unit !== '') {
+        updateData.item_dimensions_unit = listingFormData.item_dimensions_unit;
+      }
       
-      // Image IDs (from existing images)
-      if (listingImages.length > 0) {
-        updateData.image_ids = listingImages.map((img: any) => img.listing_image_id).filter(Boolean);
+      // Image IDs (from existing images) - ALWAYS include to preserve images
+      // Extract image IDs from various possible formats
+      const imageIds: number[] = [];
+      
+      console.log(`[Update Listing] Checking images - currentImages:`, currentImages);
+      console.log(`[Update Listing] currentImages type:`, typeof currentImages, 'isArray:', Array.isArray(currentImages), 'length:', currentImages?.length);
+      
+      if (currentImages && Array.isArray(currentImages) && currentImages.length > 0) {
+        console.log(`[Update Listing] Processing ${currentImages.length} images:`, JSON.stringify(currentImages.map(img => ({
+          listing_image_id: img.listing_image_id,
+          listingImageId: img.listingImageId,
+          image_id: img.image_id,
+          id: img.id,
+          keys: Object.keys(img)
+        })), null, 2));
+        
+        currentImages.forEach((img: any, index: number) => {
+          // Try multiple possible property names for image ID
+          const imgId = img.listing_image_id || img.listingImageId || img.image_id || img.id;
+          console.log(`[Update Listing] Image ${index}:`, {
+            listing_image_id: img.listing_image_id,
+            listingImageId: img.listingImageId,
+            image_id: img.image_id,
+            id: img.id,
+            extracted: imgId,
+            type: typeof imgId
+          });
+          
+          if (imgId !== undefined && imgId !== null) {
+            const id = typeof imgId === 'string' ? parseInt(imgId, 10) : Number(imgId);
+            if (!isNaN(id) && id > 0) {
+              imageIds.push(id);
+              console.log(`[Update Listing] ✓ Added image ID: ${id}`);
+            } else {
+              console.warn(`[Update Listing] ✗ Invalid image ID found:`, imgId, 'parsed as:', id, 'from image:', img);
+            }
+          } else {
+            console.warn(`[Update Listing] ✗ Image ${index} missing ID property. Full object:`, img);
+          }
+        });
+        console.log(`[Update Listing] ✓ Extracted ${imageIds.length} valid image IDs from ${currentImages.length} images:`, imageIds);
+      } else {
+        console.error(`[Update Listing] ✗ No images found for listing ${listing.listingId}. currentImages:`, currentImages);
+        console.error(`[Update Listing] ✗ Images may be removed from listing!`);
+      }
+      
+      // Always include image_ids if we have any, to prevent Etsy from removing them
+      if (imageIds.length > 0) {
+        updateData.image_ids = imageIds;
+        console.log(`[Update Listing] ✓✓✓ Adding image_ids to updateData:`, imageIds);
+        console.log(`[Update Listing] ✓✓✓ updateData.image_ids:`, updateData.image_ids);
+      } else {
+        console.error(`[Update Listing] ✗✗✗ WARNING: No image IDs to send! This will remove all images from the listing.`);
+        console.error(`[Update Listing] ✗✗✗ currentImages was:`, currentImages);
       }
       
       // Personalization
-      updateData.is_personalizable = listingFormData.is_personalizable;
+      updateData.is_personalizable = listingFormData.is_personalizable ?? false;
       if (listingFormData.is_personalizable) {
-        updateData.personalization_is_required = listingFormData.personalization_is_required;
-        if (listingFormData.personalization_char_count_max) {
+        updateData.personalization_is_required = listingFormData.personalization_is_required ?? false;
+        if (listingFormData.personalization_char_count_max && listingFormData.personalization_char_count_max !== '') {
           updateData.personalization_char_count_max = parseInt(listingFormData.personalization_char_count_max);
         }
         if (listingFormData.personalization_instructions) {
           updateData.personalization_instructions = listingFormData.personalization_instructions;
         }
+      } else {
+        // If not personalizable, clear personalization fields
+        updateData.personalization_is_required = false;
       }
       
       // Additional options
-      updateData.is_taxable = listingFormData.is_taxable;
-      updateData.should_auto_renew = listingFormData.should_auto_renew;
-      if (listingFormData.featured_rank) updateData.featured_rank = parseInt(listingFormData.featured_rank);
+      updateData.is_taxable = listingFormData.is_taxable ?? false;
+      updateData.should_auto_renew = listingFormData.should_auto_renew ?? false;
+      if (listingFormData.featured_rank && listingFormData.featured_rank !== '') {
+        updateData.featured_rank = parseInt(listingFormData.featured_rank);
+      }
       if (listingFormData.state) updateData.state = listingFormData.state;
+      
+      // Note: Size variations/inventory are updated separately via PUT /inventory endpoint
+      // We'll handle this after the listing update succeeds
+      
+      // Log what we're sending for debugging
+      console.log('[Update Listing] ===== FINAL UPDATE DATA =====');
+      console.log('[Update Listing] updateData keys:', Object.keys(updateData));
+      console.log('[Update Listing] updateData.image_ids:', updateData.image_ids);
+      console.log('[Update Listing] updateData.image_ids type:', typeof updateData.image_ids, 'isArray:', Array.isArray(updateData.image_ids));
+      console.log('[Update Listing] updateData.image_ids length:', updateData.image_ids?.length);
+      console.log('[Update Listing] Full updateData:', {
+        ...updateData,
+        description: updateData.description ? `${updateData.description.substring(0, 50)}...` : '(empty)',
+        image_ids: updateData.image_ids,
+        image_ids_count: updateData.image_ids?.length || 0,
+      });
+      console.log('[Update Listing] ============================');
       
       const response = await fetch(`/api/etsy/listings/${listing.listingId}`, {
         method: 'PATCH',
@@ -1098,7 +1344,59 @@ export default function EtsyBusinessSuite() {
       
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
-        toast.success('Listing updated successfully!');
+        // Update inventory separately if size variations are enabled
+        if (sizeVariations.enabled && sizeVariations.propertyId && sizeVariations.values.length > 0) {
+          try {
+            const propertyId = parseInt(sizeVariations.propertyId);
+            const products = sizeVariations.values.map((sizeVal) => ({
+              property_values: [{
+                property_id: propertyId,
+                value_ids: [sizeVal.valueId],
+                values: [sizeVal.value],
+                scale_id: sizeVariations.scaleId || null,
+                property_name: sizeVariations.propertyName,
+              }],
+              offerings: [{
+                price: parseFloat(sizeVal.price) || parseFloat(listingFormData.price) || 0,
+                quantity: parseInt(sizeVal.quantity) || 1,
+                is_enabled: true,
+              }],
+              sku: sizeVal.sku || null,
+            }));
+            
+            const inventoryPayload = {
+              products,
+              price_on_property: [propertyId],
+              quantity_on_property: [propertyId],
+              sku_on_property: sizeVariations.values.some(v => v.sku) ? [propertyId] : [],
+            };
+            
+            console.log('[Update Listing] Updating inventory separately with:', inventoryPayload);
+            const inventoryRes = await fetch(`/api/etsy/listings/${listing.listingId}/inventory?shopId=${selectedShopId}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(inventoryPayload),
+            });
+            const inventoryData = await parseJsonResponse<any>(inventoryRes);
+            if (inventoryData.success) {
+              console.log('[Update Listing] Inventory updated successfully');
+              toast.success('Listing and size variations updated successfully!');
+            } else {
+              console.warn('[Update Listing] Inventory update failed:', inventoryData.error);
+              toast.warning('Listing updated but size variations failed to update. Please update inventory separately.');
+            }
+          } catch (inventoryError: any) {
+            console.error('[Update Listing] Error updating inventory:', inventoryError);
+            toast.warning('Listing updated but size variations failed to update. Please update inventory separately.');
+            // Don't fail the entire update - listing is updated, inventory can be set separately
+          }
+        } else {
+          toast.success('Listing updated successfully!');
+        }
+        
         setEditingListing(null);
         setFieldOptimizationResult(null);
         setOptimizingField(null);
@@ -1139,6 +1437,12 @@ export default function EtsyBusinessSuite() {
         setNewImageUrls(['']);
         setListingInventory(null);
         setAvailableProperties([]);
+        setSizeVariations({
+          enabled: false,
+          propertyId: '',
+          propertyName: '',
+          values: [],
+        });
         loadDashboardStats(); // Refresh listings
       } else {
         toast.error(data.error || 'Failed to update listing');
@@ -1163,6 +1467,11 @@ export default function EtsyBusinessSuite() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+      
       const response = await fetch(`/api/etsy/listings/${listingId}?shopId=${selectedShopId}`, {
         method: 'DELETE',
         headers: {
@@ -1173,11 +1482,17 @@ export default function EtsyBusinessSuite() {
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success('Listing deleted successfully!');
-        loadDashboardStats(); // Refresh listings
+        // Remove from local state immediately for better UX
+        setListings(prev => prev.filter(l => l.listingId !== listingId));
+        setDraftListings(prev => prev.filter(l => l.listingId !== listingId));
+        setInactiveListings(prev => prev.filter(l => l.listingId !== listingId));
+        // Refresh dashboard stats to ensure consistency
+        loadDashboardStats();
       } else {
         toast.error(data.error || 'Failed to delete listing');
       }
     } catch (error: any) {
+      console.error('Error deleting listing:', error);
       toast.error(error.message || 'Error deleting listing');
     } finally {
       setLoading(false);
@@ -1796,13 +2111,28 @@ export default function EtsyBusinessSuite() {
         const listing = listingData.listing;
         taxonomyId = listing.taxonomy_id?.toString();
         
+        // Log what we received for debugging
+        console.log('[Load Listing Details] Received listing data:', {
+          has_title: !!listing.title,
+          has_description: !!listing.description,
+          has_taxonomy_id: !!listing.taxonomy_id,
+          has_quantity: listing.quantity !== undefined,
+          has_price: !!listing.price,
+          has_shipping_profile_id: !!listing.shipping_profile_id,
+          has_shop_section_id: !!listing.shop_section_id,
+          has_processing_min: listing.processing_min !== undefined,
+          has_processing_max: listing.processing_max !== undefined,
+          has_item_weight: listing.item_weight !== undefined,
+          all_keys: Object.keys(listing),
+        });
+        
         // Calculate price from amount/divisor format
         const price = listing.price?.amount && listing.price?.divisor 
           ? (listing.price.amount / listing.price.divisor).toFixed(2)
           : listing.price ? String(listing.price) : '';
         
         // Set ALL fields exactly as they come from Etsy
-        setListingFormData({
+        const formDataToSet = {
           title: listing.title || '',
           description: listing.description || '',
           quantity: listing.quantity ?? 1,
@@ -1833,16 +2163,33 @@ export default function EtsyBusinessSuite() {
           featured_rank: listing.featured_rank?.toString() || '',
           state: listing.state || 'draft',
           type: listing.type || listing.is_digital ? 'download' : 'physical',
+        };
+        
+        console.log('[Load Listing Details] Setting form data:', {
+          taxonomy_id: formDataToSet.taxonomy_id,
+          quantity: formDataToSet.quantity,
+          price: formDataToSet.price,
+          shipping_profile_id: formDataToSet.shipping_profile_id,
+          shop_section_id: formDataToSet.shop_section_id,
+          processing_min: formDataToSet.processing_min,
+          processing_max: formDataToSet.processing_max,
         });
+        
+        setListingFormData(formDataToSet);
+      } else {
+        console.error('[Load Listing Details] Failed to load listing:', listingData);
       }
       
       // Load images
       const imagesRes = await fetch(`/api/etsy/listings/${listingId}/images?shopId=${selectedShopId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      const imagesData = await imagesRes.json();
-      if (imagesData.success) {
+      const imagesData = await parseJsonResponse<any>(imagesRes);
+      if (imagesData.success && imagesData.results) {
         setListingImages(imagesData.results || []);
+      } else {
+        // If images failed to load, set empty array to prevent errors
+        setListingImages([]);
       }
       
       // Load videos
@@ -1874,7 +2221,46 @@ export default function EtsyBusinessSuite() {
           });
           const propsData = await parseJsonResponse<any>(propsRes);
           if (propsData.success) {
-            setAvailableProperties(propsData.results || []);
+            const properties = propsData.results || [];
+            setAvailableProperties(properties);
+            console.log('[Load Listing Details] Loaded properties:', properties.length);
+            
+            // If listing has inventory with size variations, populate sizeVariations state
+            if (listingInventory?.products && listingInventory.products.length > 0) {
+              const firstProduct = listingInventory.products[0];
+              if (firstProduct.property_values && firstProduct.property_values.length > 0) {
+                const sizeProperty = firstProduct.property_values.find((pv: any) => 
+                  pv.property_name?.toLowerCase().includes('size') || 
+                  properties.find((p: any) => p.property_id === pv.property_id)?.name?.toLowerCase().includes('size')
+                ) || firstProduct.property_values[0];
+                
+                if (sizeProperty) {
+                  const prop = properties.find((p: any) => p.property_id === sizeProperty.property_id);
+                  if (prop) {
+                    const values = sizeProperty.values.map((val: string, idx: number) => {
+                      const valueId = sizeProperty.value_ids?.[idx];
+                      // Find offering for this value
+                      const offering = firstProduct.offerings?.[idx] || firstProduct.offerings?.[0];
+                      return {
+                        valueId: valueId || 0,
+                        value: val,
+                        price: offering?.price ? (typeof offering.price === 'object' ? (offering.price.amount / offering.price.divisor).toFixed(2) : offering.price.toString()) : listingFormData.price || '',
+                        quantity: offering?.quantity?.toString() || listingFormData.quantity?.toString() || '1',
+                        sku: firstProduct.sku || '',
+                      };
+                    });
+                    
+                    setSizeVariations({
+                      enabled: true,
+                      propertyId: sizeProperty.property_id.toString(),
+                      propertyName: sizeProperty.property_name || prop.name || '',
+                      scaleId: sizeProperty.scale_id || prop.scale_id,
+                      values,
+                    });
+                  }
+                }
+              }
+            }
           }
         } catch (err) {
           console.warn('Could not load taxonomy properties:', err);
@@ -2919,6 +3305,242 @@ export default function EtsyBusinessSuite() {
                         </div>
                       </div>
                       
+                      {/* Size/Variations Section */}
+                      <div className="mt-6 pt-6 border-t">
+                        <SectionHeader 
+                          title="Size Options & Variations"
+                          icon={Package}
+                          section="listings"
+                          helpText="Add size variations to your listing. Each size can have its own price and quantity. Select a property (like Size) and choose the values you want to offer."
+                        />
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={sizeVariations.enabled}
+                              onChange={(e) => setSizeVariations({ ...sizeVariations, enabled: e.target.checked })}
+                              className="h-4 w-4"
+                            />
+                            <label className="text-sm font-medium text-black">Enable size variations</label>
+                          </div>
+                          
+                          {sizeVariations.enabled && (
+                            <div className="space-y-4 pl-6 border-l-2 border-purple-200">
+                              {/* Property Selection */}
+                              <div>
+                                <label className="block text-sm font-medium mb-1 text-black">Size Property</label>
+                                <select
+                                  value={sizeVariations.propertyId}
+                                  onChange={(e) => {
+                                    const selectedProp = availableProperties.find((p: any) => 
+                                      p.property_id?.toString() === e.target.value || 
+                                      p.id?.toString() === e.target.value
+                                    );
+                                    setSizeVariations({
+                                      ...sizeVariations,
+                                      propertyId: e.target.value,
+                                      propertyName: selectedProp?.name || selectedProp?.property_name || '',
+                                      scaleId: selectedProp?.scale_id,
+                                      values: [], // Reset values when property changes
+                                    });
+                                  }}
+                                  className="w-full px-3 py-2 border rounded-lg text-black bg-white"
+                                  disabled={!availableProperties || availableProperties.length === 0}
+                                >
+                                  <option value="">Select a property (e.g., Size)</option>
+                                  {availableProperties.map((prop: any) => {
+                                    const propId = prop.property_id || prop.id;
+                                    const propName = prop.name || prop.property_name || prop.display_name || `Property ${propId}`;
+                                    const isSizeProperty = propName.toLowerCase().includes('size');
+                                    return (
+                                      <option key={propId} value={propId} style={isSizeProperty ? { fontWeight: 'bold' } : {}}>
+                                        {isSizeProperty && '⭐ '}
+                                        {propName}
+                                        {prop.scale_name && ` (${prop.scale_name})`}
+                                        {prop.supports_variations === false && ' (no variations)'}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {(!availableProperties || availableProperties.length === 0) && listingFormData.taxonomy_id && (
+                                  <p className="text-xs text-gray-500 mt-1">Loading properties for taxonomy {listingFormData.taxonomy_id}...</p>
+                                )}
+                                {!listingFormData.taxonomy_id && (
+                                  <p className="text-xs text-gray-500 mt-1">Please select a taxonomy first to see available properties.</p>
+                                )}
+                                {availableProperties && availableProperties.length > 0 && (
+                                  <p className="text-xs text-green-600 mt-1">✓ {availableProperties.length} property{availableProperties.length !== 1 ? 'ies' : ''} available</p>
+                                )}
+                              </div>
+                              
+                              {/* Size Values Selection */}
+                              {sizeVariations.propertyId && (() => {
+                                const selectedProp = availableProperties.find((p: any) => 
+                                  (p.property_id?.toString() === sizeVariations.propertyId) || 
+                                  (p.id?.toString() === sizeVariations.propertyId)
+                                );
+                                
+                                // Get values from different possible structures
+                                let availableValues: any[] = [];
+                                if (selectedProp) {
+                                  // Check for scales first (for size properties with measurement scales)
+                                  if (selectedProp.scales && Array.isArray(selectedProp.scales) && selectedProp.scales.length > 0) {
+                                    // Flatten all values from all scales
+                                    selectedProp.scales.forEach((scale: any) => {
+                                      if (scale.values && Array.isArray(scale.values)) {
+                                        availableValues = [...availableValues, ...scale.values];
+                                      }
+                                    });
+                                  }
+                                  
+                                  // Also check for direct values/possible_values
+                                  if (availableValues.length === 0) {
+                                    availableValues = selectedProp.possible_values || selectedProp.values || [];
+                                  }
+                                  
+                                  console.log('[Size Variations] Selected property:', selectedProp.name || selectedProp.property_name || selectedProp.display_name);
+                                  console.log('[Size Variations] Available values:', availableValues.length, availableValues);
+                                }
+                                
+                                return (
+                                  <div>
+                                    <label className="block text-sm font-medium mb-2 text-black">Select Sizes</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                                      {availableValues.map((value: any) => {
+                                        const valueId = value.value_id || value.id || value;
+                                        const valueName = typeof value === 'string' ? value : (value.name || value.value || value);
+                                        
+                                        if (!valueId || !valueName) return null;
+                                        
+                                        const isSelected = sizeVariations.values.some(v => v.valueId === valueId);
+                                        
+                                        return (
+                                          <button
+                                            key={valueId}
+                                            type="button"
+                                            onClick={() => {
+                                              if (isSelected) {
+                                                setSizeVariations({
+                                                  ...sizeVariations,
+                                                  values: sizeVariations.values.filter(v => v.valueId !== valueId),
+                                                });
+                                              } else {
+                                                setSizeVariations({
+                                                  ...sizeVariations,
+                                                  values: [
+                                                    ...sizeVariations.values,
+                                                    {
+                                                      valueId: typeof valueId === 'number' ? valueId : parseInt(valueId),
+                                                      value: valueName,
+                                                      price: listingFormData.price || '',
+                                                      quantity: listingFormData.quantity?.toString() || '1',
+                                                      sku: '',
+                                                    },
+                                                  ],
+                                                });
+                                              }
+                                            }}
+                                            className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                                              isSelected
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-white text-black border-gray-300 hover:border-purple-400'
+                                            }`}
+                                          >
+                                            {valueName}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    
+                                    {/* Size Details Table */}
+                                    {sizeVariations.values.length > 0 && (
+                                      <div className="mt-4">
+                                        <label className="block text-sm font-medium mb-2 text-black">Size Details (Price & Quantity)</label>
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full border-collapse border border-gray-300">
+                                            <thead>
+                                              <tr className="bg-gray-100">
+                                                <th className="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-black">Size</th>
+                                                <th className="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-black">Price ($)</th>
+                                                <th className="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-black">Quantity</th>
+                                                <th className="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-black">SKU (Optional)</th>
+                                                <th className="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-black">Actions</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {sizeVariations.values.map((sizeVal, idx) => (
+                                                <tr key={idx}>
+                                                  <td className="border border-gray-300 px-3 py-2 text-black font-medium">{sizeVal.value}</td>
+                                                  <td className="border border-gray-300 px-3 py-2">
+                                                    <input
+                                                      type="number"
+                                                      step="0.01"
+                                                      value={sizeVal.price}
+                                                      onChange={(e) => {
+                                                        const newValues = [...sizeVariations.values];
+                                                        newValues[idx].price = e.target.value;
+                                                        setSizeVariations({ ...sizeVariations, values: newValues });
+                                                      }}
+                                                      className="w-full px-2 py-1 border rounded text-black text-sm"
+                                                      placeholder="0.00"
+                                                    />
+                                                  </td>
+                                                  <td className="border border-gray-300 px-3 py-2">
+                                                    <input
+                                                      type="number"
+                                                      value={sizeVal.quantity}
+                                                      onChange={(e) => {
+                                                        const newValues = [...sizeVariations.values];
+                                                        newValues[idx].quantity = e.target.value;
+                                                        setSizeVariations({ ...sizeVariations, values: newValues });
+                                                      }}
+                                                      className="w-full px-2 py-1 border rounded text-black text-sm"
+                                                      placeholder="1"
+                                                      min="0"
+                                                    />
+                                                  </td>
+                                                  <td className="border border-gray-300 px-3 py-2">
+                                                    <input
+                                                      type="text"
+                                                      value={sizeVal.sku || ''}
+                                                      onChange={(e) => {
+                                                        const newValues = [...sizeVariations.values];
+                                                        newValues[idx].sku = e.target.value;
+                                                        setSizeVariations({ ...sizeVariations, values: newValues });
+                                                      }}
+                                                      className="w-full px-2 py-1 border rounded text-black text-sm"
+                                                      placeholder="SKU"
+                                                    />
+                                                  </td>
+                                                  <td className="border border-gray-300 px-3 py-2">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        setSizeVariations({
+                                                          ...sizeVariations,
+                                                          values: sizeVariations.values.filter((_, i) => i !== idx),
+                                                        });
+                                                      }}
+                                                      className="text-red-600 hover:text-red-800 text-sm"
+                                                    >
+                                                      Remove
+                                                    </button>
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       {/* Personalization Section */}
                       <div className="mt-6 pt-6 border-t">
                         <SectionHeader 
@@ -3533,11 +4155,14 @@ export default function EtsyBusinessSuite() {
                           </button>
                           
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
-                                handleDeleteListing(selectedListingForModal.listingId);
                                 setShowListingModal(false);
+                                const listingIdToDelete = selectedListingForModal?.listingId;
                                 setSelectedListingForModal(null);
+                                if (listingIdToDelete) {
+                                  await handleDeleteListing(listingIdToDelete);
+                                }
                               }
                             }}
                             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"

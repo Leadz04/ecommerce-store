@@ -29,17 +29,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Etsy public search
-    let raw;
+    // Call Etsy public search with pagination to fetch more listings
+    // Etsy API allows max 100 per request, so we'll make multiple requests if needed
+    const maxPerRequest = 100;
+    const requestedLimit = Math.min(Math.max(limit, 1), 500); // Allow up to 500 listings
+    const numberOfRequests = Math.ceil(requestedLimit / maxPerRequest);
+    
+    let allResults: any[] = [];
+    let totalCount = 0;
+    
     try {
-      raw = await EtsyPublicAPI.searchActiveListings({
-        keywords,
-        min_price: minPrice,
-        max_price: maxPrice,
-        taxonomy_id: taxonomyId,
-        shop_location: shopLocation,
-        limit: Math.min(Math.max(limit, 1), 100),
-      });
+      for (let i = 0; i < numberOfRequests && allResults.length < requestedLimit; i++) {
+        const offset = i * maxPerRequest;
+        const currentLimit = Math.min(maxPerRequest, requestedLimit - allResults.length);
+        
+        const raw = await EtsyPublicAPI.searchActiveListings({
+          keywords,
+          min_price: minPrice,
+          max_price: maxPrice,
+          taxonomy_id: taxonomyId,
+          shop_location: shopLocation,
+          limit: currentLimit,
+          offset: offset,
+        });
+        
+        const batchResults = Array.isArray(raw.results) ? raw.results : [];
+        allResults = [...allResults, ...batchResults];
+        totalCount = raw.count || totalCount;
+        
+        // If we got fewer results than requested, we've reached the end
+        if (batchResults.length < currentLimit) {
+          break;
+        }
+        
+        // Small delay to respect rate limits
+        if (i < numberOfRequests - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
     } catch (apiError: any) {
       console.error('[Market Insights] Etsy API error:', apiError);
       const errorMessage = apiError?.message || 'Etsy API request failed';
@@ -56,9 +83,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = Array.isArray(raw.results) ? raw.results : [];
+    const results = allResults.slice(0, requestedLimit);
 
-    // Normalize basic listing info
+    // Normalize basic listing info only (no detailed fetching for performance)
+    // Details (images, videos, description) will be fetched on-demand when user expands a row
     const listings = results.map((item: any) => {
       const priceAmount = item.price?.amount ?? 0;
       const priceDivisor = item.price?.divisor ?? 100;
@@ -78,6 +106,10 @@ export async function POST(request: NextRequest) {
         taxonomy_id: item.taxonomy_id ?? null,
         category_path: item.category_path ?? [],
         tags: Array.isArray(item.tags) ? item.tags : [],
+        // Details will be fetched on-demand via separate API endpoint
+        description: null,
+        images: null,
+        videos: null,
         created_timestamp: item.creation_timestamp ?? item.created_timestamp ?? null,
       };
     });
@@ -174,24 +206,34 @@ export async function POST(request: NextRequest) {
     });
 
     const topSellers = Object.values(shopsMap)
-      .map((shop) => ({
-        shop_id: shop.shop_id,
-        shop_name: shop.shop_name || 'Unknown Shop',
-        listingCount: shop.listingCount,
-        averagePrice: shop.listingCount > 0 ? shop.totalPrice / shop.listingCount : 0,
-        averageViews: shop.listingCount > 0 ? shop.totalViews / shop.listingCount : 0,
-        averageFavorites: shop.listingCount > 0 ? shop.totalFavorites / shop.listingCount : 0,
-        totalViews: shop.totalViews,
-        totalFavorites: shop.totalFavorites,
-      }))
+      .map((shop) => {
+        // Calculate engagement score as proxy for sales potential
+        // Higher views and favorites indicate better performance
+        const engagementScore = shop.totalViews * 0.7 + shop.totalFavorites * 10;
+        
+        return {
+          shop_id: shop.shop_id,
+          shop_name: shop.shop_name || 'Unknown Shop',
+          listingCount: shop.listingCount,
+          averagePrice: shop.listingCount > 0 ? shop.totalPrice / shop.listingCount : 0,
+          averageViews: shop.listingCount > 0 ? shop.totalViews / shop.listingCount : 0,
+          averageFavorites: shop.listingCount > 0 ? shop.totalFavorites / shop.listingCount : 0,
+          totalViews: shop.totalViews,
+          totalFavorites: shop.totalFavorites,
+          engagementScore,
+        };
+      })
       .sort((a, b) => {
-        // Sort by listing count first, then by average views
+        // Sort by engagement score first (proxy for sales performance)
+        // Then by listing count, then by average views
+        if (Math.abs(b.engagementScore - a.engagementScore) > 0.1) {
+          return b.engagementScore - a.engagementScore;
+        }
         if (b.listingCount !== a.listingCount) {
           return b.listingCount - a.listingCount;
         }
         return b.averageViews - a.averageViews;
-      })
-      .slice(0, 20);
+      });
 
     return NextResponse.json({
       success: true,
@@ -201,7 +243,8 @@ export async function POST(request: NextRequest) {
         maxPrice,
         taxonomyId,
         shopLocation,
-        limit: Math.min(Math.max(limit, 1), 100),
+        limit: requestedLimit,
+        totalAvailable: totalCount,
       },
       summary: {
         totalListings: listings.length,

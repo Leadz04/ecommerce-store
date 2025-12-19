@@ -48,7 +48,20 @@ export async function GET(
       }
     );
 
-    // Step 1: Check DB first (EtsyListing collection)
+    // Step 1: Check cache first (contains full API response with ALL fields)
+    const cacheKey = generateCacheKey('listing-details', { listingId });
+    const cachedListing = await getCachedData<any>(cacheKey, userId);
+    
+    if (cachedListing) {
+      console.log(`[Cache HIT] Using cached listing details for listingId: ${listingId}`);
+      // Return cached data directly - it has ALL fields from Etsy API
+      return NextResponse.json({
+        success: true,
+        listing: cachedListing,
+      });
+    }
+    
+    // Step 2: Check DB (but prefer fresh API data for editing)
     let listing = await EtsyListing.findOne({ etsyListingId: listingId, userId }).lean();
     
     // Check if data needs refresh (6 hours for listings)
@@ -57,75 +70,16 @@ export async function GET(
       (Date.now() - new Date(listing.lastSyncedAt).getTime()) > CACHE_TTL.LISTING;
     
     if (!needsRefresh && listing) {
-      // Use DB data - transform to API format
-      console.log(`[DB HIT] Using listing details from database for listingId: ${listingId}`);
-      const dbListingData = {
-        listing_id: parseInt(listingId),
-        title: listing.title,
-        description: listing.description,
-        tags: listing.tags || [],
-        materials: listing.materials || [],
-        category_path: listing.categoryPath || [],
-        price: {
-          amount: Math.round((listing.price || 0) * 100),
-          divisor: 100,
-          currency_code: listing.currency || 'USD',
-        },
-        quantity: listing.inventory?.quantity || 0,
-        state: listing.state,
-        views: listing.views || 0,
-        num_favorers: listing.numFavorers || 0,
-      };
-      
-      return NextResponse.json({
-        success: true,
-        listing: dbListingData,
-      });
+      // Use DB data - but we'll still fetch from API to get ALL fields
+      // This ensures we have complete data for editing
+      console.log(`[DB HIT] Found listing in DB, but fetching fresh from API for complete data`);
     }
     
-    // Step 2: Check cache before API call
-    const cacheKey = generateCacheKey('listing-details', { listingId });
-    const cachedListing = await getCachedData<any>(cacheKey, userId);
-    
-    if (cachedListing) {
-      console.log(`[Cache HIT] Using cached listing details for listingId: ${listingId}`);
-      
-      // Update DB with cached data for consistency
-      await EtsyListing.findOneAndUpdate(
-        { etsyListingId: listingId, userId },
-        {
-          $set: {
-            userId,
-            etsyListingId: listingId,
-            shopId,
-            title: cachedListing.title,
-            description: cachedListing.description,
-            price: cachedListing.price?.amount ? cachedListing.price.amount / cachedListing.price.divisor : 0,
-            currency: cachedListing.price?.currency_code || 'USD',
-            state: cachedListing.state,
-            tags: cachedListing.tags || [],
-            materials: cachedListing.materials || [],
-            categoryPath: cachedListing.category_path || [],
-            inventory: { quantity: cachedListing.quantity || 0 },
-            views: cachedListing.views || 0,
-            numFavorers: cachedListing.num_favorers || 0,
-            lastSyncedAt: new Date(),
-          }
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      
-      return NextResponse.json({
-        success: true,
-        listing: cachedListing,
-      });
-    }
-    
-    // Step 3: Fetch from Etsy API only if not in DB or cache
+    // Step 3: Always fetch from Etsy API to ensure we have ALL fields
     console.log(`[API Fetch] Fetching listing details from Etsy API for listingId: ${listingId}`);
     const apiListing = await etsyAPI.getListing(listingId);
     
-    // Save to DB
+    // Save to DB - include ALL fields from Etsy API
     await EtsyListing.findOneAndUpdate(
       { etsyListingId: listingId, userId },
       {
@@ -144,6 +98,31 @@ export async function GET(
           inventory: { quantity: apiListing.quantity || 0 },
           views: apiListing.views || 0,
           numFavorers: apiListing.num_favorers || 0,
+          // Include ALL other fields from API response
+          taxonomyId: apiListing.taxonomy_id,
+          whoMade: apiListing.who_made,
+          whenMade: apiListing.when_made,
+          isSupply: apiListing.is_supply,
+          shippingProfileId: apiListing.shipping_profile_id,
+          shopSectionId: apiListing.shop_section_id,
+          returnPolicyId: apiListing.return_policy_id,
+          itemWeight: apiListing.item_weight,
+          itemWeightUnit: apiListing.item_weight_unit,
+          itemLength: apiListing.item_length,
+          itemWidth: apiListing.item_width,
+          itemHeight: apiListing.item_height,
+          itemDimensionsUnit: apiListing.item_dimensions_unit,
+          processingMin: apiListing.processing_min,
+          processingMax: apiListing.processing_max,
+          isTaxable: apiListing.is_taxable,
+          isPersonalizable: apiListing.is_personalizable,
+          personalizationIsRequired: apiListing.personalization_is_required,
+          personalizationCharCountMax: apiListing.personalization_char_count_max,
+          personalizationInstructions: apiListing.personalization_instructions,
+          shouldAutoRenew: apiListing.should_auto_renew,
+          featuredRank: apiListing.featured_rank,
+          type: apiListing.type,
+          isDigital: apiListing.is_digital,
           lastSyncedAt: new Date(),
         }
       },
