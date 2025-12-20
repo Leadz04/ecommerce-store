@@ -11,6 +11,8 @@ import SearchEvent from './SearchEvent';
 import EtsyShop from './EtsyShop';
 import EtsyListing from './EtsyListing';
 import EtsyOrder from './EtsyOrder';
+import EtsyFormField from './EtsyFormField';
+// EtsyCacheEntry is imported via etsy-cache.ts when needed
 // Removed eRank-specific models (Keyword, Competitor, Trend, ShopHealth)
 import SeoQuery from './SeoQuery';
 import SeoKeyword from './SeoKeyword';
@@ -51,6 +53,7 @@ export { default as SearchEvent } from './SearchEvent';
 export { default as EtsyShop } from './EtsyShop';
 export { default as EtsyListing } from './EtsyListing';
 export { default as EtsyOrder } from './EtsyOrder';
+export { default as EtsyFormField } from './EtsyFormField';
 // eRank-specific model exports removed
 export { default as SeoQuery } from './SeoQuery';
 export { default as SeoKeyword } from './SeoKeyword';
@@ -90,6 +93,7 @@ export type { IProductVersion } from './ProductVersion';
 export type { IEtsyShop } from './EtsyShop';
 export type { IEtsyListing } from './EtsyListing';
 export type { IEtsyOrder } from './EtsyOrder';
+export type { IEtsyFormField } from './EtsyFormField';
 // eRank-specific interface exports removed
 export type { ISeoQuery } from './SeoQuery';
 export type { ISeoKeyword } from './SeoKeyword';

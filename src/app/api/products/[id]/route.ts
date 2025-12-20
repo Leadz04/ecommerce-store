@@ -31,14 +31,16 @@ export async function GET(
     await getMainConnection();
 
     const { id } = await context.params;
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { error: 'Invalid product id' },
-        { status: 400 }
-      );
+    
+    // Support both ObjectId and slug
+    let product;
+    if (isValidObjectId(id)) {
+      // Try by ObjectId first
+      product = await Product.findById(id);
+    } else {
+      // Try by slug
+      product = await Product.findOne({ slug: id });
     }
-
-    const product = await Product.findById(id);
     
     if (!product) {
       return NextResponse.json(
@@ -106,10 +108,18 @@ export async function PUT(
     const updateData = await request.json();
     const { id } = await context.params;
 
-    if (!isValidObjectId(id)) {
+    // Support both ObjectId and slug for updates
+    let product;
+    if (isValidObjectId(id)) {
+      product = await Product.findById(id);
+    } else {
+      product = await Product.findOne({ slug: id });
+    }
+
+    if (!product) {
       return NextResponse.json(
-        { error: 'Invalid product id' },
-        { status: 400 }
+        { error: 'Product not found' },
+        { status: 404 }
       );
     }
 
@@ -135,13 +145,14 @@ export async function PUT(
       );
     }
 
-    const product = await Product.findByIdAndUpdate(
-      id,
+    // Update using the found product's _id
+    const updatedProduct = await Product.findByIdAndUpdate(
+      product._id,
       updateData,
       { new: true, runValidators: true }
     );
     
-    if (!product) {
+    if (!updatedProduct) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
@@ -150,7 +161,7 @@ export async function PUT(
 
     return NextResponse.json({
       message: 'Product updated successfully',
-      product
+      product: updatedProduct
     });
 
   } catch (error) {
@@ -207,20 +218,28 @@ export async function DELETE(
     await getMainConnection();
     const { id } = await context.params;
 
-    if (!isValidObjectId(id)) {
+    // Support both ObjectId and slug
+    let product;
+    if (isValidObjectId(id)) {
+      product = await Product.findById(id);
+    } else {
+      product = await Product.findOne({ slug: id });
+    }
+
+    if (!product) {
       return NextResponse.json(
-        { error: 'Invalid product id' },
-        { status: 400 }
+        { error: 'Product not found' },
+        { status: 404 }
       );
     }
 
-    const product = await Product.findByIdAndUpdate(
-      id,
+    const updatedProduct = await Product.findByIdAndUpdate(
+      product._id,
       { isActive: false },
       { new: true }
     );
     
-    if (!product) {
+    if (!updatedProduct) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }

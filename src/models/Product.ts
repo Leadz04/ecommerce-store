@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { generateSlug } from '@/lib/slug';
 
 export interface IProduct extends Document {
   _id: string;
   name: string;
+  slug?: string;
   description: string;
   descriptionHtml?: string;
   price: number;
@@ -73,6 +75,15 @@ const ProductSchema = new Schema<IProduct>({
     required: [true, 'Product name is required'],
     trim: true,
     maxlength: [200, 'Product name cannot be more than 200 characters']
+  },
+  slug: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true,
+    index: true,
+    maxlength: [200, 'Slug cannot be more than 200 characters']
   },
   description: {
     type: String,
@@ -235,11 +246,41 @@ const ProductSchema = new Schema<IProduct>({
   timestamps: true
 });
 
+// Generate slug from name if not provided
+ProductSchema.pre('save', async function(next) {
+  // Only generate slug if it doesn't exist or name has changed
+  if ((!this.slug || this.isModified('name')) && this.name) {
+    const baseSlug = generateSlug(this.name);
+    
+    // Check if slug already exists (excluding current document)
+    const Product = this.constructor as any;
+    const existingProduct = await Product.findOne({ 
+      slug: baseSlug,
+      _id: { $ne: this._id }
+    });
+    
+    if (existingProduct) {
+      // Append a number to make it unique
+      let counter = 1;
+      let uniqueSlug = `${baseSlug}-${counter}`;
+      while (await Product.findOne({ slug: uniqueSlug, _id: { $ne: this._id } })) {
+        counter++;
+        uniqueSlug = `${baseSlug}-${counter}`;
+      }
+      this.slug = uniqueSlug;
+    } else {
+      this.slug = baseSlug;
+    }
+  }
+  next();
+});
+
 // Index for search functionality
 ProductSchema.index({ name: 'text', description: 'text', tags: 'text' });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ brand: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ rating: -1 });
+ProductSchema.index({ slug: 1 }); // Index for slug lookups
 
 export default mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);

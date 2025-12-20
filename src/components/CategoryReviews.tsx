@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Star, User } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { getProductUrl } from '@/lib/productUrl';
 
 interface Review {
   _id: string;
@@ -77,7 +78,7 @@ export default function CategoryReviews({ categorySlug }: CategoryReviewsProps) 
               {/* Product Info */}
               {review.productId && (
                 <Link
-                  href={`/products/${review.productId._id}`}
+                  href={getProductUrl(review.productId as any)}
                   className="flex items-center space-x-3 mb-4 group"
                 >
                   {review.productId.image && (

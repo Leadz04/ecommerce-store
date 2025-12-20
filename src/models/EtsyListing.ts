@@ -78,5 +78,11 @@ const EtsyListingSchema = new Schema<IEtsyListing>({
 EtsyListingSchema.index({ userId: 1, shopId: 1 });
 // Keep etsyListingId unique globally (or make it unique per user+shop if needed)
 EtsyListingSchema.index({ etsyListingId: 1 }, { unique: true });
+// Index on productId for fast lookups of synced products
+EtsyListingSchema.index({ productId: 1 });
+// Compound index for productId + shopId lookups (most common query pattern)
+EtsyListingSchema.index({ productId: 1, shopId: 1 });
+// Index for filtering by state (active/inactive/draft)
+EtsyListingSchema.index({ state: 1, productId: 1 });
 
 export default mongoose.models.EtsyListing || mongoose.model<IEtsyListing>('EtsyListing', EtsyListingSchema);

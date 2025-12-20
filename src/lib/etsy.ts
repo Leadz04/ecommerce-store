@@ -331,6 +331,21 @@ export class EtsyPublicAPI {
   static async getSellerTaxonomyNodes(): Promise<any> {
     return this.request('/application/seller-taxonomy/nodes');
   }
+
+  // Get a single listing with full details (public API)
+  static async getListing(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}`);
+  }
+
+  // Get images for a listing (public API)
+  static async getListingImages(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}/images`);
+  }
+
+  // Get videos for a listing (public API)
+  static async getListingVideos(listingId: number | string): Promise<any> {
+    return this.request(`/application/listings/${listingId}/videos`);
+  }
 }
 
 export class EtsyAPI {
@@ -701,9 +716,33 @@ export class EtsyAPI {
   }
 
   async updateListingInventory(listingId: string, inventoryData: any): Promise<any> {
+    // Etsy API expects JSON format for inventory updates
+    // Ensure all required fields are present
+    const payload: any = {
+      products: inventoryData.products || [],
+    };
+    
+    if (inventoryData.price_on_property) {
+      payload.price_on_property = inventoryData.price_on_property;
+    }
+    if (inventoryData.quantity_on_property) {
+      payload.quantity_on_property = inventoryData.quantity_on_property;
+    }
+    if (inventoryData.sku_on_property) {
+      payload.sku_on_property = inventoryData.sku_on_property;
+    }
+    if (inventoryData.readiness_state_on_property) {
+      payload.readiness_state_on_property = inventoryData.readiness_state_on_property;
+    }
+    
+    console.log('[EtsyAPI] Updating inventory with payload:', JSON.stringify(payload, null, 2));
+    
     return this.makeRequest(`/application/listings/${listingId}/inventory`, {
       method: 'PUT',
-      body: JSON.stringify(inventoryData),
+      body: JSON.stringify(payload),
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
   }
 
@@ -720,6 +759,76 @@ export class EtsyAPI {
       `/application/listings/${listingId}/reviews?limit=${limit}&offset=${offset}`
     );
     return response.results || [];
+  }
+
+  // Receipt methods
+  async getShopReceipts(shopId: string, options: {
+    limit?: number;
+    offset?: number;
+    min_created?: number;
+    max_created?: number;
+    min_last_modified?: number;
+    max_last_modified?: number;
+    sort_on?: 'created' | 'updated' | 'receipt_id';
+    sort_order?: 'asc' | 'desc';
+    was_paid?: boolean;
+    was_shipped?: boolean;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.offset) params.append('offset', options.offset.toString());
+    if (options.min_created) params.append('min_created', options.min_created.toString());
+    if (options.max_created) params.append('max_created', options.max_created.toString());
+    if (options.min_last_modified) params.append('min_last_modified', options.min_last_modified.toString());
+    if (options.max_last_modified) params.append('max_last_modified', options.max_last_modified.toString());
+    if (options.sort_on) params.append('sort_on', options.sort_on);
+    if (options.sort_order) params.append('sort_order', options.sort_order);
+    if (options.was_paid !== undefined) params.append('was_paid', options.was_paid.toString());
+    if (options.was_shipped !== undefined) params.append('was_shipped', options.was_shipped.toString());
+
+    const queryString = params.toString();
+    const endpoint = `/application/shops/${shopId}/receipts${queryString ? `?${queryString}` : ''}`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getShopReceipt(shopId: string, receiptId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/receipts/${receiptId}`);
+  }
+
+  // Payment methods
+  async getShopPayments(shopId: string, paymentIds?: number[]): Promise<any> {
+    const params = new URLSearchParams();
+    if (paymentIds && paymentIds.length > 0) {
+      params.append('payment_ids', paymentIds.join(','));
+    }
+    const queryString = params.toString();
+    const endpoint = `/application/shops/${shopId}/payments${queryString ? `?${queryString}` : ''}`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getShopPaymentByReceiptId(shopId: string, receiptId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/receipts/${receiptId}/payments`);
+  }
+
+  // Ledger Entry methods
+  async getShopLedgerEntries(shopId: string, options: {
+    min_created: number;
+    max_created: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('min_created', options.min_created.toString());
+    params.append('max_created', options.max_created.toString());
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.offset) params.append('offset', options.offset.toString());
+
+    const queryString = params.toString();
+    return this.makeRequest(`/application/shops/${shopId}/payment-account/ledger-entries?${queryString}`);
+  }
+
+  async getShopLedgerEntry(shopId: string, ledgerEntryId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${shopId}/payment-account/ledger-entries/${ledgerEntryId}`);
   }
 }
 
@@ -769,7 +878,7 @@ export async function getEtsyAuthUrl(userId?: string): Promise<string> {
     response_type: 'code',
     redirect_uri: redirectUri,
     client_id: clientId,
-    scope: 'listings_r listings_w shops_r shops_w transactions_r transactions_w',
+    scope: 'listings_r listings_w listings_d shops_r shops_w transactions_r transactions_w',
     state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { EtsyShop, EtsyListing } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
+import { invalidateCache } from '@/lib/etsy-cache';
+import { getCurrentUserId } from '@/lib/etsy-auth-helper';
 
 // Helper function to download image from URL and return buffer for FormData
 async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; filename: string }> {
@@ -97,6 +99,18 @@ export async function POST(request: NextRequest) {
     const created = await etsyAPI.createListing(shop.shopId, listingData);
     const listingId = created.listing_id.toString();
 
+    // Update inventory with size variations if provided
+    if (listing.inventory && listing.inventory.products && listing.inventory.products.length > 0) {
+      try {
+        console.log('[Create Listing] Setting inventory with variations:', listing.inventory);
+        await etsyAPI.updateListingInventory(listingId, listing.inventory);
+        console.log('[Create Listing] Inventory updated successfully');
+      } catch (inventoryError: any) {
+        console.error('[Create Listing] Failed to set inventory:', inventoryError);
+        // Don't fail the entire request - listing is created, inventory can be set later
+      }
+    }
+
     // Upload images if provided
     const uploadedImages: any[] = [];
     if (productImages && Array.isArray(productImages) && productImages.length > 0) {
@@ -163,6 +177,14 @@ export async function POST(request: NextRequest) {
         lastSyncedAt: new Date(),
       });
       await dbListing.save();
+      
+      // Invalidate shop listings cache
+      try {
+        const userId = await getCurrentUserId(request);
+        await invalidateCache(userId, { shopId: shop.shopId, cacheKeyPattern: 'shop-listings' });
+      } catch (err) {
+        console.warn('Failed to invalidate cache:', err);
+      }
     } catch (dbError: any) {
       console.error('Failed to save listing to database:', dbError);
       // Don't fail the request if DB save fails - listing is already on Etsy

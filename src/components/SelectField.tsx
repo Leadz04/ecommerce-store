@@ -75,7 +75,7 @@ export default function SelectField({
         />
       </button>
       {isOpen && !disabled && (
-        <div className="absolute z-20 mt-2 w-full max-h-64 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl">
+        <div className="absolute z-50 mt-2 w-full max-h-64 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl">
           {options.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
           ) : (

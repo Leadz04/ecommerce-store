@@ -8,6 +8,7 @@ import { Product } from '@/types';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
+import { getProductUrl } from '@/lib/productUrl';
 import toast from 'react-hot-toast';
 
 interface ProductCardProps {
@@ -89,7 +90,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     : 0;
 
   return (
-    <Link href={`/products/${product._id || product.id}`} className="group">
+    <Link href={getProductUrl(product as any)} className="group">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 h-full flex flex-col">
         {/* Product Image */}
         <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-700">
