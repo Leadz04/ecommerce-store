@@ -88,8 +88,24 @@ export async function PATCH(
   try {
     const userId = await getCurrentUserId(request);
     const { listingId } = await params;
-    const body = await request.json();
-    const { shopId, ...updateData } = body;
+    const { searchParams } = new URL(request.url);
+    
+    // Get shopId from query params first, then from body
+    let shopId = searchParams.get('shopId');
+    let updateData: any = {};
+    
+    try {
+      const body = await request.json();
+      if (body.shopId && !shopId) {
+        shopId = body.shopId;
+      }
+      // Extract updateData, excluding shopId
+      const { shopId: bodyShopId, ...rest } = body;
+      updateData = rest;
+    } catch (e) {
+      // Body might be empty or invalid JSON, that's okay
+      console.warn('[Etsy Update API] Could not parse request body:', e);
+    }
 
     if (!shopId) {
       return NextResponse.json({ error: 'shopId is required' }, { status: 400 });

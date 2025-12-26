@@ -362,7 +362,7 @@ export class EtsyAPI {
     this.onTokenRefresh = onTokenRefresh;
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
+  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount = 0, maxRetries = 3): Promise<any> {
     // Respect rate limits per Etsy API Terms
     const rateLimiter = EtsyRateLimiter.getInstance();
     await rateLimiter.waitIfNeeded();
@@ -410,59 +410,113 @@ export class EtsyAPI {
     console.log('[EtsyAPI] Request', requestMeta);
 
     const startTime = Date.now();
+    const timeoutMs = 30000; // 30 seconds timeout (increased from default 10s)
 
-    const response = await fetch(url, {
-      ...options,
-      headers: finalHeaders,
-    });
+    try {
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    const durationMs = Date.now() - startTime;
-
-    // Record the API call for rate limiting
-    rateLimiter.recordCall();
-
-    // Handle token expiration (401)
-    if (response.status === 401 && retryCount === 0 && this.refreshToken) {
-      console.log('Etsy access token expired. Attempting refresh...');
+      let response: Response;
       try {
-        await this.refreshTokens();
-        // Retry the request with new token
-        return this.makeRequest(endpoint, options, retryCount + 1);
-      } catch (refreshError) {
-        console.error('Failed to refresh Etsy token:', refreshError);
-        // If refresh fails, throw original 401 or refresh error
-        throw new Error('Etsy API Authentication Failed: Token expired and refresh failed.');
-      }
-    }
+        response = await fetch(url, {
+          ...options,
+          headers: finalHeaders,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Handle timeout and connection errors with retry logic
+        const isTimeoutError = fetchError.name === 'AbortError' || 
+                               fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+                               fetchError.code === 'ETIMEDOUT' ||
+                               fetchError.message?.includes('timeout') ||
+                               fetchError.message?.includes('Timeout');
+        
+        const isConnectionError = fetchError.code === 'ECONNREFUSED' ||
+                                  fetchError.code === 'ENOTFOUND' ||
+                                  fetchError.code === 'ECONNRESET' ||
+                                  fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+                                  fetchError.message?.includes('fetch failed');
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[EtsyAPI] Error Response', {
+        if ((isTimeoutError || isConnectionError) && retryCount < maxRetries) {
+          const delayMs = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff: 1s, 2s, 4s, max 5s
+          console.warn(`[EtsyAPI] ${isTimeoutError ? 'Timeout' : 'Connection'} error (attempt ${retryCount + 1}/${maxRetries + 1}). Retrying in ${delayMs}ms...`, {
+            endpoint,
+            error: fetchError.message || fetchError.code,
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          return this.makeRequest(endpoint, options, retryCount + 1, maxRetries);
+        }
+
+        // If we've exhausted retries or it's not a retryable error, throw
+        const errorMessage = isTimeoutError 
+          ? `Etsy API request timed out after ${timeoutMs}ms. Please check your internet connection and try again.`
+          : isConnectionError
+          ? `Etsy API connection failed. Please check your internet connection and try again.`
+          : `Etsy API request failed: ${fetchError.message || fetchError.code || 'Unknown error'}`;
+        
+        throw new Error(errorMessage);
+      }
+
+      const durationMs = Date.now() - startTime;
+
+      // Record the API call for rate limiting
+      rateLimiter.recordCall();
+
+      // Handle token expiration (401)
+      if (response.status === 401 && retryCount === 0 && this.refreshToken) {
+        console.log('Etsy access token expired. Attempting refresh...');
+        try {
+          await this.refreshTokens();
+          // Retry the request with new token
+          return this.makeRequest(endpoint, options, retryCount + 1, maxRetries);
+        } catch (refreshError) {
+          console.error('Failed to refresh Etsy token:', refreshError);
+          // If refresh fails, throw original 401 or refresh error
+          throw new Error('Etsy API Authentication Failed: Token expired and refresh failed.');
+        }
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[EtsyAPI] Error Response', {
+          endpoint,
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          retryCount,
+          errorBodyPreview: errorText.length > 1000 ? `${errorText.slice(0, 1000)}...<truncated>` : errorText,
+        });
+        throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
+      }
+
+      const json = await response.json();
+      console.log('[EtsyAPI] Response', {
         endpoint,
         url,
         status: response.status,
         statusText: response.statusText,
         durationMs,
         retryCount,
-        errorBodyPreview: errorText.length > 1000 ? `${errorText.slice(0, 1000)}...<truncated>` : errorText,
+        // Avoid logging huge payloads
+        bodyPreview: JSON.stringify(json).length > 5000
+          ? `${JSON.stringify(json).slice(0, 5000)}...<truncated>`
+          : json,
       });
-      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
+      return json;
+    } catch (error: any) {
+      // Re-throw if it's already been handled (timeout/connection errors)
+      if (error.message?.includes('timed out') || error.message?.includes('connection failed') || error.message?.includes('connection')) {
+        throw error;
+      }
+      // For other unexpected errors, wrap and throw
+      throw new Error(`Etsy API request failed: ${error.message || 'Unknown error'}`);
     }
-
-    const json = await response.json();
-    console.log('[EtsyAPI] Response', {
-      endpoint,
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      durationMs,
-      retryCount,
-      // Avoid logging huge payloads
-      bodyPreview: JSON.stringify(json).length > 5000
-        ? `${JSON.stringify(json).slice(0, 5000)}...<truncated>`
-        : json,
-    });
-    return json;
   }
 
   private async refreshTokens() {

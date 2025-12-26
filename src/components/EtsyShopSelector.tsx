@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Store, ChevronDown, RefreshCw, Plus, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useEtsyShopStore } from '@/store/etsyShopStore';
 
 interface Shop {
   shopId: string;
@@ -26,6 +27,7 @@ export default function EtsyShopSelector({
   className = '',
   showAddButton = true,
 }: EtsyShopSelectorProps) {
+  const { fetchShops: fetchShopsFromStore, setSelectedShop } = useEtsyShopStore();
   const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -57,24 +59,34 @@ export default function EtsyShopSelector({
 
       const data = await response.json();
       if (data.success) {
-        setShops(data.shops || []);
+        const fetchedShops = data.shops || [];
+        setShops(fetchedShops);
+        
+        // Sync with store
+        await fetchShopsFromStore();
         
         // Auto-select first shop if none selected (only once)
-        if (!selectedShopId && !hasAutoSelectedRef.current && data.shops && data.shops.length > 0) {
+        if (!selectedShopId && !hasAutoSelectedRef.current && fetchedShops.length > 0) {
           hasAutoSelectedRef.current = true;
-          const firstShopId = data.shops[0].shopId;
+          const firstShopId = fetchedShops[0].shopId;
           onShopChange(firstShopId);
+          setSelectedShop(firstShopId);
           return; // Exit early to avoid the check below
         }
         
         // If selected shop no longer exists, clear selection (only if it changed)
-        if (selectedShopId && data.shops && !data.shops.find((s: Shop) => s.shopId === selectedShopId)) {
-          const newShopId = data.shops.length > 0 ? data.shops[0].shopId : null;
+        if (selectedShopId && fetchedShops && !fetchedShops.find((s: Shop) => s.shopId === selectedShopId)) {
+          const newShopId = fetchedShops.length > 0 ? fetchedShops[0].shopId : null;
           if (newShopId !== selectedShopId && newShopId !== null) {
             onShopChange(newShopId);
+            setSelectedShop(newShopId);
           } else if (newShopId === null && selectedShopId !== null) {
             onShopChange(null);
+            setSelectedShop(null);
           }
+        } else if (selectedShopId) {
+          // Sync selected shop with store
+          setSelectedShop(selectedShopId);
         }
       }
     } catch (error) {
@@ -117,10 +129,12 @@ export default function EtsyShopSelector({
       // If we disconnected the selected shop, switch to another one
       if (selectedShopId === shopId) {
         const remainingShops = shops.filter(s => s.shopId !== shopId);
-        onShopChange(remainingShops.length > 0 ? remainingShops[0].shopId : null);
+        const newShopId = remainingShops.length > 0 ? remainingShops[0].shopId : null;
+        onShopChange(newShopId);
+        setSelectedShop(newShopId);
       }
       
-      // Refresh shop list
+      // Refresh shop list and sync with store
       await fetchShops();
     } catch (error) {
       console.error('Error disconnecting shop:', error);

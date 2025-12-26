@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { EtsyShop, EtsyListing } from '@/models';
 import { EtsyAPI } from '@/lib/etsy';
-import { needsEtsyDataRefresh } from '@/lib/etsy-compliance';
 import { generateCacheKey, getCachedData, setCachedData, CACHE_TTL } from '@/lib/etsy-cache';
 import { GoogleGenAI } from '@google/genai';
 
@@ -387,113 +386,119 @@ export async function POST(request: NextRequest) {
         when_made: formData.when_made || 'made_to_order',
       };
     } else {
+      const cacheKey = generateCacheKey('listing', { listingId });
+      
+      // Helper function to transform DB listing to API format
+      const transformDbToApiFormat = (dbListing: any) => ({
+        listing_id: parseInt(listingId),
+        title: dbListing.title || '',
+        description: dbListing.description || '',
+        tags: dbListing.tags || [],
+        materials: dbListing.materials || [],
+        category_path: dbListing.categoryPath || [],
+        price: {
+          amount: Math.round((dbListing.price || 0) * 100),
+          divisor: 100,
+          currency_code: dbListing.currency || 'USD',
+        },
+        quantity: dbListing.inventory?.quantity || 0,
+        state: dbListing.state,
+        views: dbListing.views || 0,
+        num_favorers: dbListing.numFavorers || 0,
+        processing_min: dbListing.processingMin,
+        processing_max: dbListing.processingMax,
+        who_made: dbListing.whoMade,
+        when_made: dbListing.whenMade,
+      });
+      
+      // Helper function to save API data to DB
+      const saveToDb = async (apiData: any) => {
+        try {
+          await EtsyListing.findOneAndUpdate(
+            { etsyListingId: listingId, userId: shop.userId },
+            {
+              $set: {
+                userId: shop.userId,
+                shopId: shop.shopId,
+                etsyListingId: listingId,
+                title: apiData.title,
+                description: apiData.description,
+                price: apiData.price?.amount ? apiData.price.amount / apiData.price.divisor : 0,
+                currency: apiData.price?.currency_code || 'USD',
+                state: apiData.state,
+                tags: apiData.tags || [],
+                materials: apiData.materials || [],
+                categoryPath: apiData.category_path || [],
+                inventory: { quantity: apiData.quantity || 0 },
+                views: apiData.views || 0,
+                numFavorers: apiData.num_favorers || 0,
+                lastSyncedAt: new Date(),
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+        } catch (dbError: any) {
+          // Ignore duplicate key errors (listing already exists)
+          if (dbError.code !== 11000) {
+            console.warn('[DB Update] Error updating DB:', dbError);
+          }
+        }
+      };
+      
       // Step 1: Check DB first
       const dbListing = await EtsyListing.findOne({ etsyListingId: listingId, userId: shop.userId }).lean();
-      const needsRefresh = !dbListing || needsEtsyDataRefresh(dbListing.lastSyncedAt, 'listing');
       
-      if (!needsRefresh && dbListing) {
-        // Use DB data, transform to match API format
+      if (dbListing) {
+        // Found in DB - use it and cache it
         console.log(`[DB HIT] Using listing data from database for listingId: ${listingId}`);
-        listingData = {
-          listing_id: parseInt(listingId),
-          title: dbListing.title || '',
-          description: dbListing.description || '',
-          tags: dbListing.tags || [],
-          materials: dbListing.materials || [],
-          category_path: dbListing.categoryPath || [],
-          price: {
-            amount: Math.round((dbListing.price || 0) * 100),
-            divisor: 100,
-            currency_code: dbListing.currency || 'USD',
-          },
-          quantity: dbListing.inventory?.quantity || 0,
-          state: dbListing.state,
-          views: dbListing.views || 0,
-          num_favorers: dbListing.numFavorers || 0,
-          processing_min: dbListing.processingMin,
-          processing_max: dbListing.processingMax,
-          who_made: dbListing.whoMade,
-          when_made: dbListing.whenMade,
-        };
+        listingData = transformDbToApiFormat(dbListing);
+        
+        // Cache the data for faster subsequent access
+        await setCachedData(cacheKey, shop.userId, listingData, CACHE_TTL.LISTING, shopId, listingId);
       } else {
-        // Step 2: Check cache before API call
-        const cacheKey = generateCacheKey('listing', { listingId });
+        // Step 2: Not found in DB, check cache
         const cachedListing = await getCachedData<any>(cacheKey, shop.userId);
         
-        if (cachedListing && !needsRefresh) {
+        if (cachedListing) {
+          // Found in cache - use it and save to DB
           console.log(`[Cache HIT] Using cached listing data for listingId: ${listingId}`);
           listingData = cachedListing;
           
-          // Update DB with cached data for consistency (only if not exists)
-          try {
-            await EtsyListing.findOneAndUpdate(
-              { etsyListingId: listingId, userId: shop.userId },
-              {
-                $set: {
-                  userId: shop.userId,
-                  shopId: shop.shopId,
-                  etsyListingId: listingId,
-                  title: listingData.title,
-                  description: listingData.description,
-                  price: listingData.price?.amount ? listingData.price.amount / listingData.price.divisor : 0,
-                  currency: listingData.price?.currency_code || 'USD',
-                  state: listingData.state,
-                  tags: listingData.tags || [],
-                  materials: listingData.materials || [],
-                  categoryPath: listingData.category_path || [],
-                  inventory: { quantity: listingData.quantity || 0 },
-                  views: listingData.views || 0,
-                  numFavorers: listingData.num_favorers || 0,
-                  lastSyncedAt: new Date(),
-                }
-              },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-          } catch (dbError: any) {
-            // Ignore duplicate key errors (listing already exists)
-            if (dbError.code !== 11000) {
-              console.warn('[DB Update] Error updating DB from cache:', dbError);
-            }
-          }
+          // Update DB with cached data for consistency
+          await saveToDb(cachedListing);
         } else {
-          // Step 3: Fetch from Etsy API only if not in DB or cache
+          // Step 3: Not found in DB or cache, fetch from Etsy API
           console.log(`[API Fetch] Fetching listing data from Etsy API for listingId: ${listingId}`);
-          listingData = await etsyAPI.getListing(listingId);
-          
-          // Update DB (only if not exists to avoid duplicate key errors)
           try {
-            await EtsyListing.findOneAndUpdate(
-              { etsyListingId: listingId, userId: shop.userId },
-              {
-                $set: {
-                  userId: shop.userId,
-                  shopId: shop.shopId,
-                  etsyListingId: listingId,
-                  title: listingData.title,
-                  description: listingData.description,
-                  price: listingData.price.amount / listingData.price.divisor,
-                  currency: listingData.price.currency_code,
-                  state: listingData.state,
-                  tags: listingData.tags || [],
-                  materials: listingData.materials || [],
-                  categoryPath: listingData.category_path || [],
-                  inventory: { quantity: listingData.quantity || 0 },
-                  views: listingData.views || 0,
-                  numFavorers: listingData.num_favorers || 0,
-                  lastSyncedAt: new Date(),
-                }
-              },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-          } catch (dbError: any) {
-            // Ignore duplicate key errors (listing already exists)
-            if (dbError.code !== 11000) {
-              console.warn('[DB Update] Error updating DB from API:', dbError);
+            listingData = await etsyAPI.getListing(listingId);
+            
+            // Step 4: Store in both DB and cache
+            await saveToDb(listingData);
+            await setCachedData(cacheKey, shop.userId, listingData, CACHE_TTL.LISTING, shopId, listingId);
+          } catch (apiError: any) {
+            // Check if it's a timeout or connection error
+            const isTimeoutError = apiError?.message?.includes('timed out') || 
+                                  apiError?.message?.includes('timeout') ||
+                                  apiError?.code === 'UND_ERR_CONNECT_TIMEOUT';
+            const isConnectionError = apiError?.message?.includes('connection failed') ||
+                                     apiError?.message?.includes('connection') ||
+                                     apiError?.code === 'ECONNREFUSED' ||
+                                     apiError?.code === 'ENOTFOUND';
+            
+            if (isTimeoutError || isConnectionError) {
+              console.error(`[Etsy Listing Optimizer] ${isTimeoutError ? 'Timeout' : 'Connection'} error fetching listing:`, apiError);
+              return NextResponse.json(
+                { 
+                  error: isTimeoutError 
+                    ? 'Etsy API request timed out. Please check your internet connection and try again. The listing data may be temporarily unavailable.'
+                    : 'Unable to connect to Etsy API. Please check your internet connection and try again.'
+                },
+                { status: 503 } // Service Unavailable
+              );
             }
+            // Re-throw other errors to be handled by outer catch
+            throw apiError;
           }
-          
-          // Update cache
-          await setCachedData(cacheKey, shop.userId, listingData, CACHE_TTL.LISTING, shopId, listingId);
         }
       }
     }
@@ -538,9 +543,22 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[Etsy Listing Optimizer] Error:', error);
+    
+    // Provide more specific error messages
+    const errorMessage = error?.message || 'Failed to optimize listing';
+    const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
+    const isConnectionError = errorMessage.includes('connection failed') || errorMessage.includes('connection');
+    
+    const statusCode = isTimeoutError || isConnectionError ? 503 : 500;
+    const userMessage = isTimeoutError 
+      ? 'Etsy API request timed out. Please check your internet connection and try again.'
+      : isConnectionError
+      ? 'Unable to connect to Etsy API. Please check your internet connection and try again.'
+      : errorMessage;
+    
     return NextResponse.json(
-      { error: error?.message || 'Failed to optimize listing' },
-      { status: 500 }
+      { error: userMessage },
+      { status: statusCode }
     );
   }
 }

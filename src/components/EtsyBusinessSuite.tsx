@@ -994,24 +994,6 @@ export default function EtsyBusinessSuite() {
       if (listingFormData.processing_max) {
         listingPayload.listing.processing_max = parseInt(listingFormData.processing_max);
       }
-      if (listingFormData.item_weight) {
-        listingPayload.listing.item_weight = parseFloat(listingFormData.item_weight);
-      }
-      if (listingFormData.item_weight_unit) {
-        listingPayload.listing.item_weight_unit = listingFormData.item_weight_unit;
-      }
-      if (listingFormData.item_length) {
-        listingPayload.listing.item_length = parseFloat(listingFormData.item_length);
-      }
-      if (listingFormData.item_width) {
-        listingPayload.listing.item_width = parseFloat(listingFormData.item_width);
-      }
-      if (listingFormData.item_height) {
-        listingPayload.listing.item_height = parseFloat(listingFormData.item_height);
-      }
-      if (listingFormData.item_dimensions_unit) {
-        listingPayload.listing.item_dimensions_unit = listingFormData.item_dimensions_unit;
-      }
       if (listingFormData.is_personalizable) {
         listingPayload.listing.is_personalizable = true;
         listingPayload.listing.personalization_is_required = listingFormData.personalization_is_required;
@@ -1215,26 +1197,6 @@ export default function EtsyBusinessSuite() {
       }
       if (listingFormData.processing_max && listingFormData.processing_max !== '') {
         updateData.processing_max = parseInt(listingFormData.processing_max);
-      }
-      
-      // Item weight and dimensions
-      if (listingFormData.item_weight && listingFormData.item_weight !== '') {
-        updateData.item_weight = parseFloat(listingFormData.item_weight);
-      }
-      if (listingFormData.item_weight_unit && listingFormData.item_weight_unit !== '') {
-        updateData.item_weight_unit = listingFormData.item_weight_unit;
-      }
-      if (listingFormData.item_length && listingFormData.item_length !== '') {
-        updateData.item_length = parseFloat(listingFormData.item_length);
-      }
-      if (listingFormData.item_width && listingFormData.item_width !== '') {
-        updateData.item_width = parseFloat(listingFormData.item_width);
-      }
-      if (listingFormData.item_height && listingFormData.item_height !== '') {
-        updateData.item_height = parseFloat(listingFormData.item_height);
-      }
-      if (listingFormData.item_dimensions_unit && listingFormData.item_dimensions_unit !== '') {
-        updateData.item_dimensions_unit = listingFormData.item_dimensions_unit;
       }
       
       // Image IDs (from existing images) - ALWAYS include to preserve images
@@ -2352,6 +2314,80 @@ export default function EtsyBusinessSuite() {
     }
   };
 
+  // Force refresh listings from Etsy API (bypass cache and DB)
+  const forceRefreshListings = async () => {
+    if (!selectedShopId) {
+      toast.error('Please select a shop first');
+      return;
+    }
+    
+    setIsLoadingStats(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+      
+      toast.loading('Force refreshing listings from Etsy API...', { id: 'force-refresh' });
+      
+      const offset = (listingsPage - 1) * listingsPerPage;
+      
+      // Force refresh active listings
+      const activeRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=active&limit=${listingsPerPage}&offset=${offset}&forceRefresh=true`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const activeData = await parseJsonResponse<any>(activeRes);
+      if (activeData.success) {
+        const fetchedListings = activeData.results || [];
+        const decodedListings = fetchedListings.map((listing: any) => ({
+          ...listing,
+          title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
+        }));
+        setListings(decodedListings);
+        setTotalListings(activeData.total || activeData.count || decodedListings.length);
+        setHasMoreListings(activeData.hasMore !== undefined ? activeData.hasMore : (decodedListings.length === listingsPerPage && (activeData.total || decodedListings.length) > decodedListings.length));
+        setStats(prev => ({ ...prev, 
+          totalListings: activeData.total || decodedListings.length,
+          activeListings: decodedListings.filter((l: Listing) => l.state === 'active').length
+        }));
+      }
+      
+      // Force refresh draft listings
+      const draftRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=draft&limit=100&offset=0&forceRefresh=true`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const draftData = await parseJsonResponse<any>(draftRes);
+      if (draftData.success) {
+        const decodedDrafts = (draftData.results || []).map((listing: any) => ({
+          ...listing,
+          title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
+        }));
+        setDraftListings(decodedDrafts);
+      }
+      
+      // Force refresh inactive listings
+      const inactiveRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=inactive&limit=100&offset=0&forceRefresh=true`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const inactiveData = await parseJsonResponse<any>(inactiveRes);
+      if (inactiveData.success) {
+        const decodedInactive = (inactiveData.results || []).map((listing: any) => ({
+          ...listing,
+          title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
+        }));
+        setInactiveListings(decodedInactive);
+      }
+      
+      toast.success('Listings refreshed successfully from Etsy API!', { id: 'force-refresh' });
+    } catch (error: any) {
+      console.error('Error force refreshing listings:', error);
+      toast.error(error.message || 'Failed to refresh listings', { id: 'force-refresh' });
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
   const loadDashboardStats = async () => {
     if (!selectedShopId || isLoadingStats) return;
     
@@ -3221,90 +3257,6 @@ export default function EtsyBusinessSuite() {
                         </div>
                       </div>
                       
-                      {/* Item Weight & Dimensions Section */}
-                      <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
-                          title="Item Weight & Dimensions"
-                          section="listings"
-                          helpText="Accurate weight and dimensions help calculate shipping costs correctly and set buyer expectations about product size."
-                        />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-1 text-black">Weight</label>
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={listingFormData.item_weight}
-                                onChange={(e) => setListingFormData({ ...listingFormData, item_weight: e.target.value })}
-                                className="flex-1 px-3 py-2 border rounded-lg text-black"
-                                placeholder="0.00"
-                              />
-                              <select
-                                value={listingFormData.item_weight_unit}
-                                onChange={(e) => setListingFormData({ ...listingFormData, item_weight_unit: e.target.value })}
-                                className="px-3 py-2 border rounded-lg text-black"
-                              >
-                                <option value="">Unit</option>
-                                <option value="oz">oz</option>
-                                <option value="lb">lb</option>
-                                <option value="g">g</option>
-                                <option value="kg">kg</option>
-                              </select>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 text-black">Dimensions Unit</label>
-                            <select
-                              value={listingFormData.item_dimensions_unit}
-                              onChange={(e) => setListingFormData({ ...listingFormData, item_dimensions_unit: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-lg text-black"
-                            >
-                              <option value="">Select unit</option>
-                              <option value="in">inches</option>
-                              <option value="ft">feet</option>
-                              <option value="mm">mm</option>
-                              <option value="cm">cm</option>
-                              <option value="m">m</option>
-                              <option value="yd">yards</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 text-black">Length</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingFormData.item_length}
-                              onChange={(e) => setListingFormData({ ...listingFormData, item_length: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-lg text-black"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 text-black">Width</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingFormData.item_width}
-                              onChange={(e) => setListingFormData({ ...listingFormData, item_width: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-lg text-black"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 text-black">Height</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={listingFormData.item_height}
-                              onChange={(e) => setListingFormData({ ...listingFormData, item_height: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-lg text-black"
-                              placeholder="0.00"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      
                       {/* Size/Variations Section */}
                       <div className="mt-6 pt-6 border-t">
                         <SectionHeader 
@@ -3830,13 +3782,26 @@ export default function EtsyBusinessSuite() {
                        listingsTab === 'draft' ? draftListings.length :
                        inactiveListings.length})
                     </h3>
-                    <button
-                      onClick={loadDashboardStats}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Refresh
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={loadDashboardStats}
+                        disabled={isLoadingStats}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh from cache/DB"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </button>
+                      <button
+                        onClick={forceRefreshListings}
+                        disabled={isLoadingStats}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Force refresh from Etsy API (ignores cache and DB)"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isLoadingStats ? 'animate-spin' : ''}`} />
+                        Force Refresh
+                      </button>
+                    </div>
                   </div>
                   
                   {/* Tabs for Active/Draft/Inactive */}
@@ -4005,8 +3970,8 @@ export default function EtsyBusinessSuite() {
 
                 {/* Listing Actions Modal */}
                 {showListingModal && selectedListingForModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-300">
                       <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                         <h3 className="text-xl font-semibold text-black">Listing Options</h3>
                         <button

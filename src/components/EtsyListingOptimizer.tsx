@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Loader2, CheckCircle, AlertCircle, ArrowRight, RefreshCw, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useEtsyShopStore } from '@/store/etsyShopStore';
 
 interface Listing {
   listing_id: number;
@@ -24,13 +25,16 @@ interface OptimizationResult {
 }
 
 export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: string | null }) {
+  const { selectedShopId, getSelectedShop, fetchShops } = useEtsyShopStore();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [optimizationMode, setOptimizationMode] = useState<'title' | 'description' | 'tags' | 'all'>('all');
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
-  const shopId = propShopId;
+  
+  // Use prop shopId if provided, otherwise use selected shop from store
+  const shopId = propShopId || selectedShopId;
 
   // Basic HTML entity decoding for titles coming from Etsy (e.g. Men&#39;s → Men's)
   const decodeHtmlEntities = (value: string) => {
@@ -42,6 +46,11 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'");
   };
+
+  useEffect(() => {
+    // Fetch shops on mount if not already loaded
+    fetchShops();
+  }, []);
 
   useEffect(() => {
     if (shopId) {
@@ -151,13 +160,17 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       }
 
       const token = localStorage.getItem('token');
+      // Send shopId in both query params and body for compatibility
       const response = await fetch(`/api/etsy/listings/${selectedListing.listing_id}?shopId=${shopId}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify({
+          ...updateData,
+          shopId: shopId, // Include shopId in body as well
+        }),
       });
 
       if (!response.ok) {
