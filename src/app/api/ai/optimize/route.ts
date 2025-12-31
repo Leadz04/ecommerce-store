@@ -48,7 +48,7 @@ CRITICAL - AVOID PROHIBITED PRACTICES:
 Return ONLY the description text.`;
   }
   // tags
-  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 Etsy tags (use all 13 - Etsy best practice), comma-separated. 
+  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 Etsy tags (use all 13 - Etsy best practice), comma-separated, long tail keywords, max 20 characters per tag, multi-word phrases are REQUIRED (e.g., "custom bracelet" not "custom" and "bracelet" separately), tags are used in PHASE 1 (Query Matching) - help buyers find your listing, use "LONG TAIL" keywords: specific, descriptive phrases that convert better than generic terms, do NOT repeat phrases already covered by categories or attributes as separate tags, tags must be RELEVANT and SPECIFIC to this exact product, NO random or irrelevant keywords just to appear in more searches, NO repetition of the same phrases across tags, focus on buyer intent: what would a real shopper search for?, use natural, human-written language that sounds authentic, each tag should describe a distinct aspect (material, style, color, use case, occasion), avoid generic terms unless they genuinely apply to this product, NO keyword stuffing - but still use all 13 tags with relevant, specific phrases, DO NOT add random keywords to image alt text - this is keyword stuffing and unhelpful for screen readers. 
 
 ETSY TAG GUIDELINES:
 - USE ALL 13 TAGS (not optional - Etsy best practice)
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const model = 'gemini-2.5-pro';
+        const model = 'gemini-2.5-flash-lite';
         const config = { thinkingConfig: { thinkingBudget: -1 } } as any;
         const contents = [
           {

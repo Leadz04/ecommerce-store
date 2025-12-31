@@ -43,100 +43,226 @@ Current listing information:
 - Processing time: ${listingData.processing_min}-${listingData.processing_max} days
 `;
 
-  if (mode === 'title' || mode === 'all') {
+  if (mode === 'title') {
     return `${baseContext}
 
-Your task: Generate an optimized Etsy listing title following these best practices:
+TASK: Create a highly optimized Etsy listing title that maximizes search visibility and click-through rate.
 
-1. **Length:** 55-140 characters (Etsy shows ~55 characters in search, full title in listing)
-2. **Keywords:** Include 2-3 primary keywords at the beginning
-3. **Features:** Highlight unique selling points (handmade, vintage, customizable, etc.)
-4. **Style:** Natural, compelling, not keyword-stuffed
-5. **Format:** Title Case or Sentence case
-6. **SEO:** Include relevant long-tail keywords that buyers actually search for
+CRITICAL REQUIREMENTS:
+1. **Length:** 55-140 characters (Etsy truncates to ~55 chars in search results)
+2. **Keyword Placement:** Put 2-3 MOST IMPORTANT keywords in the FIRST 5-7 words (this is what buyers see first)
+3. **Structure:** [Primary Keywords] + [Product Type] + [Key Features/Attributes] + [Unique Selling Point]
+4. **Format:** Title Case (capitalize important words) - NO emojis, NO all caps
+5. **Natural Language:** Read like a real product name, not a keyword list
 
-Generate ONLY a JSON object with this structure:
+KEYWORD STRATEGY:
+- Start with high-intent search terms buyers actually use (e.g., "Handmade Leather", "Vintage", "Custom", "Personalized")
+- Include material/type keywords (e.g., "Leather Jacket", "Wooden Sign", "Ceramic Mug")
+- Add style/occasion keywords if relevant (e.g., "Wedding Gift", "Home Decor", "Boho Style")
+- End with unique differentiators (e.g., "Slim Fit", "Gift Boxed", "Made to Order")
+
+EXAMPLES OF GOOD TITLES:
+- "Handmade Brown Leather Motorcycle Jacket | Slim Fit Biker Coat | Classic Men's Outerwear"
+- "Custom Personalized Wooden Sign | Wedding Gift | Rustic Home Decor | Made to Order"
+- "Vintage 1980s Denim Jacket | Retro High Waisted | Size Medium | Authentic Vintage"
+
+EXAMPLES OF BAD TITLES (AVOID):
+- "jacket leather brown men coat" (no structure, no natural flow)
+- "Handmade Leather Jacket Handmade Leather Jacket Handmade" (repetitive, keyword stuffing)
+- "✨ BEST LEATHER JACKET EVER ✨" (emojis, all caps)
+
+Generate ONLY a JSON object with this EXACT structure:
 {
-  "optimized_title": "Your optimized title here (55-140 characters)",
+  "optimized_title": "Your optimized title here (55-140 characters, keywords at start)",
   "seo_score": 85,
-  "improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
-  "keywords_used": ["keyword1", "keyword2", "keyword3"],
-  "character_count": 95
+  "improvements": ["Specific improvement 1", "Specific improvement 2", "Specific improvement 3"],
+  "keywords_used": ["primary keyword 1", "primary keyword 2", "primary keyword 3"],
+  "character_count": 95,
+  "reasoning": "Brief explanation of why this title is optimized"
 }
 
-Focus on making the title compelling, searchable, and conversion-focused.`;
+The title must be compelling, searchable, and sound natural - like something a real seller would write.`;
   }
 
-  if (mode === 'description' || mode === 'all') {
+  if (mode === 'description') {
     return `${baseContext}
 
-Your task: Generate an optimized Etsy listing description following these best practices:
+TASK: Create a compelling, SEO-optimized Etsy listing description that converts browsers into buyers.
 
-1. **Structure:** 
-   - Opening hook (first 2-3 lines should grab attention)
-   - Product details and benefits
-   - Materials and specifications
+CRITICAL STRUCTURE (follow this exact order):
+1. **Opening Hook (2-3 sentences):** 
+   - Start with a compelling benefit or unique selling point
+   - Naturally incorporate 2-3 primary keywords in the first paragraph
+   - Create emotional connection or highlight what makes this special
+
+2. **Essential Information (CRITICAL - place at top):**
+   - Sizes, colors, dimensions, quantities available
+   - Customization options (if applicable)
+   - Processing/shipping times
+   - Key specifications buyers need to know immediately
+
+3. **Product Details:**
+   - Detailed description of what the product is
+   - Materials used and quality indicators
+   - How it's made (if handmade/custom)
+   - Use cases and occasions
+
+4. **Benefits & Features:**
+   - Why buyers should choose this product
+   - Unique features or qualities
    - Care instructions (if applicable)
-   - Shipping information
-   - Call-to-action
 
-2. **Length:** 200-1000 words (detailed but scannable)
-3. **SEO:** Naturally incorporate relevant keywords
-4. **Format:** Use line breaks, bullet points, and emojis strategically (but don't overuse)
-5. **Tone:** Friendly, professional, authentic (Etsy sellers value authenticity)
-6. **Compliance:** Must comply with Etsy policies (no external links in first line, no prohibited content)
+5. **Trust Builders:**
+   - Quality guarantees
+   - Seller credentials (if relevant)
+   - Customer satisfaction details
 
-Generate ONLY a JSON object with this structure:
+6. **Call-to-Action:**
+   - Encourage purchase
+   - Mention gift options (if applicable)
+   - Thank the buyer
+
+SEO OPTIMIZATION:
+- Naturally include primary keywords in the FIRST 2-3 sentences
+- Use variations of keywords throughout (don't repeat exact phrases)
+- Include long-tail keywords buyers might search for
+- Write for humans first, search engines second
+
+FORMATTING BEST PRACTICES:
+- Use short paragraphs (2-4 sentences each)
+- Use bullet points for features/specifications
+- Use line breaks for readability
+- Use emojis sparingly (1-2 per section max) - only if they add value
+- Bold important information (sizes, prices, key features)
+
+TONE & STYLE:
+- Friendly, warm, authentic (Etsy buyers value genuine sellers)
+- Professional but personal
+- Conversational, not salesy
+- Show passion for the product
+
+CRITICAL COMPLIANCE RULES:
+- DO NOT copy the title verbatim into the description
+- DO NOT list keywords as a keyword list
+- DO NOT repeat the same words/phrases excessively
+- NO external links in the first line
+- NO prohibited content
+- Write naturally - if it sounds like keyword stuffing, rewrite it
+
+LENGTH: 300-800 words (detailed enough to be informative, scannable enough to read quickly)
+
+EXAMPLE STRUCTURE:
+[Opening hook with keywords naturally integrated]
+
+✨ PRODUCT DETAILS ✨
+• Size: [details]
+• Color: [options]
+• Material: [materials]
+• Dimensions: [measurements]
+
+[Detailed product description with benefits]
+
+[Care instructions if applicable]
+
+[Shipping information]
+
+[Call-to-action]
+
+Generate ONLY a JSON object with this EXACT structure:
 {
-  "optimized_description": "Your optimized description here...",
+  "optimized_description": "Your complete optimized description following the structure above (300-800 words)",
   "seo_score": 85,
-  "improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
+  "improvements": ["Specific improvement 1", "Specific improvement 2", "Specific improvement 3"],
   "word_count": 450,
-  "readability_score": "Good"
+  "readability_score": "Good",
+  "keywords_integrated": ["keyword1", "keyword2", "keyword3"],
+  "structure_followed": true
 }
 
-Make it engaging, informative, and optimized for both search engines and human readers.`;
+The description must be engaging, informative, naturally keyword-optimized, and written in a way that helps buyers make a purchase decision.`;
   }
 
-  if (mode === 'tags' || mode === 'all') {
+  if (mode === 'tags') {
     return `${baseContext}
 
-Your task: Generate optimized Etsy tags following these best practices:
+TASK: Generate EXACTLY 13 optimized Etsy tags that maximize search visibility and buyer discovery.
 
-1. **Quantity:** Etsy allows 13 tags, each up to 20 characters
-2. **Keywords:** Mix of:
-   - Primary keywords (high search volume)
-   - Long-tail keywords (specific, lower competition)
-   - Style/theme keywords
-   - Material keywords
-   - Occasion keywords (if applicable)
-   - Buyer intent keywords (gift, wedding, home decor, etc.)
+CRITICAL REQUIREMENTS:
+1. **Quantity:** MUST provide EXACTLY 13 tags (Etsy best practice - use all available slots)
+2. **Length:** Each tag MAXIMUM 20 characters (Etsy's limit)
+3. **Format:** Multi-word phrases REQUIRED (e.g., "leather jacket" not "leather" and "jacket" separately)
+4. **Relevance:** Every tag MUST be directly relevant to THIS specific product
 
-3. **Research:** Think like a buyer - what would they search for?
-4. **Variety:** Use different variations (singular/plural, synonyms)
-5. **Relevance:** All tags must be relevant to the actual product
+TAG STRATEGY - Create a diverse mix:
+1. **Primary Keywords (3-4 tags):** High-volume search terms buyers use most
+   - Example: "leather jacket", "mens coat", "biker jacket"
+   
+2. **Long-Tail Keywords (3-4 tags):** Specific, descriptive phrases that convert better
+   - Example: "brown leather jacket", "slim fit coat", "motorcycle jacket"
+   
+3. **Style/Theme Keywords (2-3 tags):** Describe the aesthetic or style
+   - Example: "vintage style", "classic design", "boho chic"
+   
+4. **Material/Quality Keywords (2-3 tags):** Highlight materials or quality
+   - Example: "genuine leather", "handmade", "premium quality"
+   
+5. **Use Case/Occasion Keywords (1-2 tags):** When/where it's used
+   - Example: "wedding gift", "home decor", "daily wear"
 
-Generate ONLY a JSON object with this structure:
+THINK LIKE A BUYER:
+- What exact phrases would someone type into Etsy search?
+- What problem does this product solve?
+- What occasion or use case applies?
+- What style or aesthetic matches?
+
+AVOID THESE MISTAKES:
+- ❌ Single words ("leather", "jacket" - use "leather jacket" instead)
+- ❌ Generic terms not specific to this product ("gift", "item")
+- ❌ Repeating the same phrase multiple times
+- ❌ Tags longer than 20 characters
+- ❌ Irrelevant keywords just to appear in more searches
+- ❌ Tags that duplicate category/attribute information
+
+EXAMPLES OF GOOD TAG SETS:
+For a leather jacket:
+["leather jacket", "mens coat", "biker jacket", "brown leather", "slim fit coat", "motorcycle jacket", "classic design", "genuine leather", "handmade jacket", "vintage style", "daily wear", "casual outerwear", "premium quality"]
+
+For a wooden sign:
+["custom sign", "wooden sign", "personalized gift", "home decor", "wedding gift", "rustic decor", "farmhouse style", "handmade sign", "custom text", "wall decor", "housewarming gift", "personalized wood", "decorative sign"]
+
+Generate ONLY a JSON object with this EXACT structure:
 {
-  "optimized_tags": ["tag1", "tag2", "tag3", ...],
+  "optimized_tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12", "tag13"],
   "seo_score": 85,
-  "improvements": ["Improvement 1", "Improvement 2"],
+  "improvements": ["Specific improvement 1", "Specific improvement 2"],
   "tags_by_category": {
-    "primary_keywords": ["tag1", "tag2"],
-    "long_tail": ["tag3", "tag4"],
-    "style": ["tag5", "tag6"],
-    "materials": ["tag7"],
-    "occasions": ["tag8"]
+    "primary_keywords": ["tag1", "tag2", "tag3"],
+    "long_tail": ["tag4", "tag5", "tag6"],
+    "style": ["tag7", "tag8"],
+    "materials": ["tag9", "tag10"],
+    "occasions": ["tag11"],
+    "buyer_intent": ["tag12", "tag13"]
+  },
+  "tag_validation": {
+    "total_tags": 13,
+    "all_under_20_chars": true,
+    "all_multi_word": true,
+    "no_duplicates": true
   }
 }
 
-Provide exactly 13 tags, each under 20 characters, that maximize discoverability.`;
+CRITICAL: You MUST provide exactly 13 tags. Each tag must be:
+- Under 20 characters
+- A multi-word phrase
+- Directly relevant to the product
+- Different from other tags (no duplicates)
+- Something a real buyer would search for`;
   }
 
   // mode === 'all'
   return `${baseContext}
 
-You are an expert Etsy SEO and copywriting consultant. Your task is to optimize the ENTIRE Etsy listing (title, description, AND tags) following Etsy's official Seller Handbook guidelines and best practices.
+TASK: Optimize the ENTIRE Etsy listing (title, description, AND tags) to maximize search visibility, click-through rate, and conversions.
 
 ETSY'S TWO-PHASE SEARCH SYSTEM:
 PHASE 1 (Query Matching): Etsy uses holistic view (title, tags, attributes, categories, descriptions, first photo, reviews). Exact keyword matches rank higher.
@@ -149,80 +275,105 @@ RANKING FACTORS:
 - Recency: New/renewed listings get temporary boost
 - Personalization: CSR learns individual buyer interests
 
-TITLE OPTIMIZATION REQUIREMENTS:
-1. Length: 55-140 characters (Etsy shows ~55 characters in search, full title in listing)
-2. Keywords: Include 2-3 primary keywords at the BEGINNING (buyers only see first few words)
-3. For Google SEO: First 50-60 characters shown in search results - include critical traits upfront
-4. Features: Highlight unique selling points (handmade, vintage, customizable, etc.)
-5. Style: Natural, compelling, NOT keyword-stuffed
-6. Format: Title Case or Sentence case
-7. NO emojis, NO ALL CAPS
+═══════════════════════════════════════════════════════════════
+TITLE OPTIMIZATION (CRITICAL - This is what buyers see first)
+═══════════════════════════════════════════════════════════════
 
-DESCRIPTION OPTIMIZATION REQUIREMENTS:
-1. Structure (CRITICAL - follow this order):
-   - Opening hook (first 2-3 lines should grab attention)
-   - ESSENTIAL INFORMATION at TOP: sizes, colors, ordering directions, key specifications
-   - Product details and benefits
-   - Materials and specifications
-   - Care instructions (if applicable)
-   - Shipping information
-   - Call-to-action
+STRUCTURE: [Primary Keywords] + [Product Type] + [Key Features] + [Unique Selling Point]
 
-2. Length: 200-1000 words (detailed but scannable)
-3. SEO: Incorporate keywords NATURALLY in FIRST FEW SENTENCES in a way that sounds human
-4. Format: Use line breaks, bullet points, and emojis strategically (but don't overuse)
-5. Tone: Friendly, professional, authentic (Etsy sellers value authenticity)
-6. CRITICAL COMPLIANCE RULES:
-   - DO NOT copy the title verbatim into the description
-   - DO NOT list keywords instead of writing naturally
-   - DO NOT repeat the same words/phrases excessively
-   - NO external links in first line
-   - NO prohibited content
-   - Write natural, helpful content for buyers
+REQUIREMENTS:
+1. Length: 55-140 characters (Etsy shows ~55 chars in search, full title in listing)
+2. Keyword Placement: Put 2-3 MOST IMPORTANT keywords in FIRST 5-7 words
+3. For Google SEO: First 50-60 characters shown in search - include critical traits upfront
+4. Format: Title Case - NO emojis, NO all caps, NO keyword stuffing
+5. Natural Language: Read like a real product name buyers would trust
 
-TAGS OPTIMIZATION REQUIREMENTS (CRITICAL):
-1. Quantity: MUST USE ALL 13 TAGS (Etsy best practice - NOT optional)
+KEYWORD STRATEGY:
+- Start with high-intent search terms (e.g., "Handmade Leather", "Vintage", "Custom")
+- Include material/type (e.g., "Leather Jacket", "Wooden Sign")
+- Add style/occasion if relevant (e.g., "Wedding Gift", "Boho Style")
+- End with unique differentiators (e.g., "Slim Fit", "Made to Order")
+
+GOOD EXAMPLE: "Handmade Brown Leather Motorcycle Jacket | Slim Fit Biker Coat | Classic Men's Outerwear"
+BAD EXAMPLE: "jacket leather brown men coat" or "✨ BEST JACKET ✨"
+
+═══════════════════════════════════════════════════════════════
+DESCRIPTION OPTIMIZATION (Must convert browsers to buyers)
+═══════════════════════════════════════════════════════════════
+
+STRUCTURE (follow this EXACT order):
+1. Opening Hook (2-3 sentences): Compelling benefit + naturally integrate 2-3 primary keywords
+2. Essential Information (CRITICAL - place at top):
+   • Sizes, colors, dimensions, quantities
+   • Customization options
+   • Processing/shipping times
+   • Key specifications buyers need immediately
+3. Product Details: What it is, materials, how it's made, use cases
+4. Benefits & Features: Why choose this, unique qualities, care instructions
+5. Trust Builders: Quality guarantees, seller credentials
+6. Call-to-Action: Encourage purchase, mention gift options
+
+REQUIREMENTS:
+- Length: 300-800 words (detailed but scannable)
+- SEO: Naturally include keywords in FIRST 2-3 sentences
+- Format: Short paragraphs, bullet points, line breaks, emojis sparingly (1-2 per section max)
+- Tone: Friendly, warm, authentic, professional but personal
+- Compliance: DO NOT copy title verbatim, DO NOT keyword stuff, write naturally
+
+═══════════════════════════════════════════════════════════════
+TAGS OPTIMIZATION (CRITICAL - Use all 13 slots)
+═══════════════════════════════════════════════════════════════
+
+REQUIREMENTS:
+1. Quantity: EXACTLY 13 tags (MANDATORY - use all available slots)
 2. Length: Maximum 20 characters per tag
-3. Format: Multi-word phrases REQUIRED (e.g., "custom bracelet" not "custom" and "bracelet" separately)
-4. Keywords: Mix of:
-   - Primary keywords (high search volume)
-   - Long-tail keywords (specific, descriptive phrases that convert better than generic terms)
-   - Style/theme keywords
-   - Material keywords
-   - Occasion keywords (if applicable)
-   - Buyer intent keywords (gift, wedding, home decor, etc.)
-5. Research: Think like a buyer - what would they search for?
-6. Variety: Use different variations (singular/plural, synonyms)
-7. Relevance: All tags MUST be relevant to the actual product
-8. DO NOT repeat phrases already covered by categories or attributes as separate tags
+3. Format: Multi-word phrases REQUIRED (e.g., "leather jacket" not "leather" + "jacket")
+4. Mix: Primary keywords (3-4) + Long-tail (3-4) + Style (2-3) + Materials (2-3) + Occasions (1-2)
 
-PROHIBITED PRACTICES (Can prevent listings from being shown in search):
-- DO NOT mislabel products (e.g., calling something "cashmere" when it is not cashmere)
-- DO NOT use lots of irrelevant keywords hoping to appear in more searches
-- DO NOT add unrelated keywords hoping to rank for those terms
-- DO NOT add random keywords to image alt text (unhelpful for screen readers)
-- Focus on accurate descriptors and natural language that helps buyers
+THINK LIKE A BUYER:
+- What exact phrases would someone type into Etsy search?
+- What problem does this solve?
+- What occasion/use case applies?
+- What style/aesthetic matches?
 
-Generate ONLY a JSON object with this EXACT structure (all fields are REQUIRED):
+AVOID:
+- Single words, generic terms, duplicates, tags >20 chars, irrelevant keywords
+
+EXAMPLE TAG SET (13 tags):
+["leather jacket", "mens coat", "biker jacket", "brown leather", "slim fit coat", "motorcycle jacket", "classic design", "genuine leather", "handmade jacket", "vintage style", "daily wear", "casual outerwear", "premium quality"]
+
+═══════════════════════════════════════════════════════════════
+PROHIBITED PRACTICES (Can prevent listings from appearing in search)
+═══════════════════════════════════════════════════════════════
+- DO NOT mislabel products (e.g., calling something "cashmere" when it's not)
+- DO NOT use irrelevant keywords hoping to appear in more searches
+- DO NOT add unrelated keywords
+- DO NOT keyword stuff - write naturally
+- Focus on accurate descriptors that help buyers
+
+Generate ONLY a JSON object with this EXACT structure (all fields REQUIRED):
 {
   "title": {
-    "optimized_title": "Your optimized title here (55-140 characters, keywords at beginning)",
+    "optimized_title": "Your optimized title (55-140 chars, keywords at start)",
     "seo_score": 85,
-    "improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
+    "improvements": ["Specific improvement 1", "Specific improvement 2", "Specific improvement 3"],
     "keywords_used": ["keyword1", "keyword2", "keyword3"],
-    "character_count": 95
+    "character_count": 95,
+    "reasoning": "Why this title is optimized"
   },
   "description": {
-    "optimized_description": "Your FULL optimized description here (200-1000 words). Start with essential info (sizes, colors, ordering). Include product details, materials, care instructions, shipping info, and a call-to-action. Write naturally and engagingly.",
+    "optimized_description": "Your complete optimized description (300-800 words) following the structure: hook with keywords, essential info at top, product details, benefits, trust builders, CTA",
     "seo_score": 85,
-    "improvements": ["Improvement 1", "Improvement 2", "Improvement 3"],
+    "improvements": ["Specific improvement 1", "Specific improvement 2", "Specific improvement 3"],
     "word_count": 450,
-    "readability_score": "Good"
+    "readability_score": "Good",
+    "keywords_integrated": ["keyword1", "keyword2", "keyword3"],
+    "structure_followed": true
   },
   "tags": {
     "optimized_tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12", "tag13"],
     "seo_score": 85,
-    "improvements": ["Improvement 1", "Improvement 2"],
+    "improvements": ["Specific improvement 1", "Specific improvement 2"],
     "tags_by_category": {
       "primary_keywords": ["tag1", "tag2", "tag3"],
       "long_tail": ["tag4", "tag5", "tag6"],
@@ -230,88 +381,159 @@ Generate ONLY a JSON object with this EXACT structure (all fields are REQUIRED):
       "materials": ["tag9", "tag10"],
       "occasions": ["tag11"],
       "buyer_intent": ["tag12", "tag13"]
+    },
+    "tag_validation": {
+      "total_tags": 13,
+      "all_under_20_chars": true,
+      "all_multi_word": true,
+      "no_duplicates": true
     }
   },
   "overall_seo_score": 85,
-  "priority_improvements": ["Most important improvement", "Second priority"]
+  "priority_improvements": ["Most important improvement", "Second priority improvement"]
 }
 
-CRITICAL: You MUST generate:
-- A complete, optimized title (55-140 characters)
-- A complete, optimized description (200-1000 words) with all required sections
-- EXACTLY 13 tags (all under 20 characters each, multi-word phrases)
+CRITICAL REQUIREMENTS:
+✓ Title: 55-140 characters, keywords at beginning, natural and compelling
+✓ Description: 300-800 words, essential info at top, naturally keyword-optimized, engaging
+✓ Tags: EXACTLY 13 tags, all under 20 chars, all multi-word phrases, relevant and diverse
 
-All three components are REQUIRED. Do not leave any field empty or incomplete.`;
+All three components are REQUIRED and must be complete. Do not leave any field empty or incomplete.`;
 }
 
 async function callGeminiOptimize(prompt: string): Promise<{ ok: boolean; data?: any; error?: string }> {
   const primaryKey = process.env.GEMINI_API_KEY;
   const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
   const tertiaryKey = process.env.TEST_LEADZ07_FIRST_API_KEY;
-  const apiKey = primaryKey || secondaryKey || tertiaryKey;
 
-  if (!apiKey) {
-    return { ok: false, error: 'Gemini API key not configured' };
-  }
-
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-2.5-flash-lite';
-    const config = {
-      responseMimeType: 'application/json',
-      maxOutputTokens: 4096, // Increased to ensure full descriptions and tags are generated
-      temperature: 0.7,
-    } as any;
-
-    const contents = [
-      {
-        role: 'user',
-        parts: [{ text: prompt }]
-      }
-    ];
-
-    const response = await (ai as any).models.generateContent({ model, config, contents });
-
-    // Extract text from response
-    let text = '';
-    if (typeof response?.response?.text === 'function') {
-      text = response.response.text();
-    } else if (response?.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      text = response.response.candidates[0].content.parts[0].text;
-    } else if (response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      text = response.candidates[0].content.parts[0].text;
+  async function tryGeminiCall(apiKey?: string): Promise<{ ok: boolean; data?: any; error?: string }> {
+    if (!apiKey) {
+      return { ok: false, error: 'Missing API key' };
     }
 
-    if (!text.trim()) {
-      return { ok: false, error: 'Empty response from Gemini' };
-    }
-
-    // Parse JSON response
-    let parsed;
     try {
-      parsed = JSON.parse(text);
+      const ai = new GoogleGenAI({ apiKey });
+      const model = 'gemini-2.5-flash-lite';
       
-      // Validate that "all" mode has all required fields
-      if (parsed.title && !parsed.title.optimized_title) {
-        console.warn('[Etsy Optimize] Missing optimized_title in title object');
+      const contents = [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ];
+
+      const response = await (ai as any).models.generateContent({
+        model,
+        contents,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          maxOutputTokens: 4096, // Increased to ensure full descriptions and tags are generated
+          temperature: 0.7,
+        },
+      });
+
+      // Extract text from response - try multiple patterns
+      let text = '';
+      if (typeof response?.response?.text === 'function') {
+        text = response.response.text();
+      } else if (typeof response?.text === 'function') {
+        text = response.text();
+      } else if (response?.response?.candidates) {
+        text = response.response.candidates
+          ?.map((candidate: any) => {
+            const parts = candidate?.content?.parts || [];
+            return parts.map((part: any) => part?.text || '').join('');
+          })
+          .join('') || '';
+      } else if (response?.candidates) {
+        text = response.candidates
+          ?.map((candidate: any) => {
+            const parts = candidate?.content?.parts || [];
+            return parts.map((part: any) => part?.text || '').join('');
+          })
+          .join('') || '';
+      } else if (response?.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        text = response.response.candidates[0].content.parts[0].text;
+      } else if (response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        text = response.candidates[0].content.parts[0].text;
+      } else if (typeof response?.text === 'string') {
+        text = response.text;
+      } else if (response?.response?.text) {
+        text = response.response.text;
       }
-      if (parsed.description && !parsed.description.optimized_description) {
-        console.warn('[Etsy Optimize] Missing optimized_description in description object');
+
+      if (!text.trim()) {
+        return { ok: false, error: 'Empty response from Gemini' };
       }
-      if (parsed.tags && (!parsed.tags.optimized_tags || !Array.isArray(parsed.tags.optimized_tags) || parsed.tags.optimized_tags.length === 0)) {
-        console.warn('[Etsy Optimize] Missing or empty optimized_tags in tags object');
+
+      // Clean the text - remove markdown code blocks if present
+      let cleanedText = text.trim();
+      
+      // Remove markdown code block markers (```json ... ``` or ``` ... ```)
+      cleanedText = cleanedText.replace(/^```(?:json)?\s*\n?/i, ''); // Remove opening ```
+      cleanedText = cleanedText.replace(/\n?```\s*$/i, ''); // Remove closing ```
+      cleanedText = cleanedText.trim();
+
+      // Parse JSON response
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanedText);
+        
+        // Validate that "all" mode has all required fields
+        if (parsed.title && !parsed.title.optimized_title) {
+          console.warn('[Etsy Optimize] Missing optimized_title in title object');
+        }
+        if (parsed.description && !parsed.description.optimized_description) {
+          console.warn('[Etsy Optimize] Missing optimized_description in description object');
+        }
+        if (parsed.tags && (!parsed.tags.optimized_tags || !Array.isArray(parsed.tags.optimized_tags) || parsed.tags.optimized_tags.length === 0)) {
+          console.warn('[Etsy Optimize] Missing or empty optimized_tags in tags object');
+        }
+        
+      } catch (parseError) {
+        console.error('[Etsy Optimize] JSON parse error:', parseError);
+        console.error('[Etsy Optimize] Original text (first 500 chars):', text.substring(0, 500));
+        console.error('[Etsy Optimize] Cleaned text (first 500 chars):', cleanedText.substring(0, 500));
+        return { ok: false, error: `Failed to parse JSON response: ${parseError}` };
       }
       
-    } catch (parseError) {
-      console.error('[Etsy Optimize] JSON parse error:', parseError, 'Text:', text.substring(0, 200));
-      return { ok: false, error: `Failed to parse JSON response: ${parseError}` };
+      return { ok: true, data: parsed };
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      console.error('[Etsy Optimize] Gemini API error:', errorMessage);
+      return { ok: false, error: errorMessage };
     }
-    
-    return { ok: true, data: parsed };
-  } catch (error: any) {
-    console.error('[Etsy Optimize] Gemini error:', error);
-    return { ok: false, error: error?.message || 'Gemini optimization failed' };
   }
+
+  // Try primary key first
+  let result = await tryGeminiCall(primaryKey);
+  if (result.ok) {
+    return result;
+  }
+
+  // Try secondary key
+  if (secondaryKey) {
+    console.log('[Etsy Optimize] Primary key failed, trying secondary key');
+    result = await tryGeminiCall(secondaryKey);
+    if (result.ok) {
+      return result;
+    }
+  }
+
+  // Try tertiary key
+  if (tertiaryKey) {
+    console.log('[Etsy Optimize] Secondary key failed, trying tertiary key');
+    result = await tryGeminiCall(tertiaryKey);
+    if (result.ok) {
+      return result;
+    }
+  }
+
+  // All keys failed
+  return { 
+    ok: false, 
+    error: result.error || 'All Gemini API keys failed. Please check your API keys and network connection.' 
+  };
 }
 
 export async function POST(request: NextRequest) {

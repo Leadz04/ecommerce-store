@@ -29,6 +29,8 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [listingDetails, setListingDetails] = useState<any | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [optimizationMode, setOptimizationMode] = useState<'title' | 'description' | 'tags' | 'all'>('all');
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
@@ -84,6 +86,32 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       toast.error('Failed to fetch listings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch listing details from DB when a listing is selected
+  const fetchListingDetails = async (listingId: number) => {
+    if (!shopId || !listingId) return;
+    
+    try {
+      setLoadingDetails(true);
+      const token = localStorage.getItem('token');
+      
+      // Fetch from DB via details endpoint (which checks DB first, then API)
+      const detailsRes = await fetch(`/api/etsy/listings/${listingId}/details?shopId=${shopId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      const detailsData = await detailsRes.json();
+      
+      if (detailsData.success && detailsData.listing) {
+        setListingDetails(detailsData.listing);
+      } else {
+        console.error('Failed to fetch listing details:', detailsData.error);
+      }
+    } catch (error) {
+      console.error('Error fetching listing details:', error);
+    } finally {
+      setLoadingDetails(false);
     }
   };
 
@@ -160,7 +188,9 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       }
 
       const token = localStorage.getItem('token');
-      // Send shopId in both query params and body for compatibility
+      toast.loading('Updating listing on Etsy...', { id: 'apply-optimization' });
+      
+      // Update on Etsy API first (this endpoint updates Etsy API, then DB)
       const response = await fetch(`/api/etsy/listings/${selectedListing.listing_id}?shopId=${shopId}`, {
         method: 'PUT',
         headers: { 
@@ -173,16 +203,25 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to update listing');
+        throw new Error(responseData.error || 'Failed to update listing');
       }
 
-      toast.success('Listing updated successfully!');
+      toast.success('Listing updated successfully on Etsy and saved to database!', { id: 'apply-optimization' });
+      
+      // Refresh listing details from DB to show updated data
+      await fetchListingDetails(selectedListing.listing_id);
+      
+      // Also refresh the listings list
+      await fetchListings();
+      
+      // Clear optimization result
       setResult(null);
-      fetchListings();
     } catch (error: any) {
       console.error('Update error:', error);
-      toast.error(error.message || 'Failed to update listing');
+      toast.error(error.message || 'Failed to update listing', { id: 'apply-optimization' });
     }
   };
 
@@ -238,9 +277,12 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                 listings.map((listing) => (
                   <div
                     key={listing.listing_id}
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedListing(listing);
                       setResult(null);
+                      setListingDetails(null);
+                      // Fetch details from DB when listing is clicked
+                      await fetchListingDetails(listing.listing_id);
                     }}
                     className={`p-3 rounded-lg border cursor-pointer transition-all ${
                       selectedListing?.listing_id === listing.listing_id
@@ -300,7 +342,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
           )}
         </div>
 
-        {/* Right: Results */}
+        {/* Right: Listing Details & Results */}
         <div className="space-y-4">
           {!selectedListing && (
             <div className="bg-gray-50 rounded-lg border border-gray-200 p-12 text-center">
@@ -309,14 +351,70 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
             </div>
           )}
 
+          {/* Display listing details when selected */}
           {selectedListing && !result && !optimizing && (
-            <div className="bg-blue-50 rounded-lg border border-blue-200 p-8 text-center">
-              <AlertCircle className="h-10 w-10 mx-auto mb-3 text-blue-500" />
-              <p className="text-blue-900 font-medium mb-1">Ready to Optimize</p>
-              <p className="text-sm text-blue-700">
-                Select an optimization mode and click "Optimize Listing" to get AI-powered suggestions
-              </p>
-            </div>
+            <>
+              {loadingDetails ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                  <Loader2 className="h-6 w-6 mx-auto mb-3 text-purple-600 animate-spin" />
+                  <p className="text-gray-600">Loading listing details...</p>
+                </div>
+              ) : listingDetails ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h4 className="font-semibold text-gray-900 mb-4">Listing Details</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Title</p>
+                      <p className="text-sm text-gray-900 font-medium">{decodeHtmlEntities(listingDetails.title || selectedListing.title)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Description</p>
+                      <p className="text-sm text-gray-700 line-clamp-4">{listingDetails.description || selectedListing.description || 'No description'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Tags</p>
+                      <div className="flex flex-wrap gap-1">
+                        {(listingDetails.tags || selectedListing.tags || []).map((tag: string, i: number) => (
+                          <span key={i} className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Price</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          ${listingDetails.price?.amount && listingDetails.price?.divisor 
+                            ? (listingDetails.price.amount / listingDetails.price.divisor).toFixed(2)
+                            : listingDetails.price || '0.00'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Quantity</p>
+                        <p className="text-sm font-medium text-gray-900">{listingDetails.quantity || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">State</p>
+                        <p className="text-sm font-medium text-gray-900 capitalize">{listingDetails.state || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Views</p>
+                        <p className="text-sm font-medium text-gray-900">{listingDetails.views || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              
+              <div className="bg-blue-50 rounded-lg border border-blue-200 p-8 text-center">
+                <AlertCircle className="h-10 w-10 mx-auto mb-3 text-blue-500" />
+                <p className="text-blue-900 font-medium mb-1">Ready to Optimize</p>
+                <p className="text-sm text-blue-700">
+                  Select an optimization mode and click "Optimize Listing" to get AI-powered suggestions
+                </p>
+              </div>
+            </>
           )}
 
           {optimizing && (
@@ -336,7 +434,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                     Optimization Results
                   </h4>
                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                    SEO Score: {result.optimized.overall_seo_score || result.optimized.seo_score || 'N/A'}
+                    SEO Score: {result.optimized?.overall_seo_score || result.optimized?.seo_score || 'N/A'}
                   </span>
                 </div>
 
@@ -345,7 +443,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                   <div className="mb-4 pb-4 border-b border-gray-200">
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="text-sm font-medium text-gray-700">Title</h5>
-                      {result.optimized.title?.seo_score && (
+                      {result.optimized?.title?.seo_score && (
                         <span className="text-xs text-purple-600">
                           Score: {result.optimized.title.seo_score}
                         </span>
@@ -355,14 +453,16 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Original:</p>
                         <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 line-clamp-2">
-                          {result.original.title}
+                          {result.original?.title || 'N/A'}
                         </p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-purple-600 mx-auto" />
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Optimized:</p>
                         <p className="text-sm text-gray-900 bg-purple-50 p-2 rounded border border-purple-200 font-medium">
-                          {optimizationMode === 'all' ? result.optimized.title?.optimized_title : result.optimized.optimized_title}
+                          {optimizationMode === 'all' 
+                            ? (result.optimized?.title?.optimized_title || result.optimized?.optimized_title || 'N/A')
+                            : (result.optimized?.optimized_title || 'N/A')}
                         </p>
                       </div>
                     </div>
@@ -373,7 +473,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                   <div className="mb-4 pb-4 border-b border-gray-200">
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="text-sm font-medium text-gray-700">Description</h5>
-                      {result.optimized.description?.seo_score && (
+                      {result.optimized?.description?.seo_score && (
                         <span className="text-xs text-purple-600">
                           Score: {result.optimized.description.seo_score}
                         </span>
@@ -383,14 +483,20 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Original:</p>
                         <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 max-h-32 overflow-y-auto">
-                          {result.original.description.substring(0, 200)}...
+                          {(result.original?.description || '').substring(0, 200)}
+                          {result.original?.description && result.original.description.length > 200 ? '...' : ''}
                         </p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-purple-600 mx-auto" />
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Optimized:</p>
                         <p className="text-sm text-gray-900 bg-purple-50 p-2 rounded border border-purple-200 max-h-32 overflow-y-auto">
-                          {optimizationMode === 'all' ? result.optimized.description?.optimized_description?.substring(0, 200) : result.optimized.optimized_description?.substring(0, 200)}...
+                          {(() => {
+                            const desc = optimizationMode === 'all' 
+                              ? (result.optimized?.description?.optimized_description || result.optimized?.optimized_description || '')
+                              : (result.optimized?.optimized_description || '');
+                            return desc.substring(0, 200) + (desc.length > 200 ? '...' : '');
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -401,7 +507,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <h5 className="text-sm font-medium text-gray-700">Tags</h5>
-                      {result.optimized.tags?.seo_score && (
+                      {result.optimized?.tags?.seo_score && (
                         <span className="text-xs text-purple-600">
                           Score: {result.optimized.tags.seo_score}
                         </span>
@@ -411,7 +517,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Original:</p>
                         <div className="flex flex-wrap gap-1">
-                          {result.original.tags.map((tag, i) => (
+                          {(result.original?.tags || []).map((tag, i) => (
                             <span key={i} className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
                               {tag}
                             </span>
@@ -422,11 +528,27 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Optimized:</p>
                         <div className="flex flex-wrap gap-1">
-                          {(optimizationMode === 'all' ? result.optimized.tags?.optimized_tags : result.optimized.optimized_tags || []).map((tag: string, i: number) => (
-                            <span key={i} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium">
-                              {tag}
-                            </span>
-                          ))}
+                          {(() => {
+                            let optimizedTags: string[] = [];
+                            if (optimizationMode === 'all') {
+                              optimizedTags = result.optimized?.tags?.optimized_tags || [];
+                            } else {
+                              optimizedTags = Array.isArray(result.optimized?.optimized_tags) 
+                                ? result.optimized.optimized_tags 
+                                : (typeof result.optimized?.optimized_tags === 'string' 
+                                  ? result.optimized.optimized_tags.split(',').map(t => t.trim())
+                                  : []);
+                            }
+                            return optimizedTags.length > 0 ? (
+                              optimizedTags.map((tag: string, i: number) => (
+                                <span key={i} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium">
+                                  {tag}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-500 italic">No optimized tags available</span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -434,11 +556,11 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                 )}
 
                 {/* Improvements */}
-                {(result.optimized.improvements || result.optimized.priority_improvements) && (
+                {(result.optimized?.improvements || result.optimized?.priority_improvements) && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h5 className="text-sm font-medium text-gray-700 mb-2">Key Improvements</h5>
                     <ul className="space-y-1">
-                      {(result.optimized.priority_improvements || result.optimized.improvements || []).map((improvement: string, i: number) => (
+                      {((result.optimized?.priority_improvements || result.optimized?.improvements || []) as string[]).map((improvement: string, i: number) => (
                         <li key={i} className="text-xs text-gray-600 flex items-start gap-2">
                           <span className="text-purple-600 mt-0.5">•</span>
                           <span>{improvement}</span>
