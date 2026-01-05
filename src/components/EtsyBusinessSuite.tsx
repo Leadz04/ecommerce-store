@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useEtsyShops, useEtsyShopDetails, useEtsyListings } from '@/hooks/useEtsyData';
+import { useEtsyDataStore } from '@/store/etsyDataStore';
 import {
   BarChart3,
   Package,
@@ -48,6 +50,8 @@ import {
   Save,
   HelpCircle,
   Sparkles,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EtsyShopSelector from '@/components/EtsyShopSelector';
@@ -144,6 +148,7 @@ interface Listing {
     currencyCode: string;
   };
   taxonomyId: number;
+  readiness_state_id?: number;
   tags: string[];
   materials?: string[];
   shopSectionId3?: number;
@@ -393,7 +398,7 @@ interface LedgerEntry {
 // Helper function to safely parse JSON responses
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type');
-  
+
   if (!response.ok) {
     // If response is not OK, try to get error message from JSON if possible
     if (contentType?.includes('application/json')) {
@@ -405,21 +410,24 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
       throw new Error(`HTTP ${response.status}: ${response.statusText}${text ? ` - ${text.substring(0, 100)}` : ''}`);
     }
   }
-  
+
   // Check if response is actually JSON
   if (!contentType?.includes('application/json')) {
     const text = await response.text();
     throw new Error(`Expected JSON but got ${contentType || 'unknown content type'}. Response: ${text.substring(0, 100)}`);
   }
-  
+
   return response.json();
 }
 
 export default function EtsyBusinessSuite() {
+  // Use shared Etsy data store
+  const { shops, selectedShopId, setSelectedShop, fetchShops } = useEtsyShops();
+  const { shopDetails, refetch: refetchShopDetails } = useEtsyShopDetails(selectedShopId);
+  const { listings: sharedListings, refetch: refetchListings, updateListing: updateSharedListing } = useEtsyListings(selectedShopId);
+
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [loading, setLoading] = useState(false);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [shopData, setShopData] = useState<Shop | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [draftListings, setDraftListings] = useState<Listing[]>([]);
@@ -427,7 +435,6 @@ export default function EtsyBusinessSuite() {
   const [listingsTab, setListingsTab] = useState<'active' | 'draft' | 'inactive'>('active');
   const [optimizingListing, setOptimizingListing] = useState<number | null>(null);
   const [optimizationResult, setOptimizationResult] = useState<any | null>(null);
-  const [selectedListingForModal, setSelectedListingForModal] = useState<Listing | null>(null);
   const [showListingModal, setShowListingModal] = useState(false);
   const [optimizingField, setOptimizingField] = useState<'title' | 'description' | 'tags' | 'materials' | null>(null);
   const [fieldOptimizationResult, setFieldOptimizationResult] = useState<any | null>(null);
@@ -443,7 +450,7 @@ export default function EtsyBusinessSuite() {
     averageRating: 0,
     totalReviews: 0,
   });
-  
+
   // Form states
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
@@ -464,13 +471,13 @@ export default function EtsyBusinessSuite() {
   });
   const [policyListings, setPolicyListings] = useState<any[]>([]);
   const [selectedPolicyForListings, setSelectedPolicyForListings] = useState<number | null>(null);
-  
+
   // Pagination states
   const [listingsPage, setListingsPage] = useState(1);
   const [listingsPerPage] = useState(20);
   const [totalListings, setTotalListings] = useState(0);
   const [hasMoreListings, setHasMoreListings] = useState(false);
-  
+
   // Form data states
   const [listingFormData, setListingFormData] = useState({
     title: '',
@@ -503,8 +510,9 @@ export default function EtsyBusinessSuite() {
     featured_rank: '',
     state: 'draft',
     type: 'physical',
+    readiness_state_id: '' as string | number,
   });
-  
+
   // Size/Variation state
   const [sizeVariations, setSizeVariations] = useState<{
     enabled: boolean;
@@ -524,12 +532,15 @@ export default function EtsyBusinessSuite() {
     propertyName: '',
     values: [],
   });
-  
+
   // Images and videos state
   const [listingImages, setListingImages] = useState<any[]>([]);
   const [listingVideos, setListingVideos] = useState<any[]>([]);
   const [newImageUrls, setNewImageUrls] = useState<string[]>(['']);
-  
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+  const [updatingImageRank, setUpdatingImageRank] = useState<string | null>(null);
+
   // Variations/Inventory state
   const [listingInventory, setListingInventory] = useState<any>(null);
   const [availableProperties, setAvailableProperties] = useState<any[]>([]);
@@ -585,7 +596,7 @@ export default function EtsyBusinessSuite() {
 
   useEffect(() => {
     if (selectedShopId) {
-      loadShopData();
+      // Shop data is loaded via useEtsyShopDetails hook
       if (activeModule === 'shipping') {
         loadShippingProfiles();
       }
@@ -621,34 +632,22 @@ export default function EtsyBusinessSuite() {
   const loadTaxonomyNodes = async () => {
     setIsLoadingTaxonomy(true);
     try {
-      const token = localStorage.getItem('token');
-      
+      const { fetchTaxonomyNodes } = useEtsyDataStore.getState();
+
       // Load seller taxonomy (requires shop)
-      if (selectedShopId && token) {
+      if (selectedShopId) {
         try {
-          const sellerRes = await fetch(`/api/etsy/taxonomy/nodes?type=seller&shopId=${selectedShopId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          const sellerData = await parseJsonResponse<any>(sellerRes);
-          if (sellerData.success) {
-            // Handle both array and object with results property
-            const nodes = Array.isArray(sellerData.results) ? sellerData.results : (sellerData.results?.results || []);
-            setSellerTaxonomyNodes(nodes);
-          }
+          const nodes = await fetchTaxonomyNodes('seller', selectedShopId);
+          setSellerTaxonomyNodes(nodes);
         } catch (err) {
           console.error('Error loading seller taxonomy:', err);
         }
       }
-      
+
       // Load buyer taxonomy (public, no auth needed)
       try {
-        const buyerRes = await fetch(`/api/etsy/taxonomy/nodes?type=buyer`);
-        const buyerData = await parseJsonResponse<any>(buyerRes);
-        if (buyerData.success) {
-          // Handle both array and object with results property
-          const nodes = Array.isArray(buyerData.results) ? buyerData.results : (buyerData.results?.results || []);
-          setBuyerTaxonomyNodes(nodes);
-        }
+        const nodes = await fetchTaxonomyNodes('buyer');
+        setBuyerTaxonomyNodes(nodes);
       } catch (err) {
         console.error('Error loading buyer taxonomy:', err);
       }
@@ -664,20 +663,9 @@ export default function EtsyBusinessSuite() {
   const loadTaxonomyProperties = async (taxonomyId: number) => {
     setIsLoadingTaxonomy(true);
     try {
-      const token = localStorage.getItem('token');
-      const url = taxonomyType === 'seller' && selectedShopId
-        ? `/api/etsy/taxonomy/nodes/${taxonomyId}/properties?type=${taxonomyType}&shopId=${selectedShopId}`
-        : `/api/etsy/taxonomy/nodes/${taxonomyId}/properties?type=${taxonomyType}`;
-
-      const response = await fetch(url, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-      const data = await parseJsonResponse<any>(response);
-      if (data.success) {
-        setTaxonomyProperties(data.results || []);
-      } else {
-        toast.error(data.error || 'Failed to load properties');
-      }
+      const { fetchTaxonomyProperties } = useEtsyDataStore.getState();
+      const results = await fetchTaxonomyProperties(taxonomyId, taxonomyType, selectedShopId || undefined);
+      setTaxonomyProperties(results);
     } catch (error) {
       console.error('Error loading taxonomy properties:', error);
       toast.error('Failed to load taxonomy properties');
@@ -685,39 +673,48 @@ export default function EtsyBusinessSuite() {
       setIsLoadingTaxonomy(false);
     }
   };
-  
+
   // Load available properties for size variations when taxonomy_id changes
   useEffect(() => {
     if (listingFormData.taxonomy_id && selectedShopId && (showCreateListing || editingListing)) {
       const loadProperties = async () => {
         try {
-          const token = localStorage.getItem('token');
           console.log('[Size Variations] Loading properties for taxonomy:', listingFormData.taxonomy_id);
-          const propsRes = await fetch(`/api/etsy/taxonomy/${listingFormData.taxonomy_id}/properties?shopId=${selectedShopId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          const propsData = await parseJsonResponse<any>(propsRes);
-          console.log('[Size Variations] Properties response:', propsData);
-          if (propsData.success) {
-            const allProperties = propsData.results || [];
+
+          const { fetchTaxonomyProperties } = useEtsyDataStore.getState();
+          const allProperties = await fetchTaxonomyProperties(
+            parseInt(listingFormData.taxonomy_id),
+            'seller',
+            selectedShopId
+          );
+
+          console.log('[Size Variations] Properties response:', allProperties);
+          if (allProperties) {
+            const propsData = { success: true, results: allProperties }; // Mock for compat if needed, or simply use allProperties
+            // But existing code uses allProperties = propsData.results || []
+            // so I should just let allProperties be allProperties
+
+            // Wait, I am replacing lines 680-688.
+            // Line 688 is: const allProperties = propsData.results || [];
+            // So my replacement should handle that variable name.
             // Filter to only show properties that support variations
             // Also prioritize size-related properties
-            const variationProperties = allProperties.filter((prop: any) => 
+            const variationProperties = allProperties.filter((prop: any) =>
               prop.supports_variations !== false // Include if true or undefined
             );
-            
+
             // Sort: size-related properties first, then others
             const sortedProperties = variationProperties.sort((a: any, b: any) => {
               const aName = (a.name || a.property_name || a.display_name || '').toLowerCase();
               const bName = (b.name || b.property_name || b.display_name || '').toLowerCase();
               const aIsSize = aName.includes('size');
               const bIsSize = bName.includes('size');
-              
+
               if (aIsSize && !bIsSize) return -1;
               if (!aIsSize && bIsSize) return 1;
               return aName.localeCompare(bName);
             });
-            
+
             setAvailableProperties(sortedProperties);
             console.log('[Size Variations] Loaded properties:', sortedProperties.length, 'out of', allProperties.length, 'total');
             console.log('[Size Variations] Properties:', sortedProperties.map((p: any) => ({
@@ -726,7 +723,7 @@ export default function EtsyBusinessSuite() {
               supports_variations: p.supports_variations
             })));
           } else {
-            console.error('[Size Variations] Failed to load properties:', propsData.error);
+            console.error('[Size Variations] Failed to load properties');
             setAvailableProperties([]);
           }
         } catch (err) {
@@ -758,10 +755,10 @@ export default function EtsyBusinessSuite() {
   };
 
   // Render taxonomy tree node
-  const renderTaxonomyNode = (node: any, level: number = 0): JSX.Element => {
+  const renderTaxonomyNode = (node: any, level: number = 0): React.ReactNode => {
     const isExpanded = expandedNodes.has(node.id);
     const hasChildren = node.children && node.children.length > 0;
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       node.id.toString().includes(searchQuery);
 
@@ -770,9 +767,8 @@ export default function EtsyBusinessSuite() {
     return (
       <div key={node.id} className="mb-1">
         <div
-          className={`flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer ${
-            selectedTaxonomyNode?.id === node.id ? 'bg-purple-50 border border-purple-200' : ''
-          }`}
+          className={`flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer ${selectedTaxonomyNode?.id === node.id ? 'bg-purple-50 border border-purple-200' : ''
+            }`}
           style={{ paddingLeft: `${level * 1.5 + 0.5}rem` }}
           onClick={() => handleSelectNode(node)}
         >
@@ -800,9 +796,8 @@ export default function EtsyBusinessSuite() {
     );
   };
 
-  // Load shops list
+  // Load form field metadata on mount
   useEffect(() => {
-    loadShops();
     loadFormFieldMetadata();
   }, []);
 
@@ -811,10 +806,10 @@ export default function EtsyBusinessSuite() {
     try {
       setIsLoadingMetadata(true);
       const token = localStorage.getItem('token');
-      const url = section 
+      const url = section
         ? `/api/etsy/form-fields?section=${section}`
         : '/api/etsy/form-fields';
-      
+
       const response = await fetch(url, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
@@ -868,14 +863,14 @@ export default function EtsyBusinessSuite() {
   };
 
   // Helper component for section header with help icon
-  const SectionHeader = ({ 
-    title, 
-    icon: Icon, 
-    section, 
-    helpText 
-  }: { 
-    title: string; 
-    icon?: any; 
+  const SectionHeader = ({
+    title,
+    icon: Icon,
+    section,
+    helpText
+  }: {
+    title: string;
+    icon?: any;
     section: string;
     helpText?: string;
   }) => {
@@ -907,63 +902,33 @@ export default function EtsyBusinessSuite() {
     );
   };
 
-  const loadShops = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch('/api/etsy/shops', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await parseJsonResponse<any>(response);
-      if (data.success && data.shops) {
-        setShops(data.shops);
-        if (!selectedShopId && data.shops.length > 0) {
-          setSelectedShopId(data.shops[0].shopId);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading shops:', error);
-    }
-  };
+  // Load shops on mount - using shared store
+  useEffect(() => {
+    fetchShops();
+  }, [fetchShops]);
 
-  const loadShopData = async () => {
-    if (!selectedShopId) return;
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/etsy/shop/${selectedShopId}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-      const data = await parseJsonResponse<any>(response);
-      if (data.success) {
-        setShopData(data.shop);
-        loadDashboardStats();
-      } else {
-        toast.error('Failed to load shop data');
-      }
-    } catch (error) {
-      toast.error('Error loading shop data');
-    } finally {
-      setLoading(false);
+  // Update shopData when shopDetails changes
+  useEffect(() => {
+    if (shopDetails) {
+      setShopData(shopDetails as any);
     }
-  };
+  }, [shopDetails]);
 
   const handleCreateListing = async () => {
     if (!selectedShopId) {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     if (!listingFormData.title || !listingFormData.description || !listingFormData.price || !listingFormData.taxonomy_id) {
       toast.error('Please fill in all required fields');
       return;
     }
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       // Prepare listing data according to Etsy API schema
       const listingPayload: any = {
         shopId: selectedShopId,
@@ -980,7 +945,7 @@ export default function EtsyBusinessSuite() {
           materials: listingFormData.materials ? listingFormData.materials.split(',').map(m => m.trim()).filter(Boolean) : [],
         }
       };
-      
+
       // Optional fields
       if (listingFormData.shipping_profile_id) {
         listingPayload.listing.shipping_profile_id = parseInt(listingFormData.shipping_profile_id);
@@ -1004,12 +969,12 @@ export default function EtsyBusinessSuite() {
           listingPayload.listing.personalization_instructions = listingFormData.personalization_instructions;
         }
       }
-      
+
       // Add image URLs if provided
       if (newImageUrls.some(url => url.trim())) {
         listingPayload.productImages = newImageUrls.filter(url => url.trim());
       }
-      
+
       // Add size variations/inventory if enabled
       if (sizeVariations.enabled && sizeVariations.propertyId && sizeVariations.values.length > 0) {
         const propertyId = parseInt(sizeVariations.propertyId);
@@ -1028,17 +993,17 @@ export default function EtsyBusinessSuite() {
           }],
           sku: sizeVal.sku || null,
         }));
-        
+
         listingPayload.inventory = {
           products,
           price_on_property: [propertyId], // Price varies by this property
           quantity_on_property: [propertyId], // Quantity varies by this property
           sku_on_property: sizeVariations.values.some(v => v.sku) ? [propertyId] : [],
         };
-        
+
         console.log('[Create Listing] Adding size variations:', listingPayload.inventory);
       }
-      
+
       const response = await fetch('/api/etsy/listings/create', {
         method: 'POST',
         headers: {
@@ -1047,7 +1012,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(listingPayload),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success('Listing created successfully!');
@@ -1083,6 +1048,7 @@ export default function EtsyBusinessSuite() {
           featured_rank: '',
           state: 'draft',
           type: 'physical',
+          readiness_state_id: '',
         });
         setListingImages([]);
         setListingVideos([]);
@@ -1112,53 +1078,17 @@ export default function EtsyBusinessSuite() {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
-      // First, ensure we have current images loaded - ALWAYS fetch fresh images before updating
-      let currentImages = listingImages;
-      try {
-        console.log(`[Update Listing] Fetching current images for listing ${listing.listingId}...`);
-        const imagesRes = await fetch(`/api/etsy/listings/${listing.listingId}/images?shopId=${selectedShopId}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        const imagesData = await parseJsonResponse<any>(imagesRes);
-        if (imagesData.success && imagesData.results) {
-          currentImages = imagesData.results;
-          setListingImages(currentImages);
-          console.log(`[Update Listing] ✓ Successfully loaded ${currentImages.length} images`);
-          console.log(`[Update Listing] Image data structure:`, currentImages.map((img: any, idx: number) => ({
-            index: idx,
-            listing_image_id: img.listing_image_id,
-            listingImageId: img.listingImageId,
-            image_id: img.image_id,
-            id: img.id,
-            allKeys: Object.keys(img),
-            url: img.url_fullxfull || img.url_570xN
-          })));
-          
-          // Verify we can extract IDs
-          const testIds = currentImages.map((img: any) => img.listing_image_id || img.listingImageId || img.image_id || img.id).filter(Boolean);
-          console.log(`[Update Listing] Test extraction - found ${testIds.length} IDs:`, testIds);
-        } else {
-          console.error(`[Update Listing] ✗ Failed to load images:`, imagesData);
-          currentImages = []; // Ensure it's an array
-        }
-      } catch (err) {
-        console.error('Could not fetch current images:', err);
-        // Don't fail the update if images can't be loaded, but warn
-        if (!currentImages || currentImages.length === 0) {
-          console.error(`[Update Listing] CRITICAL: No images available for listing ${listing.listingId}. Images will be removed!`);
-        }
-      }
-      
+
       // Prepare update data with all fields
+      // NOTE: Images are NOT included in the PATCH request - they are managed separately
       const updateData: any = {
         shopId: selectedShopId,
       };
-      
+
       // Basic fields - always include required fields
       if (listingFormData.title) updateData.title = listingFormData.title;
       // Description should always be included if it exists (even if empty)
@@ -1170,16 +1100,16 @@ export default function EtsyBusinessSuite() {
         updateData.quantity = parseInt(String(listingFormData.quantity)) || 1;
       }
       if (listingFormData.taxonomy_id) updateData.taxonomy_id = parseInt(listingFormData.taxonomy_id);
-      
+
       // Tags and materials
       if (listingFormData.tags) updateData.tags = listingFormData.tags.split(',').map(t => t.trim()).filter(Boolean);
       if (listingFormData.materials) updateData.materials = listingFormData.materials.split(',').map(m => m.trim()).filter(Boolean);
-      
+
       // Who/When made
       if (listingFormData.who_made) updateData.who_made = listingFormData.who_made;
       if (listingFormData.when_made) updateData.when_made = listingFormData.when_made;
       updateData.is_supply = listingFormData.is_supply;
-      
+
       // Shipping and sections - include if they have values
       if (listingFormData.shipping_profile_id && listingFormData.shipping_profile_id !== '') {
         updateData.shipping_profile_id = parseInt(listingFormData.shipping_profile_id);
@@ -1190,7 +1120,7 @@ export default function EtsyBusinessSuite() {
       if (listingFormData.return_policy_id && listingFormData.return_policy_id !== '') {
         updateData.return_policy_id = parseInt(listingFormData.return_policy_id);
       }
-      
+
       // Processing times
       if (listingFormData.processing_min && listingFormData.processing_min !== '') {
         updateData.processing_min = parseInt(listingFormData.processing_min);
@@ -1198,63 +1128,7 @@ export default function EtsyBusinessSuite() {
       if (listingFormData.processing_max && listingFormData.processing_max !== '') {
         updateData.processing_max = parseInt(listingFormData.processing_max);
       }
-      
-      // Image IDs (from existing images) - ALWAYS include to preserve images
-      // Extract image IDs from various possible formats
-      const imageIds: number[] = [];
-      
-      console.log(`[Update Listing] Checking images - currentImages:`, currentImages);
-      console.log(`[Update Listing] currentImages type:`, typeof currentImages, 'isArray:', Array.isArray(currentImages), 'length:', currentImages?.length);
-      
-      if (currentImages && Array.isArray(currentImages) && currentImages.length > 0) {
-        console.log(`[Update Listing] Processing ${currentImages.length} images:`, JSON.stringify(currentImages.map(img => ({
-          listing_image_id: img.listing_image_id,
-          listingImageId: img.listingImageId,
-          image_id: img.image_id,
-          id: img.id,
-          keys: Object.keys(img)
-        })), null, 2));
-        
-        currentImages.forEach((img: any, index: number) => {
-          // Try multiple possible property names for image ID
-          const imgId = img.listing_image_id || img.listingImageId || img.image_id || img.id;
-          console.log(`[Update Listing] Image ${index}:`, {
-            listing_image_id: img.listing_image_id,
-            listingImageId: img.listingImageId,
-            image_id: img.image_id,
-            id: img.id,
-            extracted: imgId,
-            type: typeof imgId
-          });
-          
-          if (imgId !== undefined && imgId !== null) {
-            const id = typeof imgId === 'string' ? parseInt(imgId, 10) : Number(imgId);
-            if (!isNaN(id) && id > 0) {
-              imageIds.push(id);
-              console.log(`[Update Listing] ✓ Added image ID: ${id}`);
-            } else {
-              console.warn(`[Update Listing] ✗ Invalid image ID found:`, imgId, 'parsed as:', id, 'from image:', img);
-            }
-          } else {
-            console.warn(`[Update Listing] ✗ Image ${index} missing ID property. Full object:`, img);
-          }
-        });
-        console.log(`[Update Listing] ✓ Extracted ${imageIds.length} valid image IDs from ${currentImages.length} images:`, imageIds);
-      } else {
-        console.error(`[Update Listing] ✗ No images found for listing ${listing.listingId}. currentImages:`, currentImages);
-        console.error(`[Update Listing] ✗ Images may be removed from listing!`);
-      }
-      
-      // Always include image_ids if we have any, to prevent Etsy from removing them
-      if (imageIds.length > 0) {
-        updateData.image_ids = imageIds;
-        console.log(`[Update Listing] ✓✓✓ Adding image_ids to updateData:`, imageIds);
-        console.log(`[Update Listing] ✓✓✓ updateData.image_ids:`, updateData.image_ids);
-      } else {
-        console.error(`[Update Listing] ✗✗✗ WARNING: No image IDs to send! This will remove all images from the listing.`);
-        console.error(`[Update Listing] ✗✗✗ currentImages was:`, currentImages);
-      }
-      
+
       // Personalization
       updateData.is_personalizable = listingFormData.is_personalizable ?? false;
       if (listingFormData.is_personalizable) {
@@ -1269,7 +1143,7 @@ export default function EtsyBusinessSuite() {
         // If not personalizable, clear personalization fields
         updateData.personalization_is_required = false;
       }
-      
+
       // Additional options
       updateData.is_taxable = listingFormData.is_taxable ?? false;
       updateData.should_auto_renew = listingFormData.should_auto_renew ?? false;
@@ -1277,10 +1151,42 @@ export default function EtsyBusinessSuite() {
         updateData.featured_rank = parseInt(listingFormData.featured_rank);
       }
       if (listingFormData.state) updateData.state = listingFormData.state;
-      
+
+      // Images - explicitly include current image IDs to preserve/reorder them
+      if (listingImages && listingImages.length > 0) {
+        const validImageIds = listingImages
+          .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+          .map(img => {
+            // Support both internal camelCase and Etsy snake_case IDs
+            const id = img.listingImageId || img.listing_image_id;
+            if (!id) return null;
+            const parsed = parseInt(id.toString());
+            return isNaN(parsed) ? null : parsed;
+          })
+          .filter((id): id is number => id !== null && id > 0);
+
+        if (validImageIds.length > 0) {
+          updateData.image_ids = validImageIds;
+        } else {
+          console.warn('[Update Listing] No valid image IDs found among', listingImages.length, 'images');
+        }
+      } else {
+        // If no images in state, don't send empty array unless we intend to delete all (which Etsy API might not support via update)
+        // Better to not send it if empty to be safe, or check requirements.
+        // User issue is that "only one image remains", implying maybe we were sending something wrong or nothing.
+        // If we send nothing, Etsy keeps existing. If the user *deleted* images in UI, we WANT to update the list.
+        // Actually, deleting images in UI calls DELETE endpoint immediately.
+        // So listingImages reflects the CURRENT state on server (mostly).
+        // However, if we reordered, we need to send this list.
+        // If we don't send it, order isn't updated.
+        // But the user says "other are deleted". This implies we might be sending a payload that wipes them?
+        // Wait, I see NO image_ids being set in the original code.
+        // If I add it now, it ensures the list matches what's on screen.
+      }
+
       // Note: Size variations/inventory are updated separately via PUT /inventory endpoint
       // We'll handle this after the listing update succeeds
-      
+
       // Log what we're sending for debugging
       console.log('[Update Listing] ===== FINAL UPDATE DATA =====');
       console.log('[Update Listing] updateData keys:', Object.keys(updateData));
@@ -1294,7 +1200,7 @@ export default function EtsyBusinessSuite() {
         image_ids_count: updateData.image_ids?.length || 0,
       });
       console.log('[Update Listing] ============================');
-      
+
       const response = await fetch(`/api/etsy/listings/${listing.listingId}`, {
         method: 'PATCH',
         headers: {
@@ -1303,7 +1209,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(updateData),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         // Update inventory separately if size variations are enabled
@@ -1315,24 +1221,26 @@ export default function EtsyBusinessSuite() {
                 property_id: propertyId,
                 value_ids: [sizeVal.valueId],
                 values: [sizeVal.value],
-                scale_id: sizeVariations.scaleId || null,
+                ...(sizeVariations.scaleId ? { scale_id: sizeVariations.scaleId } : { scale_id: null }), // Explicit null if expected, or omit? API says nullable.
                 property_name: sizeVariations.propertyName,
               }],
               offerings: [{
                 price: parseFloat(sizeVal.price) || parseFloat(listingFormData.price) || 0,
                 quantity: parseInt(sizeVal.quantity) || 1,
-                is_enabled: true,
+                is_enabled: true, // Use boolean true - Etsy API is strict about types for offerings
+                readiness_state_id: (listingFormData as any).readiness_state_id ? parseInt((listingFormData as any).readiness_state_id.toString()) : null,
               }],
-              sku: sizeVal.sku || null,
+              ...(sizeVal.sku ? { sku: sizeVal.sku } : {}), // Omit sku if empty/null
             }));
-            
+
             const inventoryPayload = {
               products,
               price_on_property: [propertyId],
               quantity_on_property: [propertyId],
               sku_on_property: sizeVariations.values.some(v => v.sku) ? [propertyId] : [],
+              readiness_state_on_property: [],
             };
-            
+
             console.log('[Update Listing] Updating inventory separately with:', inventoryPayload);
             const inventoryRes = await fetch(`/api/etsy/listings/${listing.listingId}/inventory?shopId=${selectedShopId}`, {
               method: 'PUT',
@@ -1348,17 +1256,17 @@ export default function EtsyBusinessSuite() {
               toast.success('Listing and size variations updated successfully!');
             } else {
               console.warn('[Update Listing] Inventory update failed:', inventoryData.error);
-              toast.warning('Listing updated but size variations failed to update. Please update inventory separately.');
+              toast('Listing updated but size variations failed to update. Please update inventory separately.', { icon: '⚠️' });
             }
           } catch (inventoryError: any) {
             console.error('[Update Listing] Error updating inventory:', inventoryError);
-            toast.warning('Listing updated but size variations failed to update. Please update inventory separately.');
+            toast('Listing updated but size variations failed to update. Please update inventory separately.', { icon: '⚠️' });
             // Don't fail the entire update - listing is updated, inventory can be set separately
           }
         } else {
           toast.success('Listing updated successfully!');
         }
-        
+
         setEditingListing(null);
         setFieldOptimizationResult(null);
         setOptimizingField(null);
@@ -1393,6 +1301,7 @@ export default function EtsyBusinessSuite() {
           featured_rank: '',
           state: 'draft',
           type: 'physical',
+          readiness_state_id: '',
         });
         setListingImages([]);
         setListingVideos([]);
@@ -1416,16 +1325,136 @@ export default function EtsyBusinessSuite() {
     }
   };
 
+  // Image Management Handlers
+  const handleUploadImage = async (file: File, rank?: number) => {
+    if (!editingListing || !selectedShopId) {
+      toast.error('Please select a listing to edit first');
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const token = localStorage.getItem('token');
+
+      const formData = new FormData();
+      formData.append('image', file);
+      if (rank) {
+        formData.append('rank', rank.toString());
+      }
+
+      const response = await fetch(`/api/etsy/listings/${editingListing.listingId}/images?shopId=${selectedShopId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await parseJsonResponse<any>(response);
+
+      if (data.success) {
+        toast.success('Image uploaded successfully!');
+        // Refresh images
+        await loadListingDetailsForEdit(editingListing.listingId);
+      } else {
+        toast.error(data.error || 'Failed to upload image');
+      }
+    } catch (error: any) {
+      console.error('Upload image error:', error);
+      toast.error(error.message || 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleDeleteImage = async (imageId: string) => {
+    if (!editingListing || !selectedShopId) {
+      toast.error('Please select a listing to edit first');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+
+    try {
+      setDeletingImageId(imageId);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`/api/etsy/listings/${editingListing.listingId}/images?shopId=${selectedShopId}&imageId=${imageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await parseJsonResponse<any>(response);
+
+      if (data.success) {
+        toast.success('Image deleted successfully!');
+        // Refresh images
+        await loadListingDetailsForEdit(editingListing.listingId);
+      } else {
+        toast.error(data.error || 'Failed to delete image');
+      }
+    } catch (error: any) {
+      console.error('Delete image error:', error);
+      toast.error(error.message || 'Failed to delete image');
+    } finally {
+      setDeletingImageId(null);
+    }
+  };
+
+  const handleUpdateImageRank = async (imageId: string, newRank: number) => {
+    if (!editingListing || !selectedShopId) {
+      toast.error('Please select a listing to edit first');
+      return;
+    }
+
+    try {
+      setUpdatingImageRank(imageId);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`/api/etsy/listings/${editingListing.listingId}/images?shopId=${selectedShopId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          imageId,
+          rank: newRank,
+          overwrite: true,
+        }),
+      });
+
+      const data = await parseJsonResponse<any>(response);
+
+      if (data.success) {
+        toast.success('Image order updated successfully!');
+        // Refresh images
+        await loadListingDetailsForEdit(editingListing.listingId);
+      } else {
+        toast.error(data.error || 'Failed to update image order');
+      }
+    } catch (error: any) {
+      console.error('Update image rank error:', error);
+      toast.error(error.message || 'Failed to update image order');
+    } finally {
+      setUpdatingImageRank(null);
+    }
+  };
+
   const handleDeleteListing = async (listingId: number) => {
     if (!selectedShopId) {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     if (!confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
       return;
     }
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -1433,14 +1462,14 @@ export default function EtsyBusinessSuite() {
         toast.error('Authentication required');
         return;
       }
-      
+
       const response = await fetch(`/api/etsy/listings/${listingId}?shopId=${selectedShopId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success('Listing deleted successfully!');
@@ -1461,7 +1490,7 @@ export default function EtsyBusinessSuite() {
     }
   };
 
-  const handleOptimizeListing = async (listing: Listing, mode: 'title' | 'description' | 'tags' | 'all' = 'all') => {
+  const handleOptimizeListing = async (listing: Listing, mode: 'title' | 'description' | 'tags' | 'materials' | 'all' = 'all') => {
     if (!selectedShopId) {
       toast.error('Please select a shop first');
       return;
@@ -1471,7 +1500,7 @@ export default function EtsyBusinessSuite() {
       setOptimizingListing(listing.listingId);
       setOptimizationResult(null);
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch('/api/etsy/listing-optimizer', {
         method: 'POST',
         headers: {
@@ -1488,8 +1517,8 @@ export default function EtsyBusinessSuite() {
       const data = await parseJsonResponse<any>(response);
       if (data.success || data.optimized) {
         setOptimizationResult({ listing, result: data, mode });
+        setShowListingModal(true);
         toast.success('Listing optimized successfully!');
-        // Keep modal open to show results
       } else {
         toast.error(data.error || 'Failed to optimize listing');
       }
@@ -1525,6 +1554,11 @@ export default function EtsyBusinessSuite() {
         if (tags) updateData.tags = tags;
       }
 
+      if (mode === 'materials' || mode === 'all') {
+        const materials = mode === 'all' ? optimized.materials?.optimized_materials : optimized.optimized_materials;
+        if (materials) updateData.materials = materials;
+      }
+
       const response = await fetch(`/api/etsy/listings/${listing.listingId}?shopId=${selectedShopId}`, {
         method: 'PATCH',
         headers: {
@@ -1539,7 +1573,6 @@ export default function EtsyBusinessSuite() {
         toast.success('Optimization applied successfully!');
         setOptimizationResult(null);
         setShowListingModal(false);
-        setSelectedListingForModal(null);
         loadDashboardStats();
       } else {
         toast.error(data.error || 'Failed to apply optimization');
@@ -1561,7 +1594,7 @@ export default function EtsyBusinessSuite() {
       setOptimizingField(field);
       setFieldOptimizationResult(null);
       const token = localStorage.getItem('token');
-      
+
       // For materials, we'll use a custom optimization since it's not in the standard optimizer
       if (field === 'materials') {
         // Use the AI optimize endpoint with a custom prompt for materials
@@ -1624,7 +1657,7 @@ export default function EtsyBusinessSuite() {
         if (data.success || data.optimized) {
           const optimized = data.optimized || data;
           let optimizedValue = '';
-          
+
           if (field === 'title') {
             optimizedValue = optimized.title?.optimized_title || optimized.optimized_title || '';
           } else if (field === 'description') {
@@ -1633,7 +1666,7 @@ export default function EtsyBusinessSuite() {
             const tags = optimized.tags?.optimized_tags || optimized.optimized_tags || [];
             optimizedValue = Array.isArray(tags) ? tags.join(', ') : tags;
           }
-          
+
           setFieldOptimizationResult({ field, optimized: optimizedValue });
           toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} optimized successfully!`);
         } else {
@@ -1651,7 +1684,7 @@ export default function EtsyBusinessSuite() {
     if (!fieldOptimizationResult || fieldOptimizationResult.field !== field) return;
 
     const optimizedValue = fieldOptimizationResult.optimized;
-    
+
     if (field === 'title') {
       setListingFormData({ ...listingFormData, title: optimizedValue });
     } else if (field === 'description') {
@@ -1661,14 +1694,14 @@ export default function EtsyBusinessSuite() {
     } else if (field === 'materials') {
       setListingFormData({ ...listingFormData, materials: optimizedValue });
     }
-    
+
     setFieldOptimizationResult(null);
     toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} applied to form!`);
   };
 
   const handleUpdateReceipt = async (receiptId: number, updates: any) => {
     if (!selectedShopId) return;
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -1680,7 +1713,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(updates),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success('Receipt updated successfully!');
@@ -1697,7 +1730,7 @@ export default function EtsyBusinessSuite() {
 
   const handleCreateShipment = async (receiptId: number, trackingCode: string, carrierName: string) => {
     if (!selectedShopId) return;
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -1712,7 +1745,7 @@ export default function EtsyBusinessSuite() {
           carrier_name: carrierName,
         }),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success('Shipment created successfully!');
@@ -1749,11 +1782,11 @@ export default function EtsyBusinessSuite() {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       // Prepare payload - map form data to API format
       const payload: any = {
         title: shippingProfileFormData.title,
@@ -1762,7 +1795,7 @@ export default function EtsyBusinessSuite() {
         max_processing_time: shippingProfileFormData.max_processing_time,
         processing_time_unit: shippingProfileFormData.processing_time_unit,
       };
-      
+
       // For create, add required cost fields
       if (!editingShippingProfile) {
         payload.primary_cost = parseFloat(shippingProfileFormData.primary_cost) || 0;
@@ -1774,11 +1807,11 @@ export default function EtsyBusinessSuite() {
           payload.max_delivery_days = parseInt(shippingProfileFormData.max_delivery_days);
         }
       }
-      
+
       const url = editingShippingProfile
         ? `/api/etsy/shops/${selectedShopId}/shipping-profiles/${editingShippingProfile.shipping_profile_id}`
         : `/api/etsy/shops/${selectedShopId}/shipping-profiles`;
-      
+
       const response = await fetch(url, {
         method: editingShippingProfile ? 'PUT' : 'POST',
         headers: {
@@ -1787,7 +1820,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(payload),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success(editingShippingProfile ? 'Shipping profile updated successfully!' : 'Shipping profile created successfully!');
@@ -1912,11 +1945,11 @@ export default function EtsyBusinessSuite() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       const url = editingReturnPolicy
         ? `/api/etsy/shops/${selectedShopId}/return-policies/${editingReturnPolicy.return_policy_id}`
         : `/api/etsy/shops/${selectedShopId}/return-policies`;
-      
+
       const response = await fetch(url, {
         method: editingReturnPolicy ? 'PUT' : 'POST',
         headers: {
@@ -1925,7 +1958,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(returnPolicyFormData),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success(editingReturnPolicy ? 'Return policy updated successfully!' : 'Return policy created successfully!');
@@ -2056,23 +2089,23 @@ export default function EtsyBusinessSuite() {
 
   const loadListingDetailsForEdit = async (listingId: number) => {
     if (!selectedShopId) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      
+
       // Load full listing details from API
       const listingRes = await fetch(`/api/etsy/listings/${listingId}/details?shopId=${selectedShopId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const listingData = await parseJsonResponse<any>(listingRes);
-      
+
       let taxonomyId: string | undefined;
-      
+
       if (listingData.success && listingData.listing) {
         const listing = listingData.listing;
         taxonomyId = listing.taxonomy_id?.toString();
-        
+
         // Log what we received for debugging
         console.log('[Load Listing Details] Received listing data:', {
           has_title: !!listing.title,
@@ -2087,12 +2120,12 @@ export default function EtsyBusinessSuite() {
           has_item_weight: listing.item_weight !== undefined,
           all_keys: Object.keys(listing),
         });
-        
+
         // Calculate price from amount/divisor format
-        const price = listing.price?.amount && listing.price?.divisor 
+        const price = listing.price?.amount && listing.price?.divisor
           ? (listing.price.amount / listing.price.divisor).toFixed(2)
           : listing.price ? String(listing.price) : '';
-        
+
         // Set ALL fields exactly as they come from Etsy
         const formDataToSet = {
           title: listing.title || '',
@@ -2125,8 +2158,9 @@ export default function EtsyBusinessSuite() {
           featured_rank: listing.featured_rank?.toString() || '',
           state: listing.state || 'draft',
           type: listing.type || listing.is_digital ? 'download' : 'physical',
+          readiness_state_id: listing.readiness_state_id || '',
         };
-        
+
         console.log('[Load Listing Details] Setting form data:', {
           taxonomy_id: formDataToSet.taxonomy_id,
           quantity: formDataToSet.quantity,
@@ -2136,12 +2170,12 @@ export default function EtsyBusinessSuite() {
           processing_min: formDataToSet.processing_min,
           processing_max: formDataToSet.processing_max,
         });
-        
+
         setListingFormData(formDataToSet);
       } else {
         console.error('[Load Listing Details] Failed to load listing:', listingData);
       }
-      
+
       // Load images
       const imagesRes = await fetch(`/api/etsy/listings/${listingId}/images?shopId=${selectedShopId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2153,7 +2187,7 @@ export default function EtsyBusinessSuite() {
         // If images failed to load, set empty array to prevent errors
         setListingImages([]);
       }
-      
+
       // Load videos
       const videosRes = await fetch(`/api/etsy/listings/${listingId}/videos?shopId=${selectedShopId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2162,7 +2196,7 @@ export default function EtsyBusinessSuite() {
       if (videosData.success) {
         setListingVideos(videosData.results || []);
       }
-      
+
       // Load inventory/variations
       const inventoryRes = await fetch(`/api/etsy/listings/${listingId}/inventory?shopId=${selectedShopId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2174,7 +2208,7 @@ export default function EtsyBusinessSuite() {
         // Set empty inventory if API returns success but no inventory data, or if it fails
         setListingInventory({ products: [] });
       }
-      
+
       // Load available properties for the taxonomy
       if (taxonomyId) {
         try {
@@ -2186,16 +2220,16 @@ export default function EtsyBusinessSuite() {
             const properties = propsData.results || [];
             setAvailableProperties(properties);
             console.log('[Load Listing Details] Loaded properties:', properties.length);
-            
+
             // If listing has inventory with size variations, populate sizeVariations state
             if (listingInventory?.products && listingInventory.products.length > 0) {
               const firstProduct = listingInventory.products[0];
               if (firstProduct.property_values && firstProduct.property_values.length > 0) {
-                const sizeProperty = firstProduct.property_values.find((pv: any) => 
-                  pv.property_name?.toLowerCase().includes('size') || 
+                const sizeProperty = firstProduct.property_values.find((pv: any) =>
+                  pv.property_name?.toLowerCase().includes('size') ||
                   properties.find((p: any) => p.property_id === pv.property_id)?.name?.toLowerCase().includes('size')
                 ) || firstProduct.property_values[0];
-                
+
                 if (sizeProperty) {
                   const prop = properties.find((p: any) => p.property_id === sizeProperty.property_id);
                   if (prop) {
@@ -2211,7 +2245,7 @@ export default function EtsyBusinessSuite() {
                         sku: firstProduct.sku || '',
                       };
                     });
-                    
+
                     setSizeVariations({
                       enabled: true,
                       propertyId: sizeProperty.property_id.toString(),
@@ -2239,15 +2273,15 @@ export default function EtsyBusinessSuite() {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       const url = editingSection
         ? `/api/etsy/shops/${selectedShopId}/sections/${editingSection.shop_section_id}`
         : `/api/etsy/shops/${selectedShopId}/sections`;
-      
+
       const response = await fetch(url, {
         method: editingSection ? 'PUT' : 'POST',
         headers: {
@@ -2256,7 +2290,7 @@ export default function EtsyBusinessSuite() {
         },
         body: JSON.stringify(sectionFormData),
       });
-      
+
       const data = await parseJsonResponse<any>(response);
       if (data.success) {
         toast.success(editingSection ? 'Shop section updated successfully!' : 'Shop section created successfully!');
@@ -2320,7 +2354,7 @@ export default function EtsyBusinessSuite() {
       toast.error('Please select a shop first');
       return;
     }
-    
+
     setIsLoadingStats(true);
     try {
       const token = localStorage.getItem('token');
@@ -2328,11 +2362,11 @@ export default function EtsyBusinessSuite() {
         toast.error('Authentication required');
         return;
       }
-      
+
       toast.loading('Force refreshing listings from Etsy API...', { id: 'force-refresh' });
-      
+
       const offset = (listingsPage - 1) * listingsPerPage;
-      
+
       // Force refresh active listings
       const activeRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=active&limit=${listingsPerPage}&offset=${offset}&forceRefresh=true`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2342,17 +2376,19 @@ export default function EtsyBusinessSuite() {
         const fetchedListings = activeData.results || [];
         const decodedListings = fetchedListings.map((listing: any) => ({
           ...listing,
+          listingId: listing.listingId || listing.listing_id,
           title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
         }));
         setListings(decodedListings);
         setTotalListings(activeData.total || activeData.count || decodedListings.length);
         setHasMoreListings(activeData.hasMore !== undefined ? activeData.hasMore : (decodedListings.length === listingsPerPage && (activeData.total || decodedListings.length) > decodedListings.length));
-        setStats(prev => ({ ...prev, 
+        setStats(prev => ({
+          ...prev,
           totalListings: activeData.total || decodedListings.length,
           activeListings: decodedListings.filter((l: Listing) => l.state === 'active').length
         }));
       }
-      
+
       // Force refresh draft listings
       const draftRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=draft&limit=100&offset=0&forceRefresh=true`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2361,11 +2397,12 @@ export default function EtsyBusinessSuite() {
       if (draftData.success) {
         const decodedDrafts = (draftData.results || []).map((listing: any) => ({
           ...listing,
+          listingId: listing.listingId || listing.listing_id,
           title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
         }));
         setDraftListings(decodedDrafts);
       }
-      
+
       // Force refresh inactive listings
       const inactiveRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=inactive&limit=100&offset=0&forceRefresh=true`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -2374,11 +2411,12 @@ export default function EtsyBusinessSuite() {
       if (inactiveData.success) {
         const decodedInactive = (inactiveData.results || []).map((listing: any) => ({
           ...listing,
+          listingId: listing.listingId || listing.listing_id,
           title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
         }));
         setInactiveListings(decodedInactive);
       }
-      
+
       toast.success('Listings refreshed successfully from Etsy API!', { id: 'force-refresh' });
     } catch (error: any) {
       console.error('Error force refreshing listings:', error);
@@ -2390,48 +2428,46 @@ export default function EtsyBusinessSuite() {
 
   const loadDashboardStats = async () => {
     if (!selectedShopId || isLoadingStats) return;
-    
+
     setIsLoadingStats(true);
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      
+
       // Only load data for dashboard module, or if listings module is active
       const shouldLoadAll = activeModule === 'dashboard';
-      
-      // Load shop data (always needed)
-      const shopRes = await fetch(`/api/etsy/shop/${selectedShopId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const shopData = await parseJsonResponse<any>(shopRes);
-      if (shopData.success) {
-        setShopData(shopData.shop);
-      }
+
+      // Use shared store data for shop details and listings
+      // Refresh shop details if needed
+      await refetchShopDetails(shouldLoadAll);
 
       // Load listings (only if dashboard or listings module)
       if (shouldLoadAll || activeModule === 'listings') {
         const offset = (listingsPage - 1) * listingsPerPage;
-        
-        // Load active listings
-        const activeRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=active&limit=${listingsPerPage}&offset=${offset}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        });
-        const activeData = await parseJsonResponse<any>(activeRes);
-        if (activeData.success) {
-          const fetchedListings = activeData.results || [];
-          const decodedListings = fetchedListings.map((listing: any) => ({
-            ...listing,
-            title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
-          }));
-          setListings(decodedListings);
-          setTotalListings(activeData.total || activeData.count || decodedListings.length);
-          setHasMoreListings(activeData.hasMore !== undefined ? activeData.hasMore : (decodedListings.length === listingsPerPage && (activeData.total || decodedListings.length) > decodedListings.length));
-          setStats(prev => ({ ...prev, 
-            totalListings: activeData.total || decodedListings.length,
-            activeListings: decodedListings.filter((l: Listing) => l.state === 'active').length
-          }));
+
+        // Use shared listings from store, but also fetch filtered/paginated data if needed
+        // For now, use shared listings and filter client-side for active state
+        const activeListings = sharedListings.filter((l: any) => l.state === 'active');
+        const paginatedListings = activeListings.slice(offset, offset + listingsPerPage);
+        const decodedListings = paginatedListings.map((listing: any) => ({
+          ...listing,
+          listingId: listing.listingId || listing.listing_id,
+          title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
+        }));
+        setListings(decodedListings);
+        setTotalListings(activeListings.length);
+        setHasMoreListings(activeListings.length > offset + listingsPerPage);
+        setStats(prev => ({
+          ...prev,
+          totalListings: activeListings.length,
+          activeListings: activeListings.length
+        }));
+
+        // Refresh listings from API if needed
+        if (shouldLoadAll) {
+          await refetchListings(true);
         }
-        
+
         // Load draft listings (only if listings module is active)
         if (activeModule === 'listings') {
           const draftRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=draft&limit=100&offset=0`, {
@@ -2441,11 +2477,12 @@ export default function EtsyBusinessSuite() {
           if (draftData.success) {
             const decodedDrafts = (draftData.results || []).map((listing: any) => ({
               ...listing,
+              listingId: listing.listingId || listing.listing_id,
               title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
             }));
             setDraftListings(decodedDrafts);
           }
-          
+
           // Load inactive listings
           const inactiveRes = await fetch(`/api/etsy/shops/${selectedShopId}/listings?state=inactive&limit=100&offset=0`, {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -2454,6 +2491,7 @@ export default function EtsyBusinessSuite() {
           if (inactiveData.success) {
             const decodedInactive = (inactiveData.results || []).map((listing: any) => ({
               ...listing,
+              listingId: listing.listingId || listing.listing_id,
               title: listing.title ? listing.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : listing.title
             }));
             setInactiveListings(decodedInactive);
@@ -2470,7 +2508,7 @@ export default function EtsyBusinessSuite() {
         if (receiptsData.success) {
           setReceipts(receiptsData.results || []);
           const pending = receiptsData.results?.filter((r: Receipt) => !r.isShipped).length || 0;
-          const revenue = receiptsData.results?.reduce((sum: number, r: Receipt) => 
+          const revenue = receiptsData.results?.reduce((sum: number, r: Receipt) =>
             sum + (r.grandTotal?.amount || 0), 0) || 0;
           setStats(prev => ({ ...prev, pendingOrders: pending, totalRevenue: revenue }));
         }
@@ -2483,10 +2521,10 @@ export default function EtsyBusinessSuite() {
         if (reviewsData.success) {
           setReviews(reviewsData.results || []);
           const avgRating = reviewsData.results?.reduce((sum: number, r: Review) => sum + r.rating, 0) / (reviewsData.results?.length || 1) || 0;
-          setStats(prev => ({ 
-            ...prev, 
-            averageRating: avgRating, 
-            totalReviews: reviewsData.results?.length || 0 
+          setStats(prev => ({
+            ...prev,
+            averageRating: avgRating,
+            totalReviews: reviewsData.results?.length || 0
           }));
         }
 
@@ -2635,9 +2673,8 @@ export default function EtsyBusinessSuite() {
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`h-4 w-4 ${
-                          i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                        }`}
+                        className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                          }`}
                       />
                     ))}
                   </div>
@@ -2769,7 +2806,7 @@ export default function EtsyBusinessSuite() {
                       Create Listing
                     </button>
                   </div>
-                  
+
                   {showCreateListing && (
                     <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                       <div className="flex items-center justify-between mb-4">
@@ -2811,6 +2848,7 @@ export default function EtsyBusinessSuite() {
                               featured_rank: '',
                               state: 'draft',
                               type: 'physical',
+                              readiness_state_id: '',
                             });
                             setListingImages([]);
                             setListingVideos([]);
@@ -3086,71 +3124,199 @@ export default function EtsyBusinessSuite() {
                           <label className="text-sm text-black">This is a supply</label>
                         </div>
                       </div>
-                      
-                      {/* Images Section */}
-                      <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
-                          title={`Images (${listingImages.length}/20)`}
-                          icon={ImageIcon}
-                          section="listings"
-                          helpText="Add up to 20 high-quality images. The first image is your main listing photo. Use multiple angles and lifestyle shots to showcase your product."
-                        />
-                        {editingListing && listingImages.length > 0 && (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                            {listingImages.map((img: any, idx: number) => (
-                              <div key={img.listing_image_id || idx} className="relative group">
-                                <img
-                                  src={img.url_fullxfull || img.url_570xN || img.url_75x75}
-                                  alt={`Image ${idx + 1}`}
-                                  className="w-full h-24 object-cover rounded border"
+
+                      {/* Images Section - Display Only (for new listings) */}
+                      {!editingListing && (
+                        <div className="mt-6 pt-6 border-t">
+                          <SectionHeader
+                            title={`Images (${newImageUrls.filter(url => url.trim()).length}/20)`}
+                            icon={ImageIcon}
+                            section="listings"
+                            helpText="Add up to 20 high-quality images. The first image is your main listing photo. Use multiple angles and lifestyle shots to showcase your product."
+                          />
+                          <div className="space-y-2">
+                            {newImageUrls.map((url, idx) => (
+                              <div key={idx} className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={url}
+                                  onChange={(e) => {
+                                    const newUrls = [...newImageUrls];
+                                    newUrls[idx] = e.target.value;
+                                    setNewImageUrls(newUrls);
+                                  }}
+                                  className="flex-1 px-3 py-2 border rounded-lg text-black"
+                                  placeholder="Image URL"
                                 />
-                                <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
-                                  {img.rank || idx + 1}
-                                </div>
+                                {idx === newImageUrls.length - 1 && newImageUrls.length < 20 && (
+                                  <button
+                                    onClick={() => setNewImageUrls([...newImageUrls, ''])}
+                                    className="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {newImageUrls.length > 1 && (
+                                  <button
+                                    onClick={() => setNewImageUrls(newImageUrls.filter((_, i) => i !== idx))}
+                                    className="px-3 py-2 bg-red-100 rounded-lg hover:bg-red-200"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
-                        )}
-                        <div className="space-y-2">
-                          {newImageUrls.map((url, idx) => (
-                            <div key={idx} className="flex gap-2">
+                          <p className="text-xs text-gray-500 mt-2">Add image URLs (up to 20 images). Images will be uploaded when creating the listing.</p>
+                        </div>
+                      )}
+
+                      {/* Image Management Section - Separate section for editing listings */}
+                      {editingListing && (
+                        <div className="mt-6 pt-6 border-t">
+                          <SectionHeader
+                            title={`Image Management (${listingImages.length}/20)`}
+                            icon={ImageIcon}
+                            section="listings"
+                            helpText="Upload, delete, and reorder images for this listing. Images are managed separately from other listing details."
+                          />
+
+                          {/* Current Images Display */}
+                          {listingImages.length > 0 && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                              {listingImages
+                                .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+                                .map((img: any, idx: number) => {
+                                  const imageId = img.listing_image_id?.toString() || img.listingImageId?.toString() || '';
+                                  const currentRank = img.rank || idx + 1;
+                                  const isDeleting = deletingImageId === imageId;
+                                  const isUpdatingRank = updatingImageRank === imageId;
+
+                                  const src = img.url_fullxfull || img.url_570xN || img.url_75x75 || img.url;
+                                  console.log(`[Listing Image ${idx}]`, { id: imageId, rank: currentRank, src, imgObj: img });
+
+                                  return (
+                                    <div key={imageId || idx} className="relative group border rounded-lg overflow-hidden bg-gray-100">
+                                      {src ? (
+                                        <img
+                                          src={src}
+                                          alt={`Image ${currentRank}`}
+                                          className="w-full h-32 object-cover bg-white"
+                                          onError={(e) => {
+                                            console.error(`[Image Error] Failed to load: ${src}`);
+                                            const target = e.target as HTMLImageElement;
+                                            // Use a solid color placeholder if image fails
+                                            target.style.display = 'none';
+                                            target.parentElement?.classList.add('image-load-error');
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-32 flex items-center justify-center bg-gray-200 text-gray-400">
+                                          <ImageIcon className="h-8 w-8" />
+                                        </div>
+                                      )}
+                                      {/* Fallback for error state */}
+                                      <div className="hidden image-load-error:flex w-full h-32 absolute inset-0 items-center justify-center bg-gray-200 text-gray-500">
+                                        <span className="text-xs">Failed to load</span>
+                                      </div>
+
+                                      <div className="absolute top-1 left-1 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
+                                        Rank: {currentRank}
+                                      </div>
+                                      {/* Overlay - changed to opacity transition for better compatibility */}
+                                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-20">
+                                        <div className="flex flex-col gap-1">
+                                          {/* Move Up */}
+                                          {currentRank > 1 && (
+                                            <button
+                                              onClick={() => handleUpdateImageRank(imageId, currentRank - 1)}
+                                              disabled={isUpdatingRank}
+                                              className="p-1 bg-white rounded hover:bg-gray-100 disabled:opacity-50"
+                                              title="Move up"
+                                            >
+                                              {isUpdatingRank ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                              ) : (
+                                                <ArrowUp className="h-4 w-4 text-gray-700" />
+                                              )}
+                                            </button>
+                                          )}
+                                          {/* Move Down */}
+                                          {currentRank < listingImages.length && (
+                                            <button
+                                              onClick={() => handleUpdateImageRank(imageId, currentRank + 1)}
+                                              disabled={isUpdatingRank}
+                                              className="p-1 bg-white rounded hover:bg-gray-100 disabled:opacity-50"
+                                              title="Move down"
+                                            >
+                                              {isUpdatingRank ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                              ) : (
+                                                <ArrowDown className="h-4 w-4 text-gray-700" />
+                                              )}
+                                            </button>
+                                          )}
+                                          {/* Delete */}
+                                          <button
+                                            onClick={() => handleDeleteImage(imageId)}
+                                            disabled={isDeleting}
+                                            className="p-1 bg-red-500 rounded hover:bg-red-600 disabled:opacity-50"
+                                            title="Delete image"
+                                          >
+                                            {isDeleting ? (
+                                              <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                            ) : (
+                                              <Trash2 className="h-4 w-4 text-white" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+
+                          {/* Upload New Image */}
+                          <div className="mt-4">
+                            <label className="block text-sm font-medium mb-2 text-black">Upload New Image</label>
+                            <div className="flex gap-2">
                               <input
-                                type="text"
-                                value={url}
+                                type="file"
+                                accept="image/*"
                                 onChange={(e) => {
-                                  const newUrls = [...newImageUrls];
-                                  newUrls[idx] = e.target.value;
-                                  setNewImageUrls(newUrls);
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const nextRank = listingImages.length > 0
+                                      ? Math.max(...listingImages.map((img: any) => img.rank || 0)) + 1
+                                      : 1;
+                                    handleUploadImage(file, nextRank);
+                                    // Reset input
+                                    e.target.value = '';
+                                  }
                                 }}
-                                className="flex-1 px-3 py-2 border rounded-lg text-black"
-                                placeholder="Image URL"
+                                disabled={uploadingImage || listingImages.length >= 20}
+                                className="flex-1 px-3 py-2 border rounded-lg text-black disabled:opacity-50"
                               />
-                              {idx === newImageUrls.length - 1 && newImageUrls.length < 20 && (
-                                <button
-                                  onClick={() => setNewImageUrls([...newImageUrls, ''])}
-                                  className="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              )}
-                              {newImageUrls.length > 1 && (
-                                <button
-                                  onClick={() => setNewImageUrls(newImageUrls.filter((_, i) => i !== idx))}
-                                  className="px-3 py-2 bg-red-100 rounded-lg hover:bg-red-200"
-                                >
-                                  <X className="h-4 w-4" />
-                                </button>
+                              {uploadingImage && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Uploading...
+                                </div>
                               )}
                             </div>
-                          ))}
+                            {listingImages.length >= 20 && (
+                              <p className="text-xs text-red-500 mt-1">Maximum of 20 images reached. Delete an image to add a new one.</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-2">Upload images directly to this listing. Supported formats: JPG, PNG, GIF</p>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">Add image URLs (up to 20 images). Images will be uploaded when creating the listing.</p>
-                      </div>
-                      
+                      )}
+
                       {/* Videos Section */}
                       {editingListing && listingVideos.length > 0 && (
                         <div className="mt-6 pt-6 border-t">
-                          <SectionHeader 
+                          <SectionHeader
                             title={`Videos (${listingVideos.length})`}
                             icon={Video}
                             section="listings"
@@ -3162,8 +3328,8 @@ export default function EtsyBusinessSuite() {
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <p className="text-sm font-medium text-black">Video #{idx + 1}</p>
-                                    {video.url && (
-                                      <a href={video.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600">
+                                    {(video.url || video.video_url || video.thumbnail_url) && (
+                                      <a href={video.url || video.video_url || video.thumbnail_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600">
                                         View Video
                                       </a>
                                     )}
@@ -3176,10 +3342,10 @@ export default function EtsyBusinessSuite() {
                           <p className="text-xs text-gray-500 mt-2">Videos can be managed through Etsy's API endpoints</p>
                         </div>
                       )}
-                      
+
                       {/* Shipping & Processing Section */}
                       <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
+                        <SectionHeader
                           title="Shipping & Processing"
                           icon={Truck}
                           section="listings"
@@ -3256,10 +3422,10 @@ export default function EtsyBusinessSuite() {
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* Size/Variations Section */}
                       <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
+                        <SectionHeader
                           title="Size Options & Variations"
                           icon={Package}
                           section="listings"
@@ -3275,7 +3441,7 @@ export default function EtsyBusinessSuite() {
                             />
                             <label className="text-sm font-medium text-black">Enable size variations</label>
                           </div>
-                          
+
                           {sizeVariations.enabled && (
                             <div className="space-y-4 pl-6 border-l-2 border-purple-200">
                               {/* Property Selection */}
@@ -3284,8 +3450,8 @@ export default function EtsyBusinessSuite() {
                                 <select
                                   value={sizeVariations.propertyId}
                                   onChange={(e) => {
-                                    const selectedProp = availableProperties.find((p: any) => 
-                                      p.property_id?.toString() === e.target.value || 
+                                    const selectedProp = availableProperties.find((p: any) =>
+                                      p.property_id?.toString() === e.target.value ||
                                       p.id?.toString() === e.target.value
                                     );
                                     setSizeVariations({
@@ -3324,14 +3490,14 @@ export default function EtsyBusinessSuite() {
                                   <p className="text-xs text-green-600 mt-1">✓ {availableProperties.length} property{availableProperties.length !== 1 ? 'ies' : ''} available</p>
                                 )}
                               </div>
-                              
+
                               {/* Size Values Selection */}
                               {sizeVariations.propertyId && (() => {
-                                const selectedProp = availableProperties.find((p: any) => 
-                                  (p.property_id?.toString() === sizeVariations.propertyId) || 
+                                const selectedProp = availableProperties.find((p: any) =>
+                                  (p.property_id?.toString() === sizeVariations.propertyId) ||
                                   (p.id?.toString() === sizeVariations.propertyId)
                                 );
-                                
+
                                 // Get values from different possible structures
                                 let availableValues: any[] = [];
                                 if (selectedProp) {
@@ -3344,16 +3510,16 @@ export default function EtsyBusinessSuite() {
                                       }
                                     });
                                   }
-                                  
+
                                   // Also check for direct values/possible_values
                                   if (availableValues.length === 0) {
                                     availableValues = selectedProp.possible_values || selectedProp.values || [];
                                   }
-                                  
+
                                   console.log('[Size Variations] Selected property:', selectedProp.name || selectedProp.property_name || selectedProp.display_name);
                                   console.log('[Size Variations] Available values:', availableValues.length, availableValues);
                                 }
-                                
+
                                 return (
                                   <div>
                                     <label className="block text-sm font-medium mb-2 text-black">Select Sizes</label>
@@ -3361,11 +3527,11 @@ export default function EtsyBusinessSuite() {
                                       {availableValues.map((value: any) => {
                                         const valueId = value.value_id || value.id || value;
                                         const valueName = typeof value === 'string' ? value : (value.name || value.value || value);
-                                        
+
                                         if (!valueId || !valueName) return null;
-                                        
+
                                         const isSelected = sizeVariations.values.some(v => v.valueId === valueId);
-                                        
+
                                         return (
                                           <button
                                             key={valueId}
@@ -3392,18 +3558,17 @@ export default function EtsyBusinessSuite() {
                                                 });
                                               }
                                             }}
-                                            className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
-                                              isSelected
-                                                ? 'bg-purple-600 text-white border-purple-600'
-                                                : 'bg-white text-black border-gray-300 hover:border-purple-400'
-                                            }`}
+                                            className={`px-3 py-2 border rounded-lg text-sm transition-colors ${isSelected
+                                              ? 'bg-purple-600 text-white border-purple-600'
+                                              : 'bg-white text-black border-gray-300 hover:border-purple-400'
+                                              }`}
                                           >
                                             {valueName}
                                           </button>
                                         );
                                       })}
                                     </div>
-                                    
+
                                     {/* Size Details Table */}
                                     {sizeVariations.values.length > 0 && (
                                       <div className="mt-4">
@@ -3492,10 +3657,10 @@ export default function EtsyBusinessSuite() {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Personalization Section */}
                       <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
+                        <SectionHeader
                           title="Personalization Options"
                           section="listings"
                           helpText="Enable personalization to allow buyers to customize your product with text, colors, or other options. This can increase value and buyer satisfaction."
@@ -3545,11 +3710,11 @@ export default function EtsyBusinessSuite() {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Variations/Inventory Section */}
                       {editingListing && (
                         <div className="mt-6 pt-6 border-t">
-                          <SectionHeader 
+                          <SectionHeader
                             title="Variations & Inventory"
                             icon={Package}
                             section="listings"
@@ -3602,7 +3767,7 @@ export default function EtsyBusinessSuite() {
                                                 <div>
                                                   <span className="text-xs text-gray-600">Price: </span>
                                                   <span className="font-medium text-black">
-                                                    ${offering.price?.amount && offering.price?.divisor 
+                                                    ${offering.price?.amount && offering.price?.divisor
                                                       ? (offering.price.amount / offering.price.divisor).toFixed(2)
                                                       : offering.price ? String(offering.price) : '0.00'}
                                                   </span>
@@ -3658,10 +3823,10 @@ export default function EtsyBusinessSuite() {
                           )}
                         </div>
                       )}
-                      
+
                       {/* Additional Options */}
                       <div className="mt-6 pt-6 border-t">
-                        <SectionHeader 
+                        <SectionHeader
                           title="Additional Options"
                           section="listings"
                           helpText="Configure tax settings, auto-renewal, featured rank, and listing state. These options help optimize your listing's visibility and compliance."
@@ -3713,7 +3878,7 @@ export default function EtsyBusinessSuite() {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="mt-6 flex gap-2">
                         <button
                           onClick={() => editingListing ? handleUpdateListing(editingListing) : handleCreateListing()}
@@ -3758,6 +3923,7 @@ export default function EtsyBusinessSuite() {
                               featured_rank: '',
                               state: 'draft',
                               type: 'physical',
+                              readiness_state_id: '',
                             });
                             setListingImages([]);
                             setListingVideos([]);
@@ -3773,14 +3939,14 @@ export default function EtsyBusinessSuite() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-black">
                       Your Listings (
                       {listingsTab === 'active' ? (totalListings || listings.length) :
-                       listingsTab === 'draft' ? draftListings.length :
-                       inactiveListings.length})
+                        listingsTab === 'draft' ? draftListings.length :
+                          inactiveListings.length})
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
@@ -3803,36 +3969,33 @@ export default function EtsyBusinessSuite() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Tabs for Active/Draft/Inactive */}
                   <div className="flex gap-2 mb-4 border-b">
                     <button
                       onClick={() => setListingsTab('active')}
-                      className={`px-4 py-2 text-sm font-medium transition-colors ${
-                        listingsTab === 'active'
-                          ? 'text-purple-600 border-b-2 border-purple-600'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${listingsTab === 'active'
+                        ? 'text-purple-600 border-b-2 border-purple-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
                     >
                       Active ({listings.length})
                     </button>
                     <button
                       onClick={() => setListingsTab('draft')}
-                      className={`px-4 py-2 text-sm font-medium transition-colors ${
-                        listingsTab === 'draft'
-                          ? 'text-purple-600 border-b-2 border-purple-600'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${listingsTab === 'draft'
+                        ? 'text-purple-600 border-b-2 border-purple-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
                     >
                       Draft ({draftListings.length})
                     </button>
                     <button
                       onClick={() => setListingsTab('inactive')}
-                      className={`px-4 py-2 text-sm font-medium transition-colors ${
-                        listingsTab === 'inactive'
-                          ? 'text-purple-600 border-b-2 border-purple-600'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${listingsTab === 'inactive'
+                        ? 'text-purple-600 border-b-2 border-purple-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                        }`}
                     >
                       Inactive ({inactiveListings.length})
                     </button>
@@ -3842,9 +4005,9 @@ export default function EtsyBusinessSuite() {
                   <div className="space-y-3">
                     {(() => {
                       const currentListings = listingsTab === 'active' ? listings :
-                                               listingsTab === 'draft' ? draftListings :
-                                               inactiveListings;
-                      
+                        listingsTab === 'draft' ? draftListings :
+                          inactiveListings;
+
                       if (currentListings.length === 0) {
                         return (
                           <p className="text-gray-500 text-center py-8">
@@ -3852,16 +4015,11 @@ export default function EtsyBusinessSuite() {
                           </p>
                         );
                       }
-                      
+
                       return currentListings.map((listing) => (
-                        <div 
-                          key={listing.listingId} 
-                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={() => {
-                            setSelectedListingForModal(listing);
-                            setShowListingModal(true);
-                            setOptimizationResult(null);
-                          }}
+                        <div
+                          key={listing.listingId}
+                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors group"
                         >
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-black truncate">{listing.title}</p>
@@ -3869,30 +4027,69 @@ export default function EtsyBusinessSuite() {
                               ${listing.price?.amount?.toFixed(2) || '0.00'} • {listing.quantity || 0} in stock • {listing.state}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-2 ml-4">
                             {listing.url && (
                               <a
                                 href={listing.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                 title="View on Etsy"
                               >
                                 <Eye className="h-4 w-4" />
                               </a>
                             )}
+
                             <button
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded"
-                              title="More options"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOptimizeListing(listing, 'all');
+                              }}
+                              disabled={optimizingListing === listing.listingId}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 disabled:opacity-50 transition-colors text-xs font-semibold"
+                              title="AI Optimize Listing"
                             >
-                              <ChevronRight className="h-4 w-4" />
+                              {optimizingListing === listing.listingId ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-3.5 w-3.5" />
+                              )}
+                              <span className="hidden md:inline">Optimize</span>
+                            </button>
+
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setEditingListing(listing);
+                                await loadListingDetailsForEdit(listing.listingId);
+                                setShowCreateListing(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-xs font-semibold"
+                              title="Edit Listing"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">Edit</span>
+                            </button>
+
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
+                                  await handleDeleteListing(listing.listingId);
+                                }
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-semibold"
+                              title="Delete Listing"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden md:inline">Delete</span>
                             </button>
                           </div>
                         </div>
                       ));
                     })()}
                   </div>
-                  
+
                   {/* Pagination Controls - Only show for active listings */}
                   {listingsTab === 'active' && listings.length > 0 && totalListings > 0 && (
                     <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-200 pt-4">
@@ -3915,7 +4112,7 @@ export default function EtsyBusinessSuite() {
                           {Array.from({ length: Math.min(5, Math.ceil(totalListings / listingsPerPage)) }, (_, i) => {
                             const totalPages = Math.ceil(totalListings / listingsPerPage);
                             let pageNum: number;
-                            
+
                             if (totalPages <= 5) {
                               pageNum = i + 1;
                             } else if (listingsPage <= 3) {
@@ -3925,18 +4122,17 @@ export default function EtsyBusinessSuite() {
                             } else {
                               pageNum = listingsPage - 2 + i;
                             }
-                            
+
                             if (pageNum > totalPages) return null;
-                            
+
                             return (
                               <button
                                 key={pageNum}
                                 onClick={() => setListingsPage(pageNum)}
-                                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                                  listingsPage === pageNum
-                                    ? 'bg-purple-600 text-white hover:bg-purple-700'
-                                    : 'text-black bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                                }`}
+                                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${listingsPage === pageNum
+                                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                  : 'text-black bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                                  }`}
                               >
                                 {pageNum}
                               </button>
@@ -3968,173 +4164,140 @@ export default function EtsyBusinessSuite() {
                   )}
                 </div>
 
-                {/* Listing Actions Modal */}
-                {showListingModal && selectedListingForModal && (
-                  <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-300">
-                      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                        <h3 className="text-xl font-semibold text-black">Listing Options</h3>
+                {/* AI Optimization Results Modal */}
+                {showListingModal && optimizationResult && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-purple-100 animate-in fade-in zoom-in duration-200">
+                      <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-purple-600">
+                          <Sparkles className="h-5 w-5" />
+                          <h3 className="text-xl font-bold">AI Optimization Results</h3>
+                        </div>
                         <button
                           onClick={() => {
                             setShowListingModal(false);
-                            setSelectedListingForModal(null);
                             setOptimizationResult(null);
                           }}
-                          className="text-gray-500 hover:text-gray-700"
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                         >
                           <X className="h-5 w-5" />
                         </button>
                       </div>
-                      
+
                       <div className="p-6">
                         {/* Listing Info */}
-                        <div className="mb-6 pb-6 border-b border-gray-200">
-                          <h4 className="text-lg font-semibold text-black mb-2">{selectedListingForModal.title}</h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-600">Price</p>
-                              <p className="font-medium text-black">${selectedListingForModal.price?.amount?.toFixed(2) || '0.00'}</p>
+                        <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <h4 className="text-lg font-bold text-gray-900 mb-3">{optimizationResult.listing.title}</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                            <div className="space-y-1">
+                              <p className="text-gray-500 font-medium uppercase tracking-wider text-[10px]">Current Price</p>
+                              <p className="font-bold text-gray-900">${optimizationResult.listing.price?.amount?.toFixed(2) || '0.00'}</p>
                             </div>
-                            <div>
-                              <p className="text-gray-600">Stock</p>
-                              <p className="font-medium text-black">{selectedListingForModal.quantity || 0}</p>
+                            <div className="space-y-1">
+                              <p className="text-gray-500 font-medium uppercase tracking-wider text-[10px]">Current Stock</p>
+                              <p className="font-bold text-gray-900">{optimizationResult.listing.quantity || 0} units</p>
                             </div>
-                            <div>
-                              <p className="text-gray-600">State</p>
-                              <p className="font-medium text-black capitalize">{selectedListingForModal.state}</p>
+                            <div className="space-y-1">
+                              <p className="text-gray-500 font-medium uppercase tracking-wider text-[10px]">Status</p>
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${optimizationResult.listing.state === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                {optimizationResult.listing.state}
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-gray-600">Views</p>
-                              <p className="font-medium text-black">{selectedListingForModal.views || 0}</p>
+                            <div className="space-y-1">
+                              <p className="text-gray-500 font-medium uppercase tracking-wider text-[10px]">Views</p>
+                              <p className="font-bold text-gray-900">{optimizationResult.listing.views || 0}</p>
                             </div>
                           </div>
-                          {selectedListingForModal.url && (
-                            <a
-                              href={selectedListingForModal.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 mt-4 text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              <Eye className="h-4 w-4" />
-                              View on Etsy
-                            </a>
-                          )}
                         </div>
 
                         {/* Optimization Results Display */}
-                        {optimizationResult && optimizationResult.listing.listingId === selectedListingForModal.listingId && (
-                          <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                            <div className="flex items-start justify-between mb-3">
-                              <h4 className="font-semibold text-purple-900">Optimization Results</h4>
-                              <button
-                                onClick={() => setOptimizationResult(null)}
-                                className="text-purple-600 hover:text-purple-800"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                            <div className="space-y-3 text-sm">
-                              {optimizationResult.mode === 'title' || optimizationResult.mode === 'all' ? (
-                                <div>
-                                  <p className="font-medium text-gray-700 mb-1">Title:</p>
-                                  <p className="text-gray-600 line-through mb-1">{optimizationResult.listing.title}</p>
-                                  <p className="text-purple-700 font-medium">
-                                    {optimizationResult.result.optimized?.title?.optimized_title || 
-                                     optimizationResult.result.optimized?.optimized_title || 
-                                     'No title generated'}
+                        <div className="space-y-6">
+                          <div className="p-6 bg-purple-50 rounded-xl border border-purple-100 space-y-6">
+                            {(optimizationResult.mode === 'title' || optimizationResult.mode === 'all') && (
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold text-purple-900 uppercase tracking-widest">Optimized Title</p>
+                                <div className="p-3 bg-white rounded-lg border border-purple-200">
+                                  <p className="text-gray-400 line-through text-xs mb-2">{optimizationResult.listing.title}</p>
+                                  <p className="text-purple-700 font-semibold leading-relaxed">
+                                    {optimizationResult.result.optimized?.title?.optimized_title ||
+                                      optimizationResult.result.optimized?.optimized_title ||
+                                      'No title generated'}
                                   </p>
                                 </div>
-                              ) : null}
-                              {optimizationResult.mode === 'description' || optimizationResult.mode === 'all' ? (
-                                <div>
-                                  <p className="font-medium text-gray-700 mb-1">Description:</p>
-                                  {optimizationResult.result.optimized?.description?.optimized_description || 
-                                   optimizationResult.result.optimized?.optimized_description ? (
-                                    <p className="text-purple-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                                      {optimizationResult.result.optimized?.description?.optimized_description || 
-                                       optimizationResult.result.optimized?.optimized_description}
-                                    </p>
-                                  ) : (
-                                    <p className="text-gray-500 italic">No description generated. Please try optimizing again.</p>
-                                  )}
-                                </div>
-                              ) : null}
-                              {optimizationResult.mode === 'tags' || optimizationResult.mode === 'all' ? (
-                                <div>
-                                  <p className="font-medium text-gray-700 mb-1">Tags:</p>
-                                  {optimizationResult.result.optimized?.tags?.optimized_tags || 
-                                   optimizationResult.result.optimized?.optimized_tags ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {(optimizationResult.result.optimized?.tags?.optimized_tags || 
-                                        optimizationResult.result.optimized?.optimized_tags || []).map((tag: string, i: number) => (
-                                        <span key={i} className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">{tag}</span>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-gray-500 italic">No tags generated. Please try optimizing again.</p>
-                                  )}
-                                </div>
-                              ) : null}
-                            </div>
-                            <button
-                              onClick={handleApplyOptimization}
-                              className="mt-3 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium"
-                            >
-                              Apply Optimization
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                          <button
-                            onClick={() => handleOptimizeListing(selectedListingForModal, 'all')}
-                            disabled={optimizingListing === selectedListingForModal.listingId}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {optimizingListing === selectedListingForModal.listingId ? (
-                              <>
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                                <span>Optimizing...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-5 w-5" />
-                                <span>AI Optimize Listing</span>
-                              </>
+                              </div>
                             )}
-                          </button>
-                          
-                          <button
-                            onClick={async () => {
-                              setEditingListing(selectedListingForModal);
-                              await loadListingDetailsForEdit(selectedListingForModal.listingId);
-                              setShowListingModal(false);
-                              setSelectedListingForModal(null);
-                              setShowCreateListing(true);
-                            }}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            <Edit className="h-5 w-5" />
-                            <span>Edit Listing</span>
-                          </button>
-                          
-                          <button
-                            onClick={async () => {
-                              if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {
-                                setShowListingModal(false);
-                                const listingIdToDelete = selectedListingForModal?.listingId;
-                                setSelectedListingForModal(null);
-                                if (listingIdToDelete) {
-                                  await handleDeleteListing(listingIdToDelete);
-                                }
-                              }
-                            }}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                            <span>Delete Listing</span>
-                          </button>
+
+                            {(optimizationResult.mode === 'description' || optimizationResult.mode === 'all') && (
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold text-purple-900 uppercase tracking-widest">Optimized Description</p>
+                                <div className="p-4 bg-white rounded-lg border border-purple-200">
+                                  <div className="text-purple-700 text-sm whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed font-medium">
+                                    {optimizationResult.result.optimized?.description?.optimized_description ||
+                                      optimizationResult.result.optimized?.optimized_description ||
+                                      'No description generated.'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {(optimizationResult.mode === 'tags' || optimizationResult.mode === 'all') && (
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold text-purple-900 uppercase tracking-widest">Suggested Tags</p>
+                                <div className="flex flex-wrap gap-2 p-3 bg-white rounded-lg border border-purple-200">
+                                  {(optimizationResult.result.optimized?.tags?.optimized_tags ||
+                                    optimizationResult.result.optimized?.optimized_tags || []).length > 0 ? (
+                                    (optimizationResult.result.optimized?.tags?.optimized_tags ||
+                                      optimizationResult.result.optimized?.optimized_tags || []).map((tag: string, i: number) => (
+                                        <span key={i} className="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-bold">
+                                          {tag}
+                                        </span>
+                                      ))
+                                  ) : (
+                                    <p className="text-gray-400 text-xs italic">No tags generated.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {(optimizationResult.mode === 'materials' || optimizationResult.mode === 'all') && (
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold text-purple-900 uppercase tracking-widest">Suggested Materials</p>
+                                <div className="flex flex-wrap gap-2 p-3 bg-white rounded-lg border border-purple-200">
+                                  {(optimizationResult.result.optimized?.materials?.optimized_materials ||
+                                    optimizationResult.result.optimized?.optimized_materials || []).length > 0 ? (
+                                    (optimizationResult.result.optimized?.materials?.optimized_materials ||
+                                      optimizationResult.result.optimized?.optimized_materials || []).map((material: string, i: number) => (
+                                        <span key={i} className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-bold">
+                                          {material}
+                                        </span>
+                                      ))
+                                  ) : (
+                                    <p className="text-gray-400 text-xs italic">No materials generated.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="pt-4 flex gap-3">
+                              <button
+                                onClick={handleApplyOptimization}
+                                className="flex-1 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-bold transition-all shadow-lg shadow-purple-200 flex items-center justify-center gap-2"
+                              >
+                                <Save className="h-5 w-5" />
+                                Apply to Listing
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowListingModal(false);
+                                  setOptimizationResult(null);
+                                }}
+                                className="flex-1 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 font-bold transition-all"
+                              >
+                                Keep Original
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -4286,9 +4449,8 @@ export default function EtsyBusinessSuite() {
                           {[...Array(5)].map((_, i) => (
                             <Star
                               key={i}
-                              className={`h-5 w-5 ${
-                                i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                              }`}
+                              className={`h-5 w-5 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                }`}
                             />
                           ))}
                         </div>
@@ -4396,7 +4558,7 @@ export default function EtsyBusinessSuite() {
                       Create Profile
                     </button>
                   </div>
-                  
+
                   {showCreateShippingProfile && (
                     <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                       <div className="flex items-center justify-between mb-4">
@@ -4407,9 +4569,14 @@ export default function EtsyBusinessSuite() {
                             setEditingShippingProfile(null);
                             setShippingProfileFormData({
                               title: '',
-                              min_processing_days: 1,
-                              max_processing_days: 3,
+                              min_processing_time: 1,
+                              max_processing_time: 3,
+                              processing_time_unit: 'business_days',
                               origin_country_iso: 'US',
+                              primary_cost: '',
+                              secondary_cost: '',
+                              min_delivery_days: '',
+                              max_delivery_days: '',
                             });
                           }}
                           className="text-gray-500 hover:text-gray-700"
@@ -4564,7 +4731,7 @@ export default function EtsyBusinessSuite() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                   <h3 className="text-lg font-semibold mb-4 text-black">Your Shipping Profiles ({shippingProfiles.length})</h3>
                   <div className="space-y-3">
@@ -4647,7 +4814,7 @@ export default function EtsyBusinessSuite() {
                       Create Section
                     </button>
                   </div>
-                  
+
                   {showCreateSection && (
                     <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                       <div className="flex items-center justify-between mb-4">
@@ -4694,7 +4861,7 @@ export default function EtsyBusinessSuite() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-black">Your Shop Sections ({shopSections.length})</h3>
@@ -4782,7 +4949,7 @@ export default function EtsyBusinessSuite() {
                   Refresh
                 </button>
               </div>
-              
+
               <div className="mb-4">
                 <div className="flex items-center gap-4 mb-4">
                   <label className="flex items-center gap-2">
@@ -4814,7 +4981,7 @@ export default function EtsyBusinessSuite() {
                     <span className="text-sm font-medium text-black">Buyer Taxonomy</span>
                   </label>
                 </div>
-                
+
                 {taxonomyType === 'seller' && !selectedShopId && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                     <p className="text-sm text-yellow-800">
@@ -4822,7 +4989,7 @@ export default function EtsyBusinessSuite() {
                     </p>
                   </div>
                 )}
-                
+
                 <div className="mb-4">
                   <input
                     type="text"
@@ -4851,7 +5018,7 @@ export default function EtsyBusinessSuite() {
                     </div>
                   ) : (
                     <div>
-                      {(taxonomyType === 'seller' ? sellerTaxonomyNodes : buyerTaxonomyNodes).map((node: any) => 
+                      {(taxonomyType === 'seller' ? sellerTaxonomyNodes : buyerTaxonomyNodes).map((node: any) =>
                         renderTaxonomyNode(node)
                       )}
                     </div>
@@ -5356,16 +5523,16 @@ export default function EtsyBusinessSuite() {
         <p className="text-gray-700 mb-4">
           Comprehensive platform utilizing all 100+ Etsy API endpoints for complete shop management, analytics, and automation
         </p>
-        
+
         {/* Shop Selector */}
         <div className="mt-4">
           <EtsyShopSelector
             selectedShopId={selectedShopId}
-            onShopChange={(shopId) => setSelectedShopId(shopId)}
+            onShopChange={(shopId) => setSelectedShop(shopId)}
             showAddButton={true}
           />
         </div>
-        
+
         {!selectedShopId && (
           <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
@@ -5375,41 +5542,64 @@ export default function EtsyBusinessSuite() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-sm border p-4 sticky top-4">
-            <h2 className="font-semibold mb-4 text-black">Modules</h2>
-            <div className="space-y-1">
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Mobile Module Selector - Dropdown on small screens */}
+        <div className="lg:hidden">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Select Management Module</label>
+          <select
+            value={activeModule}
+            onChange={(e) => setActiveModule(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-black font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm"
+          >
+            {modules.map((module) => (
+              <option key={module.id} value={module.id}>
+                {module.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Desktop Sidebar Sidebar */}
+        <div className="hidden lg:block lg:w-72 shrink-0">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-4">
+            <h2 className="font-bold mb-4 text-gray-900 px-2 tracking-tight">Management Modules</h2>
+            <div className="space-y-1.5">
               {modules.map((module) => (
                 <button
                   key={module.id}
                   onClick={() => setActiveModule(module.id)}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
-                    activeModule === module.id
-                      ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                  className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 group ${activeModule === module.id
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 ring-1 ring-purple-600'
+                    : 'hover:bg-purple-50 text-gray-600 hover:text-purple-700'
+                    }`}
                 >
-                  <module.icon className="h-5 w-5" />
-                  <div className="flex-1">
-                    <div className="font-medium text-sm text-black">{module.label}</div>
+                  <module.icon className={`h-5 w-5 shrink-0 transition-colors ${activeModule === module.id ? 'text-white' : 'text-gray-400 group-hover:text-purple-500'}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{module.label}</div>
                     {module.description && (
-                      <div className="text-xs text-gray-500">{module.description}</div>
+                      <div className={`text-[10px] truncate ${activeModule === module.id ? 'text-purple-100' : 'text-gray-400'}`}>
+                        {module.description}
+                      </div>
                     )}
                   </div>
+                  <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${activeModule === module.id ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0'}`} />
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-3">
+        {/* Content Area */}
+        <div className="flex-1 min-w-0">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+            <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
+              <Loader2 className="h-10 w-10 animate-spin text-purple-600 mb-4" />
+              <p className="text-gray-500 font-medium">Processing your request...</p>
             </div>
           ) : (
-            renderModuleContent()
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {renderModuleContent()}
+            </div>
           )}
         </div>
       </div>

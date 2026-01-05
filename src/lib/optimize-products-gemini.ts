@@ -124,13 +124,22 @@ Optimize for high CTR, clear benefits, relevant keywords, and natural language t
     input.category || ''
   }\n- Brand: ${input.brand || ''}`;
 
-  return `${baseContext}${productBits}\nTask: Write an Etsy-optimized product title. 
+  return `${baseContext}${productBits}\nTask: Write a natural, buyer-focused Etsy product title. 
 
 TITLE OPTIMIZATION:
-- Short, clear, easy-to-read (max 140 chars)
-- Place MOST IMPORTANT descriptive keywords FIRST (buyers only see first few words in search)
-- For Google SEO: First 50-60 characters shown in search results - include critical traits upfront
-- No emojis, no ALL CAPS, avoid keyword stuffing
+- Length: 120-140 characters (optimal range - use full space wisely but naturally)
+- Natural Flow: Read like a real product name a seller would write - NOT like an SEO keyword string
+- Buyer Clarity: Immediately tell buyers WHAT the product is and WHY they might want it
+- Format: Title Case - NO emojis, NO all caps, NO excessive punctuation
+- Authenticity: Should sound like it was written by a real person, not an algorithm
+
+KEYWORD INTEGRATION (Natural, Not Forced):
+- Include important search terms buyers use, but weave them naturally into readable sentences
+- Front-load the most important keyword (product type), but don't sacrifice readability
+- Use natural language variations - don't repeat the same phrase multiple times
+- Avoid keyword stuffing patterns that look automated
+
+CRITICAL: The title must sound like a real seller wrote it naturally. If it reads like an SEO keyword list, rewrite it. Focus on helping buyers understand and trust the product.
 
 Return ONLY the title text.`;
 }
@@ -162,28 +171,39 @@ Optimize for high CTR, clear benefits, relevant keywords, and natural language t
     input.category || ''
   }\n- Brand: ${input.brand || ''}`;
 
-  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 Etsy tags (use all 13 - Etsy best practice), comma-separated. 
+  return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 natural, buyer-focused Etsy tags that complement the title and help buyers discover the product.
 
-ETSY TAG GUIDELINES:
-- USE ALL 13 TAGS (not optional - Etsy best practice)
-- Maximum length: 20 characters per tag
-- Multi-word phrases are REQUIRED (e.g., "custom bracelet" not "custom" and "bracelet" separately)
-- If a desired keyword phrase is longer than 20 characters, break it into multiple phrasal tags
-- Tags are used in PHASE 1 (Query Matching) - help buyers find your listing
-- Use "LONG TAIL" keywords: specific, descriptive phrases that convert better than generic terms
-- Do NOT repeat phrases already covered by categories or attributes as separate tags
+CRITICAL REQUIREMENTS:
+- Quantity: EXACTLY 13 tags (use all available slots - each tag is a discovery opportunity)
+- Length: Maximum 20 characters per tag (Etsy's hard limit)
+- Format: Multi-word phrases REQUIRED (e.g., "custom bracelet" not "custom" and "bracelet" separately)
+- NO REPETITION: Do NOT repeat words or phrases already used in the title - tags should complement, not duplicate
 
-CRITICAL ANTI-KEYWORD-STUFFING RULES:
-- Tags must be RELEVANT and SPECIFIC to this exact product
-- NO random or irrelevant keywords just to appear in more searches
-- NO repetition of the same phrases across tags
-- Focus on buyer intent: what would a real shopper search for?
-- Use natural, human-written language that sounds authentic
-- Each tag should describe a distinct aspect (material, style, color, use case, occasion)
-- Avoid generic terms unless they genuinely apply to this product
-- NO keyword stuffing - but still use all 13 tags with relevant, specific phrases
+TAG STRATEGY - Create a diverse, natural mix:
+1. Alternative Product Names (2-3 tags): Different ways buyers might search for this product
+2. Long-Tail Search Phrases (3-4 tags): Specific phrases buyers actually type
+3. Style/Aesthetic Keywords (2-3 tags): Describe the look or feel
+4. Use Case/Context (2-3 tags): When, where, or how it's used
+5. Buyer Intent Phrases (2-3 tags): What problem it solves or who it's for
 
-NOTE: Do NOT add random keywords to image alt text - this is keyword stuffing and unhelpful for screen readers.
+THINK LIKE A BUYER:
+- What exact phrases would someone type into Etsy search?
+- What alternative names might they use for this product?
+- What problem does this product solve?
+- What occasion or use case applies?
+- What style or aesthetic matches?
+
+CRITICAL RULES:
+- ✅ Use all 13 tags - each one is valuable
+- ✅ Multi-word phrases only (more specific = better)
+- ✅ Natural language buyers actually search for
+- ✅ Complement the title, don't repeat it
+- ❌ NO single words (use phrases instead)
+- ❌ NO repetition of title words/phrases
+- ❌ NO generic terms ("gift", "item" - unless genuinely relevant)
+- ❌ NO tags longer than 20 characters
+- ❌ NO irrelevant keywords just to appear in more searches
+- ❌ NO keyword stuffing patterns
 
 Return ONLY the comma-separated list.`;
 }
@@ -244,7 +264,7 @@ async function optimizeTitle(product: any) {
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash-lite';
+      const model = 'gemini-1.5-flash';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {
@@ -354,7 +374,7 @@ async function optimizeTags(product: any) {
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash-lite';
+      const model = 'gemini-1.5-flash';
       const config = { thinkingConfig: { thinkingBudget: -1 } };
       const contents = [
         {

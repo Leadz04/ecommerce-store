@@ -73,10 +73,10 @@ export default function EtsyAnalyticsDashboard({ shopId: propShopId }: { shopId:
 
     const data = analytics.dailyBreakdown;
     if (data.length === 0) return null;
-    
+
     const maxRevenue = Math.max(...data.map((d) => d.revenue));
     if (maxRevenue <= 0) return null;
-    
+
     const chartWidth = 800;
     const chartHeight = 200;
     const padding = { top: 20, right: 20, bottom: 40, left: 60 };
@@ -132,7 +132,7 @@ export default function EtsyAnalyticsDashboard({ shopId: propShopId }: { shopId:
       const token = localStorage.getItem('token');
       const analyticsRes = await fetch('/api/etsy/analytics', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
@@ -144,7 +144,13 @@ export default function EtsyAnalyticsDashboard({ shopId: propShopId }: { shopId:
       if (analyticsData.success) {
         setAnalytics(analyticsData);
       } else {
-        toast.error('Failed to fetch analytics');
+        if (analyticsRes.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          localStorage.removeItem('token');
+          // Optionally redirect to login here
+        } else {
+          toast.error(analyticsData.error || 'Failed to fetch analytics');
+        }
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);

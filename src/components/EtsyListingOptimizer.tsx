@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Loader2, CheckCircle, AlertCircle, ArrowRight, RefreshCw, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useEtsyShopStore } from '@/store/etsyShopStore';
+import { useEtsyListings } from '@/hooks/useEtsyData';
+import { useEtsyDataStore } from '@/store/etsyDataStore';
 
 interface Listing {
   listing_id: number;
@@ -25,18 +26,16 @@ interface OptimizationResult {
 }
 
 export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: string | null }) {
-  const { selectedShopId, getSelectedShop, fetchShops } = useEtsyShopStore();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use shared Etsy data store
+  const { listings, isLoading, refetch: refetchListings, updateListing } = useEtsyListings(propShopId, { autoFetch: true });
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [listingDetails, setListingDetails] = useState<any | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [optimizationMode, setOptimizationMode] = useState<'title' | 'description' | 'tags' | 'all'>('all');
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
-  
-  // Use prop shopId if provided, otherwise use selected shop from store
-  const shopId = propShopId || selectedShopId;
+
+  const shopId = propShopId;
 
   // Basic HTML entity decoding for titles coming from Etsy (e.g. Men&#39;s → Men's)
   const decodeHtmlEntities = (value: string) => {
@@ -49,60 +48,24 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       .replace(/&#39;/g, "'");
   };
 
-  useEffect(() => {
-    // Fetch shops on mount if not already loaded
-    fetchShops();
-  }, []);
-
-  useEffect(() => {
-    if (shopId) {
-      fetchListings();
-    } else {
-      setListings([]);
-      setLoading(false);
-    }
-  }, [shopId]);
-
-  const fetchListings = async () => {
-    if (!shopId) return;
-    
-    try {
-      setLoading(true);
-
-      const token = localStorage.getItem('token');
-      // Fetch listings from Etsy
-      const listingsRes = await fetch(`/api/etsy/listings?shopId=${shopId}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-      const listingsData = await listingsRes.json();
-      
-      if (listingsData.success && listingsData.listings) {
-        setListings(listingsData.listings);
-      } else {
-        toast.error('Failed to fetch listings');
-      }
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-      toast.error('Failed to fetch listings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Listings are automatically fetched via useEtsyListings hook
+  // No need for separate fetchListings function
 
   // Fetch listing details from DB when a listing is selected
   const fetchListingDetails = async (listingId: number) => {
     if (!shopId || !listingId) return;
-    
+
     try {
       setLoadingDetails(true);
-      const token = localStorage.getItem('token');
-      
+      const { accessToken } = useEtsyDataStore.getState();
+      const token = accessToken || localStorage.getItem('token');
+
       // Fetch from DB via details endpoint (which checks DB first, then API)
       const detailsRes = await fetch(`/api/etsy/listings/${listingId}/details?shopId=${shopId}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
       const detailsData = await detailsRes.json();
-      
+
       if (detailsData.success && detailsData.listing) {
         setListingDetails(detailsData.listing);
       } else {
@@ -133,10 +96,11 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       setOptimizing(true);
       setResult(null);
 
-      const token = localStorage.getItem('token');
+      const { accessToken } = useEtsyDataStore.getState();
+      const token = accessToken || localStorage.getItem('token');
       const response = await fetch('/api/etsy/listing-optimizer', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
@@ -187,13 +151,14 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
         if (tags) updateData.tags = tags;
       }
 
-      const token = localStorage.getItem('token');
+      const { accessToken } = useEtsyDataStore.getState();
+      const token = accessToken || localStorage.getItem('token');
       toast.loading('Updating listing on Etsy...', { id: 'apply-optimization' });
-      
+
       // Update on Etsy API first (this endpoint updates Etsy API, then DB)
       const response = await fetch(`/api/etsy/listings/${selectedListing.listing_id}?shopId=${shopId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
@@ -210,13 +175,19 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       }
 
       toast.success('Listing updated successfully on Etsy and saved to database!', { id: 'apply-optimization' });
-      
-      // Refresh listing details from DB to show updated data
+
+      // Refresh listing details from DB to show updated data (only the selected listing)
       await fetchListingDetails(selectedListing.listing_id);
-      
-      // Also refresh the listings list
-      await fetchListings();
-      
+
+      // Update the selected listing in the local state with the updated data from response
+      if (responseData.listing) {
+        updateListing(selectedListing.listing_id, {
+          title: responseData.listing.title || selectedListing.title,
+          description: responseData.listing.description || selectedListing.description,
+          tags: responseData.listing.tags || selectedListing.tags,
+        });
+      }
+
       // Clear optimization result
       setResult(null);
     } catch (error: any) {
@@ -225,7 +196,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
@@ -257,7 +228,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
           </p>
         </div>
         <button
-          onClick={fetchListings}
+          onClick={() => refetchListings(true)}
           className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
         >
           <RefreshCw className="h-4 w-4" />
@@ -284,11 +255,10 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       // Fetch details from DB when listing is clicked
                       await fetchListingDetails(listing.listing_id);
                     }}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      selectedListing?.listing_id === listing.listing_id
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
-                    }`}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedListing?.listing_id === listing.listing_id
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                      }`}
                   >
                     <h5 className="font-medium text-sm text-gray-900 line-clamp-2">
                       {decodeHtmlEntities(listing.title)}
@@ -311,11 +281,10 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                   <button
                     key={mode}
                     onClick={() => setOptimizationMode(mode)}
-                    className={`px-3 py-2 text-sm rounded-lg border transition-all ${
-                      optimizationMode === mode
-                        ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-900'
-                    }`}
+                    className={`px-3 py-2 text-sm rounded-lg border transition-all ${optimizationMode === mode
+                      ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-900'
+                      }`}
                   >
                     {mode.charAt(0).toUpperCase() + mode.slice(1)}
                   </button>
@@ -385,7 +354,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Price</p>
                         <p className="text-sm font-medium text-gray-900">
-                          ${listingDetails.price?.amount && listingDetails.price?.divisor 
+                          ${listingDetails.price?.amount && listingDetails.price?.divisor
                             ? (listingDetails.price.amount / listingDetails.price.divisor).toFixed(2)
                             : listingDetails.price || '0.00'}
                         </p>
@@ -406,7 +375,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                   </div>
                 </div>
               ) : null}
-              
+
               <div className="bg-blue-50 rounded-lg border border-blue-200 p-8 text-center">
                 <AlertCircle className="h-10 w-10 mx-auto mb-3 text-blue-500" />
                 <p className="text-blue-900 font-medium mb-1">Ready to Optimize</p>
@@ -460,7 +429,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Optimized:</p>
                         <p className="text-sm text-gray-900 bg-purple-50 p-2 rounded border border-purple-200 font-medium">
-                          {optimizationMode === 'all' 
+                          {optimizationMode === 'all'
                             ? (result.optimized?.title?.optimized_title || result.optimized?.optimized_title || 'N/A')
                             : (result.optimized?.optimized_title || 'N/A')}
                         </p>
@@ -492,7 +461,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                         <p className="text-xs text-gray-500 mb-1">Optimized:</p>
                         <p className="text-sm text-gray-900 bg-purple-50 p-2 rounded border border-purple-200 max-h-32 overflow-y-auto">
                           {(() => {
-                            const desc = optimizationMode === 'all' 
+                            const desc = optimizationMode === 'all'
                               ? (result.optimized?.description?.optimized_description || result.optimized?.optimized_description || '')
                               : (result.optimized?.optimized_description || '');
                             return desc.substring(0, 200) + (desc.length > 200 ? '...' : '');
@@ -533,9 +502,9 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
                             if (optimizationMode === 'all') {
                               optimizedTags = result.optimized?.tags?.optimized_tags || [];
                             } else {
-                              optimizedTags = Array.isArray(result.optimized?.optimized_tags) 
-                                ? result.optimized.optimized_tags 
-                                : (typeof result.optimized?.optimized_tags === 'string' 
+                              optimizedTags = Array.isArray(result.optimized?.optimized_tags)
+                                ? result.optimized.optimized_tags
+                                : (typeof result.optimized?.optimized_tags === 'string'
                                   ? result.optimized.optimized_tags.split(',').map(t => t.trim())
                                   : []);
                             }

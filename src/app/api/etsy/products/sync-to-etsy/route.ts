@@ -11,14 +11,14 @@ async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; 
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.statusText}`);
     }
-    
+
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    
+
     // Extract filename from URL or use default
     const urlParts = imageUrl.split('/');
     const filename = urlParts[urlParts.length - 1].split('?')[0] || `image.jpg`;
-    
+
     return { buffer, filename };
   } catch (error) {
     console.error(`Error downloading image from ${imageUrl}:`, error);
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Etsy product sync error:', error);
     return NextResponse.json(
-      { 
+      {
         error: error?.message || 'Product sync failed',
         details: error?.response?.data || error?.stack
       },
@@ -154,7 +154,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     const readinessStates = await etsyAPI.getReadinessStateDefinitions(shop.shopId);
     // Since we're using 'made_to_order', look for readiness_state = 2
     const madeToOrderState = readinessStates?.find((r: any) => r.readiness_state === 2);
-    
+
     if (madeToOrderState) {
       readinessStateId = madeToOrderState.readiness_state_id;
     } else if (readinessStates && readinessStates.length > 0) {
@@ -181,7 +181,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
         console.warn('Failed to fetch readiness states after conflict:', retryError);
       }
     }
-    
+
     if (!readinessStateId) {
       console.warn('Failed to get/create readiness state definition:', error);
       throw new Error('Failed to get or create readiness state definition. Please create a processing profile in your Etsy shop settings.');
@@ -202,7 +202,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     type: 'physical' as const, // All products are physical
     price: product.price || 0, // Simple float value (Etsy API expects float, not object)
     quantity: product.stockCount || product.inventory || 1,
-    tags: Array.isArray(product.tags) ? product.tags : [],
+    tags: [], // Tags removed as per request to avoid validation errors
     materials: materials.length > 0 ? materials : [],
     taxonomy_id: 691, // Default: Clothing/Apparel (users should customize this)
     who_made: 'i_did' as const,
@@ -225,7 +225,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     // Upload product images
     const uploadedImages: any[] = [];
     const productImages: string[] = [];
-    
+
     // Collect all product images
     if (product.image) {
       productImages.push(product.image);
@@ -237,24 +237,24 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     // Upload up to 20 images (Etsy limit)
     if (productImages.length > 0) {
       const imagesToUpload = productImages.slice(0, 20);
-      
+
       for (let i = 0; i < imagesToUpload.length; i++) {
         const imageUrl = imagesToUpload[i];
         if (!imageUrl || typeof imageUrl !== 'string') continue;
-        
+
         try {
           // Download image and create FormData
           const { buffer, filename } = await downloadImageBuffer(imageUrl);
           const formData = new FormData();
-          
+
           // Create a File-like object from buffer
-          const file = new File([buffer], filename, { type: 'image/jpeg' });
+          const file = new File([buffer as any], filename, { type: 'image/jpeg' });
           formData.append('image', file);
           formData.append('rank', (i + 1).toString());
-          
+
           const uploadedImage = await etsyAPI.uploadListingImage(listingId, formData);
           uploadedImages.push(uploadedImage);
-          
+
           // Small delay between uploads to avoid rate limiting
           if (i < imagesToUpload.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -265,7 +265,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
         }
       }
     }
-    
+
     // Save to our database
     const listing = new EtsyListing({
       userId: String(userId), // Use authenticated user ID
@@ -274,12 +274,12 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
       productId: product._id?.toString(),
       title: etsyListing.title || product.name,
       description: etsyListing.description || product.description || '',
-      price: typeof etsyListing.price === 'object' && etsyListing.price?.amount 
-        ? (etsyListing.price.amount / etsyListing.price.divisor) 
+      price: typeof etsyListing.price === 'object' && etsyListing.price?.amount
+        ? (etsyListing.price.amount / etsyListing.price.divisor)
         : (typeof etsyListing.price === 'number' ? etsyListing.price : product.price || 0),
       currency: (typeof etsyListing.price === 'object' && etsyListing.price?.currency_code) || 'USD',
       state: etsyListing.state || 'draft',
-      tags: etsyListing.tags || product.tags || [],
+      tags: [], // Always empty tags as requested
       materials: etsyListing.materials || materials,
       categoryPath: etsyListing.category_path || [],
       images: uploadedImages.length > 0 ? uploadedImages.map((img, idx) => ({
@@ -295,6 +295,13 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
 
     await listing.save();
 
+    // Update Product model with Etsy Listing ID
+    await Product.findByIdAndUpdate(product._id, {
+      etsyListingId: listingId,
+      etsyExported: true,
+      etsyExportedAt: new Date(),
+    });
+
     return {
       success: true,
       etsyListingId: etsyListing.listing_id,
@@ -308,9 +315,9 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
 }
 
 async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, userId: string) {
-  const existingListing = await EtsyListing.findOne({ 
-    productId: product._id, 
-    shopId: shop.shopId 
+  const existingListing = await EtsyListing.findOne({
+    productId: product._id,
+    shopId: shop.shopId
   });
 
   if (!existingListing) {
@@ -338,13 +345,13 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
     description: product.description || product.descriptionHtml || existingListing.description,
     price: product.price || existingListing.price || 0, // Simple float value
     quantity: product.stockCount || product.inventory || existingListing.inventory?.quantity || 1,
-    tags: Array.isArray(product.tags) ? product.tags : existingListing.tags || [],
+    tags: [], // Tags removed as per request
     materials: materials.length > 0 ? materials : existingListing.materials || [],
   };
 
   try {
     const etsyListing = await etsyAPI.updateListing(existingListing.etsyListingId, listingData);
-    
+
     // Update images if product has new images
     const productImages: string[] = [];
     if (product.image) productImages.push(product.image);
@@ -372,17 +379,17 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
         for (let i = 0; i < imagesToUpload.length; i++) {
           const imageUrl = imagesToUpload[i];
           if (!imageUrl || typeof imageUrl !== 'string') continue;
-          
+
           try {
             const { buffer, filename } = await downloadImageBuffer(imageUrl);
             const formData = new FormData();
-            const file = new File([buffer], filename, { type: 'image/jpeg' });
+            const file = new File([buffer as any], filename, { type: 'image/jpeg' });
             formData.append('image', file);
             formData.append('rank', (i + 1).toString());
-            
+
             const uploadedImage = await etsyAPI.uploadListingImage(existingListing.etsyListingId, formData);
             uploadedImages.push(uploadedImage);
-            
+
             if (i < imagesToUpload.length - 1) {
               await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -392,7 +399,7 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
         }
       }
     }
-    
+
     // Update our database
     const updateData: any = {
       title: etsyListing.title,
@@ -400,7 +407,7 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
       price: typeof etsyListing.price === 'object' && etsyListing.price?.amount
         ? (etsyListing.price.amount / etsyListing.price.divisor)
         : (typeof etsyListing.price === 'number' ? etsyListing.price : existingListing.price),
-      tags: etsyListing.tags || [],
+      tags: [], // Tags removed
       materials: etsyListing.materials || [],
       'inventory.quantity': etsyListing.quantity,
       lastSyncedAt: new Date(),
@@ -420,6 +427,13 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
       { $set: updateData }
     );
 
+    // Ensure Product model has the listing ID (useful for migration/consistency)
+    await Product.findByIdAndUpdate(product._id, {
+      etsyListingId: existingListing.etsyListingId,
+      etsyExported: true,
+      etsyExportedAt: new Date(),
+    });
+
     return {
       success: true,
       etsyListingId: etsyListing.listing_id,
@@ -433,9 +447,9 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
 }
 
 async function deleteEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
-  const existingListing = await EtsyListing.findOne({ 
-    productId: product._id, 
-    shopId: shop.shopId 
+  const existingListing = await EtsyListing.findOne({
+    productId: product._id,
+    shopId: shop.shopId
   });
 
   if (!existingListing) {
@@ -444,7 +458,7 @@ async function deleteEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any) {
 
   try {
     await etsyAPI.deleteListing(existingListing.etsyListingId);
-    
+
     // Remove from our database
     await EtsyListing.deleteOne({ etsyListingId: existingListing.etsyListingId });
 

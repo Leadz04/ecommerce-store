@@ -39,7 +39,7 @@ async function analyzeSentimentWithGemini(reviewText: string, rating: number): P
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-2.5-flash-lite';
+    const model = 'gemini-1.5-flash';
     const config = {
       responseMimeType: 'application/json',
       maxOutputTokens: 512,

@@ -52,6 +52,7 @@ export interface IProduct extends Document {
   }>;
   etsyExported?: boolean;
   etsyExportedAt?: Date | null;
+  etsyListingId?: string;
   policyReview?: {
     lastRunAt?: Date | null;
     score?: number;
@@ -200,6 +201,11 @@ const ProductSchema = new Schema<IProduct>({
     type: Date,
     default: null,
   },
+  etsyListingId: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
   sourceUrl: {
     type: String,
     index: true,
@@ -247,18 +253,18 @@ const ProductSchema = new Schema<IProduct>({
 });
 
 // Generate slug from name if not provided
-ProductSchema.pre('save', async function(next) {
+ProductSchema.pre('save', async function (next) {
   // Only generate slug if it doesn't exist or name has changed
   if ((!this.slug || this.isModified('name')) && this.name) {
     const baseSlug = generateSlug(this.name);
-    
+
     // Check if slug already exists (excluding current document)
     const Product = this.constructor as any;
-    const existingProduct = await Product.findOne({ 
+    const existingProduct = await Product.findOne({
       slug: baseSlug,
       _id: { $ne: this._id }
     });
-    
+
     if (existingProduct) {
       // Append a number to make it unique
       let counter = 1;

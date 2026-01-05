@@ -261,7 +261,7 @@ async function generateFAQsWithGemini(
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash-lite';
+      const model = 'gemini-1.5-flash';
       // Flash-Lite doesn't support thinkingConfig, so we use a simpler config
       const config = {};
       const contents = [
@@ -520,7 +520,7 @@ export async function generateFAQsForProducts(logger?: Logger) {
           answer: faq.answer.trim(),
           source: 'gemini' as const,
           generatedAt: new Date(),
-          model: 'gemini-2.5-flash-lite',
+          model: 'gemini-1.5-flash',
         }));
 
         // Update product with generated FAQs

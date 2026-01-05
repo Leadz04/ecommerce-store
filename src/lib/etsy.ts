@@ -427,19 +427,19 @@ export class EtsyAPI {
         clearTimeout(timeoutId);
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
-        
+
         // Handle timeout and connection errors with retry logic
-        const isTimeoutError = fetchError.name === 'AbortError' || 
-                               fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
-                               fetchError.code === 'ETIMEDOUT' ||
-                               fetchError.message?.includes('timeout') ||
-                               fetchError.message?.includes('Timeout');
-        
+        const isTimeoutError = fetchError.name === 'AbortError' ||
+          fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+          fetchError.code === 'ETIMEDOUT' ||
+          fetchError.message?.includes('timeout') ||
+          fetchError.message?.includes('Timeout');
+
         const isConnectionError = fetchError.code === 'ECONNREFUSED' ||
-                                  fetchError.code === 'ENOTFOUND' ||
-                                  fetchError.code === 'ECONNRESET' ||
-                                  fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
-                                  fetchError.message?.includes('fetch failed');
+          fetchError.code === 'ENOTFOUND' ||
+          fetchError.code === 'ECONNRESET' ||
+          fetchError.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+          fetchError.message?.includes('fetch failed');
 
         if ((isTimeoutError || isConnectionError) && retryCount < maxRetries) {
           const delayMs = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff: 1s, 2s, 4s, max 5s
@@ -447,18 +447,18 @@ export class EtsyAPI {
             endpoint,
             error: fetchError.message || fetchError.code,
           });
-          
+
           await new Promise(resolve => setTimeout(resolve, delayMs));
           return this.makeRequest(endpoint, options, retryCount + 1, maxRetries);
         }
 
         // If we've exhausted retries or it's not a retryable error, throw
-        const errorMessage = isTimeoutError 
+        const errorMessage = isTimeoutError
           ? `Etsy API request timed out after ${timeoutMs}ms. Please check your internet connection and try again.`
           : isConnectionError
-          ? `Etsy API connection failed. Please check your internet connection and try again.`
-          : `Etsy API request failed: ${fetchError.message || fetchError.code || 'Unknown error'}`;
-        
+            ? `Etsy API connection failed. Please check your internet connection and try again.`
+            : `Etsy API request failed: ${fetchError.message || fetchError.code || 'Unknown error'}`;
+
         throw new Error(errorMessage);
       }
 
@@ -602,7 +602,7 @@ export class EtsyAPI {
     formData.append('readiness_state', readinessState.toString());
     formData.append('processing_min', processingMin.toString());
     formData.append('processing_max', processingMax.toString());
-    
+
     return this.makeRequest(`/application/shops/${shopId}/readiness-state-definitions`, {
       method: 'POST',
       body: formData.toString(),
@@ -616,24 +616,24 @@ export class EtsyAPI {
     // Etsy API requires application/x-www-form-urlencoded format
     // Convert the listing data to form-urlencoded format
     const formData = new URLSearchParams();
-    
+
     // Required fields
     if (listingData.title) formData.append('title', listingData.title);
     if (listingData.description) formData.append('description', listingData.description);
     if (listingData.quantity !== undefined) formData.append('quantity', listingData.quantity.toString());
-    
+
     // Price: convert from object format to float
     if (listingData.price) {
-      const priceValue = typeof listingData.price === 'object' 
+      const priceValue = typeof listingData.price === 'object'
         ? (listingData.price.amount / listingData.price.divisor).toFixed(2)
         : listingData.price.toString();
       formData.append('price', priceValue);
     }
-    
+
     if (listingData.taxonomy_id) formData.append('taxonomy_id', listingData.taxonomy_id.toString());
     if (listingData.who_made) formData.append('who_made', listingData.who_made);
     if (listingData.when_made) formData.append('when_made', listingData.when_made);
-    
+
     // Optional fields
     if (listingData.tags && Array.isArray(listingData.tags)) {
       listingData.tags.forEach(tag => formData.append('tags[]', tag));
@@ -666,7 +666,7 @@ export class EtsyAPI {
     if (listingData.is_private !== undefined) formData.append('is_private', listingData.is_private.toString());
     if (listingData.used_manufacturer !== undefined) formData.append('used_manufacturer', listingData.used_manufacturer.toString());
     if (listingData.is_vintage !== undefined) formData.append('is_vintage', listingData.is_vintage.toString());
-    
+
     // Handle style field (can be string or array)
     if (listingData.style) {
       if (Array.isArray(listingData.style)) {
@@ -675,12 +675,12 @@ export class EtsyAPI {
         formData.append('styles[]', listingData.style);
       }
     }
-    
+
     // Type field (physical, download, or both)
     if (listingData.type) {
       formData.append('type', listingData.type);
     }
-    
+
     return this.makeRequest(`/application/shops/${shopId}/listings`, {
       method: 'POST',
       body: formData.toString(),
@@ -691,9 +691,39 @@ export class EtsyAPI {
   }
 
   async updateListing(listingId: string, listingData: Partial<EtsyListingData>): Promise<EtsyListingData> {
-    return this.makeRequest(`/application/listings/${listingId}`, {
-      method: 'PUT',
-      body: JSON.stringify(listingData),
+    const formData = new URLSearchParams();
+
+    // Process all fields in listingData
+    Object.entries(listingData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          if (key === 'image_ids' || key === 'tags' || key === 'materials') {
+            // Join certain arrays with commas
+            const validItems = value.filter(item => item !== null && item !== undefined);
+            if (validItems.length > 0) {
+              formData.append(key, validItems.join(','));
+            }
+          } else if (key === 'styles' || key === 'style') {
+            // Styles usually use brackets
+            value.forEach(item => formData.append('styles[]', String(item)));
+          } else {
+            // Other arrays, append individually
+            value.forEach(item => formData.append(key, String(item)));
+          }
+        } else if (typeof value === 'boolean') {
+          formData.append(key, value ? 'true' : 'false');
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+    });
+
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}`, {
+      method: 'PATCH',
+      body: formData.toString(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     });
   }
 
@@ -764,6 +794,81 @@ export class EtsyAPI {
     return response.json();
   }
 
+  async deleteListingImage(listingId: string, listingImageId: string): Promise<void> {
+    const url = `${ETSY_API_BASE}/application/shops/${this.shopId}/listings/${listingId}/images/${listingImageId}`;
+    const apiKeyHeader =
+      process.env.ETSY_X_API_KEY
+      || process.env.ETSY_CLIENT_ID
+      || '';
+
+    const rateLimiter = EtsyRateLimiter.getInstance();
+    await rateLimiter.waitIfNeeded();
+
+    if (!rateLimiter.canMakeRequest()) {
+      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
+    }
+
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'x-api-key': apiKeyHeader,
+      },
+    });
+
+    rateLimiter.recordCall();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
+    }
+
+    // DELETE returns 204 No Content, so no JSON to parse
+    return;
+  }
+
+  async updateListingImageRank(listingId: string, listingImageId: string, rank: number, overwrite: boolean = true): Promise<any> {
+    // To update image rank, we use the upload endpoint with overwrite=true
+    // We need to use the listing_image_id parameter to reference the existing image
+    const url = `${ETSY_API_BASE}/application/shops/${this.shopId}/listings/${listingId}/images`;
+    const apiKeyHeader =
+      process.env.ETSY_X_API_KEY
+      || process.env.ETSY_CLIENT_ID
+      || '';
+
+    const rateLimiter = EtsyRateLimiter.getInstance();
+    await rateLimiter.waitIfNeeded();
+
+    if (!rateLimiter.canMakeRequest()) {
+      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
+    }
+
+    // Create form data with listing_image_id and rank
+    const formData = new FormData();
+    formData.append('listing_image_id', listingImageId);
+    formData.append('rank', rank.toString());
+    formData.append('overwrite', overwrite.toString());
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'x-api-key': apiKeyHeader,
+        // Don't set Content-Type - let browser set it with boundary for FormData
+      },
+      body: formData,
+    });
+
+    rateLimiter.recordCall();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   // Inventory methods
   async getListingInventory(listingId: string): Promise<any> {
     return this.makeRequest(`/application/listings/${listingId}/inventory`);
@@ -775,7 +880,7 @@ export class EtsyAPI {
     const payload: any = {
       products: inventoryData.products || [],
     };
-    
+
     if (inventoryData.price_on_property) {
       payload.price_on_property = inventoryData.price_on_property;
     }
@@ -788,9 +893,9 @@ export class EtsyAPI {
     if (inventoryData.readiness_state_on_property) {
       payload.readiness_state_on_property = inventoryData.readiness_state_on_property;
     }
-    
+
     console.log('[EtsyAPI] Updating inventory with payload:', JSON.stringify(payload, null, 2));
-    
+
     return this.makeRequest(`/application/listings/${listingId}/inventory`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -995,11 +1100,11 @@ export async function exchangeCodeForToken(code: string, state: string | null): 
     token_type: data.token_type,
     scope: data.scope,
   };
-  
+
   if (userId) {
     result.userId = userId;
   }
-  
+
   return result;
 }
 

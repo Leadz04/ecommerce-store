@@ -1,18 +1,7 @@
-'use client';
-
 import { useEffect, useState, useRef } from 'react';
 import { Store, ChevronDown, RefreshCw, Plus, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useEtsyShopStore } from '@/store/etsyShopStore';
-
-interface Shop {
-  shopId: string;
-  shopName: string;
-  isActive: boolean;
-  lastSyncAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { useEtsyDataStore } from '@/store/etsyDataStore';
 
 interface EtsyShopSelectorProps {
   selectedShopId: string | null;
@@ -27,84 +16,48 @@ export default function EtsyShopSelector({
   className = '',
   showAddButton = true,
 }: EtsyShopSelectorProps) {
-  const { fetchShops: fetchShopsFromStore, setSelectedShop } = useEtsyShopStore();
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    shops,
+    fetchShops,
+    setSelectedShop,
+    isLoading: loading
+  } = useEtsyDataStore();
+
   const [isOpen, setIsOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
-  const hasAutoSelectedRef = useRef(false); // Track if we've auto-selected to prevent loops
+  const hasAutoSelectedRef = useRef(false);
 
-  const fetchShops = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setShops([]);
-        return;
-      }
-
-      const response = await fetch('/api/etsy/shops', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          toast.error('Please log in to view your shops');
-          return;
-        }
-        throw new Error('Failed to fetch shops');
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        const fetchedShops = data.shops || [];
-        setShops(fetchedShops);
-        
-        // Sync with store
-        await fetchShopsFromStore();
-        
-        // Auto-select first shop if none selected (only once)
-        if (!selectedShopId && !hasAutoSelectedRef.current && fetchedShops.length > 0) {
-          hasAutoSelectedRef.current = true;
-          const firstShopId = fetchedShops[0].shopId;
-          onShopChange(firstShopId);
-          setSelectedShop(firstShopId);
-          return; // Exit early to avoid the check below
-        }
-        
-        // If selected shop no longer exists, clear selection (only if it changed)
-        if (selectedShopId && fetchedShops && !fetchedShops.find((s: Shop) => s.shopId === selectedShopId)) {
-          const newShopId = fetchedShops.length > 0 ? fetchedShops[0].shopId : null;
-          if (newShopId !== selectedShopId && newShopId !== null) {
-            onShopChange(newShopId);
-            setSelectedShop(newShopId);
-          } else if (newShopId === null && selectedShopId !== null) {
-            onShopChange(null);
-            setSelectedShop(null);
-          }
-        } else if (selectedShopId) {
-          // Sync selected shop with store
-          setSelectedShop(selectedShopId);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching shops:', error);
-      toast.error('Failed to load shops');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Sync with store on mount
   useEffect(() => {
     fetchShops();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, [fetchShops]);
+
+  // Auto-select logic
+  useEffect(() => {
+    if (loading) return;
+
+    // If no shop selected, pick the first one (only once)
+    if (!selectedShopId && !hasAutoSelectedRef.current && shops.length > 0) {
+      hasAutoSelectedRef.current = true;
+      const firstShop = shops[0];
+      onShopChange(firstShop.shopId);
+      setSelectedShop(firstShop.shopId);
+    }
+
+    // If selected shop is not in the list (e.g. disconnected or different user), clear it/pick new
+    if (selectedShopId && shops.length > 0 && !shops.find(s => s.shopId === selectedShopId)) {
+      onShopChange(shops[0].shopId);
+      setSelectedShop(shops[0].shopId);
+    } else if (selectedShopId && shops.length === 0) {
+      onShopChange(null);
+      setSelectedShop(null);
+    }
+  }, [shops, loading, selectedShopId, onShopChange, setSelectedShop]);
+
 
   const handleDisconnect = async (shopId: string, shopName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!confirm(`Are you sure you want to disconnect "${shopName}"? This will stop syncing data for this shop.`)) {
       return;
     }
@@ -112,7 +65,7 @@ export default function EtsyShopSelector({
     try {
       setDisconnecting(shopId);
       const token = localStorage.getItem('token');
-      
+
       const response = await fetch(`/api/etsy/shops?shopId=${encodeURIComponent(shopId)}`, {
         method: 'DELETE',
         headers: {
@@ -125,7 +78,10 @@ export default function EtsyShopSelector({
       }
 
       toast.success(`"${shopName}" disconnected successfully`);
-      
+
+      // Store update handled by re-fetching
+      await fetchShops();
+
       // If we disconnected the selected shop, switch to another one
       if (selectedShopId === shopId) {
         const remainingShops = shops.filter(s => s.shopId !== shopId);
@@ -133,9 +89,7 @@ export default function EtsyShopSelector({
         onShopChange(newShopId);
         setSelectedShop(newShopId);
       }
-      
-      // Refresh shop list and sync with store
-      await fetchShops();
+
     } catch (error) {
       console.error('Error disconnecting shop:', error);
       toast.error('Failed to disconnect shop');
@@ -232,25 +186,22 @@ export default function EtsyShopSelector({
                   {shops.map((shop) => (
                     <div
                       key={shop.shopId}
-                      className={`relative group flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-                        selectedShopId === shop.shopId
-                          ? 'bg-purple-50 border border-purple-200'
-                          : 'hover:bg-gray-50 border border-transparent'
-                      }`}
+                      className={`relative group flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer transition-colors ${selectedShopId === shop.shopId
+                        ? 'bg-purple-50 border border-purple-200'
+                        : 'hover:bg-gray-50 border border-transparent'
+                        }`}
                       onClick={() => {
                         onShopChange(shop.shopId);
                         setIsOpen(false);
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Store className={`h-4 w-4 flex-shrink-0 ${
-                          selectedShopId === shop.shopId ? 'text-purple-600' : 'text-gray-400'
-                        }`} />
+                        <Store className={`h-4 w-4 flex-shrink-0 ${selectedShopId === shop.shopId ? 'text-purple-600' : 'text-gray-400'
+                          }`} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={`text-sm font-medium truncate ${
-                              selectedShopId === shop.shopId ? 'text-purple-900' : 'text-gray-900'
-                            }`}>
+                            <span className={`text-sm font-medium truncate ${selectedShopId === shop.shopId ? 'text-purple-900' : 'text-gray-900'
+                              }`}>
                               {shop.shopName}
                             </span>
                             {selectedShopId === shop.shopId && (
@@ -260,7 +211,7 @@ export default function EtsyShopSelector({
                           <div className="text-xs text-gray-500 mt-0.5">
                             ID: {shop.shopId}
                             {shop.lastSyncAt && (
-                              <> • Last synced: {formatRelativeTime(shop.lastSyncAt)}</>
+                              <> • Last synced: {formatRelativeTime(shop.lastSyncAt.toString())}</>
                             )}
                           </div>
                         </div>
@@ -268,11 +219,10 @@ export default function EtsyShopSelector({
                       <button
                         onClick={(e) => handleDisconnect(shop.shopId, shop.shopName, e)}
                         disabled={disconnecting === shop.shopId}
-                        className={`ml-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity ${
-                          disconnecting === shop.shopId
-                            ? 'opacity-100 cursor-not-allowed'
-                            : 'hover:bg-red-50'
-                        }`}
+                        className={`ml-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity ${disconnecting === shop.shopId
+                          ? 'opacity-100 cursor-not-allowed'
+                          : 'hover:bg-red-50'
+                          }`}
                         title="Disconnect shop"
                       >
                         {disconnecting === shop.shopId ? (
