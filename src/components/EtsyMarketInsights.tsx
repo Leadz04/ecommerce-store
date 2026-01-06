@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Search, BarChart3, Loader2, AlertCircle, RefreshCw, TrendingUp, Tag, Store, ChevronDown, ChevronUp, Image as ImageIcon, Video, Eye, DollarSign } from 'lucide-react';
+import { Search, BarChart3, Loader2, AlertCircle, RefreshCw, TrendingUp, Tag, Store, ChevronDown, ChevronUp, Image as ImageIcon, Video, Eye, DollarSign, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ColumnDef } from '@tanstack/react-table';
 import { MarketDataTable } from './MarketDataTable';
@@ -16,6 +16,7 @@ interface MarketListing {
   num_favorers: number | null;
   shop_id: number | null;
   shop_name: string | null;
+  is_star_seller?: boolean;
   category_path: string[];
   tags?: string[];
   description?: string;
@@ -56,6 +57,7 @@ interface MarketInsightsResponse {
   topSellers: {
     shop_id: number;
     shop_name: string;
+    is_star_seller?: boolean;
     listingCount: number;
     averagePrice: number;
     averageViews: number;
@@ -257,8 +259,16 @@ export default function EtsyMarketInsights() {
       {
         header: 'Shop Name',
         accessorKey: 'shop_name',
-        cell: ({ getValue }) => (
-          <span className="font-medium text-gray-900">{getValue<string>()}</span>
+        cell: ({ row, getValue }) => (
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{getValue<string>()}</span>
+            {row.original.is_star_seller && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-700 border border-purple-200 font-bold" title="Star Seller">
+                <Star className="h-2.5 w-2.5 fill-purple-600" />
+                STAR
+              </span>
+            )}
+          </div>
         ),
       },
       {
@@ -419,15 +429,23 @@ export default function EtsyMarketInsights() {
           const details = listingDetailsCache.get(l.listing_id);
           return (
             <div className="space-y-1.5 max-w-md">
-              <a
-                href={l.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 hover:text-purple-600 hover:underline font-semibold text-sm block leading-tight"
-                title={l.title}
-              >
-                {l.title}
-              </a>
+              <div className="flex items-start gap-2">
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 hover:text-purple-600 hover:underline font-semibold text-sm block leading-tight"
+                  title={l.title}
+                >
+                  {l.title}
+                </a>
+                {l.is_star_seller && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] bg-purple-100 text-purple-700 border border-purple-200 font-bold flex-shrink-0" title="Star Seller">
+                    <Star className="h-2 w-2 fill-purple-600" />
+                    STAR
+                  </span>
+                )}
+              </div>
               {l.category_path && l.category_path.length > 0 && (
                 <div className="text-[10px] text-gray-500 flex items-center gap-1">
                   <span className="font-medium">Category:</span>
@@ -435,7 +453,7 @@ export default function EtsyMarketInsights() {
                 </div>
               )}
               {details?.description ? (
-                <div 
+                <div
                   className="text-xs text-gray-600 line-clamp-2 leading-relaxed mt-1"
                   dangerouslySetInnerHTML={{
                     __html: details.description.length > 150
@@ -542,7 +560,7 @@ export default function EtsyMarketInsights() {
           const l = row.original;
           const imageUrl = listingImagesCache.get(l.listing_id);
           const isLoading = loadingImages.has(l.listing_id);
-          
+
           return (
             <div className="flex items-center justify-center">
               {isLoading ? (
@@ -614,9 +632,9 @@ export default function EtsyMarketInsights() {
       setExpandedShops(new Set()); // Reset expanded shops when new data loads
       setShopListingsCache(new Map()); // Clear shop listings cache when new data loads
       setListingImagesCache(new Map()); // Clear images cache when new data loads
-      
-      
-      const totalMsg = json.query?.totalAvailable 
+
+
+      const totalMsg = json.query?.totalAvailable
         ? `${json.summary.totalListings} listings analyzed (${json.query.totalAvailable.toLocaleString()} total available)`
         : `${json.summary.totalListings} listings analyzed`;
       toast.success(`Found ${totalMsg} in the market.`);
@@ -819,7 +837,7 @@ export default function EtsyMarketInsights() {
                 getExpandedState={(row) => expandedShops.has(row.shop_id)}
                 renderExpandedRow={(row) => {
                   const shopListings = shopListingsCache.get(row.shop_id) || getShopListings(row.shop_id);
-                  
+
                   if (shopListings.length === 0) {
                     return (
                       <div className="py-4 text-sm text-gray-500 text-center">
@@ -850,7 +868,7 @@ export default function EtsyMarketInsights() {
                             {shopListings.map((listing, idx) => {
                               const listingImageUrl = listingImagesCache.get(listing.listing_id);
                               const isImageLoading = loadingImages.has(listing.listing_id);
-                              
+
                               return (
                                 <tr key={listing.listing_id} className="hover:bg-gray-50">
                                   <td className="px-3 py-2 text-gray-700">{idx + 1}</td>
@@ -980,6 +998,154 @@ export default function EtsyMarketInsights() {
             </div>
           )}
 
+          {/* Star Seller Spotlights */}
+          {data.listings.some(l => l.is_star_seller) && (
+            <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-purple-100 rounded-lg">
+                    <Star className="h-5 w-5 text-purple-600 fill-purple-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-purple-900">Star Seller Spotlights</h4>
+                    <p className="text-xs text-purple-700">Top performing listings from Etsy Star Sellers</p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-200">
+                  {data.listings.filter(l => l.is_star_seller).length} DISCOVERED
+                </span>
+              </div>
+              <MarketDataTable
+                columns={listingsColumns}
+                data={data.listings.filter(l => l.is_star_seller)}
+                getRowId={(row, index) => `star-${row.listing_id}-${index}`}
+                pageSize={5}
+                showPagination={true}
+                getExpandedState={(row) => expandedRows.has(row.listing_id)}
+                renderExpandedRow={(row) => {
+                  const details = listingDetailsCache.get(row.listing_id);
+                  const isLoading = loadingDetails.has(row.listing_id);
+                  const hasDetails = details !== undefined;
+
+                  return (
+                    <div className="space-y-4 py-2">
+                      {isLoading && (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-purple-600 mr-2" />
+                          <span className="text-sm text-gray-600">Loading listing details...</span>
+                        </div>
+                      )}
+
+                      {!isLoading && !hasDetails && (
+                        <div className="text-sm text-gray-500 text-center py-4">
+                          Failed to load details. Please try again.
+                        </div>
+                      )}
+
+                      {!isLoading && hasDetails && (
+                        <>
+                          {/* Images */}
+                          {details.images && details.images.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <ImageIcon className="h-4 w-4 text-purple-600" />
+                                <h5 className="text-xs font-semibold text-gray-700">Images ({details.images.length})</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {details.images.map((img, idx) => (
+                                  <img
+                                    key={idx}
+                                    src={img.url}
+                                    alt={`${row.title} - Image ${idx + 1}`}
+                                    className="w-24 h-24 object-cover rounded border border-gray-200 cursor-pointer hover:border-purple-400 transition"
+                                    onClick={() => window.open(img.url, '_blank')}
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Videos */}
+                          {details.videos && details.videos.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Video className="h-4 w-4 text-red-600" />
+                                <h5 className="text-xs font-semibold text-gray-700">Videos ({details.videos.length})</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {details.videos.map((vid, idx) => (
+                                  <div key={idx} className="relative">
+                                    <video
+                                      src={vid.url}
+                                      controls
+                                      className="w-48 h-32 rounded border border-gray-200"
+                                      preload="metadata"
+                                    >
+                                      Your browser does not support the video tag.
+                                    </video>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tags */}
+                          {row.tags && row.tags.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Tag className="h-4 w-4 text-indigo-600" />
+                                <h5 className="text-xs font-semibold text-gray-700">All Tags ({row.tags.length})</h5>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {row.tags.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 font-medium"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Description */}
+                          {details.description && (
+                            <div>
+                              <h5 className="text-xs font-semibold text-gray-700 mb-2">Description</h5>
+                              <div
+                                className="text-xs text-gray-600 max-h-48 overflow-y-auto prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{
+                                  __html: details.description.length > 500
+                                    ? `${details.description.substring(0, 500)}...`
+                                    : details.description,
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          <div className="pt-2 border-t border-purple-100">
+                            <a
+                              href={row.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 font-bold"
+                            >
+                              View Premium Listing on Etsy →
+                            </a>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            </div>
+          )}
+
           {/* Listings table */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
@@ -1032,22 +1198,22 @@ export default function EtsyMarketInsights() {
                               <ImageIcon className="h-4 w-4 text-purple-600" />
                               <h5 className="text-xs font-semibold text-gray-700">Images ({details.images.length})</h5>
                             </div>
-                      <div className="flex flex-wrap gap-2">
-                        {details.images.map((img, idx) => (
-                          <img
-                            key={idx}
-                            src={img.url}
-                            alt={`${row.title} - Image ${idx + 1}`}
-                            className="w-24 h-24 object-cover rounded border border-gray-200 cursor-pointer hover:border-purple-400 transition"
-                            onClick={() => window.open(img.url, '_blank')}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                            <div className="flex flex-wrap gap-2">
+                              {details.images.map((img, idx) => (
+                                <img
+                                  key={idx}
+                                  src={img.url}
+                                  alt={`${row.title} - Image ${idx + 1}`}
+                                  className="w-24 h-24 object-cover rounded border border-gray-200 cursor-pointer hover:border-purple-400 transition"
+                                  onClick={() => window.open(img.url, '_blank')}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Videos */}
                         {details.videos && details.videos.length > 0 && (
@@ -1058,20 +1224,20 @@ export default function EtsyMarketInsights() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {details.videos.map((vid, idx) => (
-                          <div key={idx} className="relative">
-                            <video
-                              src={vid.url}
-                              controls
-                              className="w-48 h-32 rounded border border-gray-200"
-                              preload="metadata"
-                            >
-                              Your browser does not support the video tag.
-                            </video>
+                                <div key={idx} className="relative">
+                                  <video
+                                    src={vid.url}
+                                    controls
+                                    className="w-48 h-32 rounded border border-gray-200"
+                                    preload="metadata"
+                                  >
+                                    Your browser does not support the video tag.
+                                  </video>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                        )}
 
                         {/* Tags - Show in expanded view even though they're in table */}
                         {row.tags && row.tags.length > 0 && (

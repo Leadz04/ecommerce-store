@@ -8,6 +8,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 // Cache expiration times (in milliseconds)
 export const CACHE_TTL = {
   LISTING: 6 * 60 * 60 * 1000, // 6 hours
+  LISTING_DETAILS: 6 * 60 * 60 * 1000, // 6 hours
   LISTING_IMAGES: 24 * 60 * 60 * 1000, // 24 hours
   LISTING_VIDEOS: 24 * 60 * 60 * 1000, // 24 hours
   LISTING_INVENTORY: 1 * 60 * 60 * 1000, // 1 hour
@@ -140,15 +141,15 @@ export async function invalidateCache(
 ): Promise<void> {
   try {
     const query: any = { userId };
-    
+
     if (filters?.shopId) {
       query.shopId = filters.shopId;
     }
-    
+
     if (filters?.listingId) {
       query.listingId = filters.listingId;
     }
-    
+
     if (filters?.cacheKeyPattern) {
       query.cacheKey = { $regex: filters.cacheKeyPattern };
     }
@@ -190,16 +191,16 @@ export async function getDataWithCache<T>(options: {
   dbUpdate: (data: T) => Promise<void>;
   apiFetch: () => Promise<T>;
 }): Promise<{ data: T; fromCache: boolean; fromDB: boolean }> {
-  const { 
-    userId, 
-    shopId, 
+  const {
+    userId,
+    shopId,
     listingId,
-    cacheKey, 
-    cacheTTL, 
+    cacheKey,
+    cacheTTL,
     forceRefresh = false,
-    dbQuery, 
-    dbUpdate, 
-    apiFetch 
+    dbQuery,
+    dbUpdate,
+    apiFetch
   } = options;
 
   // Step 1: Check DB first (if not forcing refresh)

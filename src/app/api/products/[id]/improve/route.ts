@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 
-const IMPROVEMENT_MODEL = process.env.GEMINI_POLICY_MODEL?.trim() || 'gemini-2.5-pro';
+const IMPROVEMENT_MODEL = process.env.GEMINI_POLICY_MODEL?.trim() || 'gemini-2.0-pro';
 
 interface GeminiImprovementBlock {
   suggestion?: string;
@@ -179,7 +179,7 @@ async function runGeminiImprovement(prompt: string) {
   const secondaryKey = process.env.STAGE_GEMINI_API_KEY;
   const tertiaryKey = process.env.TEST_LEADZ07_FIRST_API_KEY;
   const apiKey = primaryKey || secondaryKey || tertiaryKey;
-  
+
   if (!apiKey) {
     console.log('[Improve] Gemini API key not configured');
     return { ok: false, error: 'Gemini API key not configured' } as const;
@@ -198,16 +198,16 @@ async function runGeminiImprovement(prompt: string) {
         responseMimeType: 'application/json',
       },
     });
-    
+
     console.log('[Improve] Raw response type:', typeof response);
     console.log('[Improve] Response keys:', Object.keys(response || {}));
     console.log('[Improve] response.response exists:', !!response?.response);
     console.log('[Improve] response.text exists:', typeof response?.text);
     console.log('[Improve] response.response?.text exists:', typeof response?.response?.text);
     console.log('[Improve] response.response?.candidates exists:', !!response?.response?.candidates);
-    
+
     let text = '';
-    
+
     // Try different response structures
     if (typeof response?.response?.text === 'function') {
       console.log('[Improve] Using response.response.text()');
@@ -240,22 +240,22 @@ async function runGeminiImprovement(prompt: string) {
         console.log('[Improve] Could not stringify response:', e);
       }
     }
-    
+
     console.log('[Improve] Extracted text length:', text.length);
     console.log('[Improve] Text preview:', text.substring(0, 200));
-    
+
     if (!text.trim()) {
       console.log('[Improve] ERROR: Empty text extracted from response');
       return { ok: false, error: 'Empty response from Gemini' } as const;
     }
-    
+
     console.log('[Improve] Parsing JSON...');
     const parsed = safeJsonParse<GeminiImprovementResult>(text);
     if (!parsed) {
       console.log('[Improve] ERROR: Failed to parse JSON. Raw text:', text.substring(0, 500));
       return { ok: false, error: 'Unable to parse Gemini JSON', raw: text } as const;
     }
-    
+
     console.log('[Improve] Successfully parsed improvements');
     return { ok: true, parsed, raw: text } as const;
   } catch (error: any) {
@@ -274,7 +274,7 @@ export async function POST(
     await connectDB();
     const { id } = await params;
     console.log('[Improve] Product ID:', id);
-    
+
     const product = await Product.findById(id);
 
     if (!product) {
@@ -289,7 +289,7 @@ export async function POST(
 
     const prompt = buildImprovementPrompt(product, reviewSummary);
     console.log('[Improve] Prompt length:', prompt.length);
-    
+
     const result = await runGeminiImprovement(prompt);
     console.log('[Improve] Improvement result ok:', result.ok);
 
@@ -311,9 +311,9 @@ export async function POST(
       description: parsed.description,
       tags: parsed.tags
         ? {
-            suggestion: normalizeTags(parsed.tags.suggestion),
-            reasoning: parsed.tags.reasoning,
-          }
+          suggestion: normalizeTags(parsed.tags.suggestion),
+          reasoning: parsed.tags.reasoning,
+        }
         : undefined,
     };
 

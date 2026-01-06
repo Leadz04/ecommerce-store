@@ -6,20 +6,26 @@ import { invalidateCache } from '@/lib/etsy-cache';
 import { getCurrentUserId } from '@/lib/etsy-auth-helper';
 
 // Helper function to download image from URL and return buffer for FormData
-async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; filename: string }> {
+async function downloadImageBuffer(imageUrl: string, origin?: string): Promise<{ buffer: Buffer; filename: string }> {
   try {
-    const response = await fetch(imageUrl);
+    // Handle relative URLs by prepending the request origin
+    let fullUrl = imageUrl;
+    if (imageUrl.startsWith('/') && origin) {
+      fullUrl = `${origin}${imageUrl}`;
+    }
+
+    const response = await fetch(fullUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.statusText}`);
     }
-    
+
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    
+
     // Extract filename from URL or use default
     const urlParts = imageUrl.split('/');
     const filename = urlParts[urlParts.length - 1].split('?')[0] || `image.jpg`;
-    
+
     return { buffer, filename };
   } catch (error) {
     console.error(`Error downloading image from ${imageUrl}:`, error);
@@ -29,6 +35,9 @@ async function downloadImageBuffer(imageUrl: string): Promise<{ buffer: Buffer; 
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user ID first
+    const userId = await getCurrentUserId(request);
+
     const body = await request.json();
     const { shopId, listing, productImages } = body || {};
 
@@ -41,13 +50,15 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // Use provided shopId or fall back to first active shop
-    const shopQuery = shopId ? { shopId: String(shopId), isActive: true } : { isActive: true };
+    // Use provided shopId or fall back to first active shop for this user
+    const shopQuery = shopId
+      ? { userId, shopId: String(shopId), isActive: true }
+      : { userId, isActive: true };
     const shop = await EtsyShop.findOne(shopQuery);
 
     if (!shop) {
       return NextResponse.json(
-        { error: 'Active Etsy shop not found' },
+        { error: 'Active Etsy shop not found for your account' },
         { status: 404 }
       );
     }
@@ -96,6 +107,35 @@ export async function POST(request: NextRequest) {
       type: listing.is_digital ? 'download' : 'physical', // Set listing type
     };
 
+    // For physical products, ensure readiness_state_id is set
+    if (!listing.is_digital && !listingData.readiness_state_id) {
+      try {
+        const readinessStateId = await etsyAPI.getOrCreateReadinessState(shop.shopId);
+        listingData.readiness_state_id = readinessStateId;
+      } catch (err) {
+        console.warn('Failed to get/create readiness state:', err);
+      }
+    }
+
+    // For physical products, ensure shipping_profile_id is set
+    if (!listing.is_digital && !listingData.shipping_profile_id) {
+      try {
+        const profiles = await etsyAPI.getShippingProfiles(shop.shopId);
+        if (profiles && profiles.length > 0) {
+          listingData.shipping_profile_id = profiles[0].shipping_profile_id;
+          console.log(`[Create Listing] Using default shipping profile: ${listingData.shipping_profile_id}`);
+        } else {
+          throw new Error('No shipping profiles found for this shop. Please create one on Etsy first.');
+        }
+      } catch (err: any) {
+        console.warn('Failed to get default shipping profile:', err);
+        if (err.message?.includes('No shipping profiles')) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+        // If it's a generic failure, we still try, but Etsy will likely reject it
+      }
+    }
+
     const created = await etsyAPI.createListing(shop.shopId, listingData);
     const listingId = created.listing_id.toString();
 
@@ -117,25 +157,26 @@ export async function POST(request: NextRequest) {
       try {
         // Upload up to 20 images (Etsy limit)
         const imagesToUpload = productImages.slice(0, 20);
-        
+
         for (let i = 0; i < imagesToUpload.length; i++) {
           const imageUrl = imagesToUpload[i];
           if (!imageUrl || typeof imageUrl !== 'string') continue;
-          
+
           try {
             // Download image and create FormData
-            const { buffer, filename } = await downloadImageBuffer(imageUrl);
+            const origin = request.nextUrl.origin;
+            const { buffer, filename } = await downloadImageBuffer(imageUrl, origin);
             const formData = new FormData();
-            
+
             // Append buffer directly to FormData (Node.js 18+ supports File/Blob-like objects)
             // Create a File-like object from buffer
-            const file = new File([buffer], filename, { type: 'image/jpeg' });
+            const file = new File([buffer as any], filename, { type: 'image/jpeg' });
             formData.append('image', file);
             formData.append('rank', (i + 1).toString());
-            
+
             const uploadedImage = await etsyAPI.uploadListingImage(listingId, formData);
             uploadedImages.push(uploadedImage);
-            
+
             // Small delay between uploads to avoid rate limiting
             if (i < imagesToUpload.length - 1) {
               await new Promise(resolve => setTimeout(resolve, 500));
@@ -160,8 +201,8 @@ export async function POST(request: NextRequest) {
         shopId: shop.shopId,
         title: created.title || listing.title,
         description: created.description || listing.description,
-        price: created.price ? (created.price.amount / created.price.divisor) : listing.price?.amount / listing.price?.divisor || 0,
-        currency: created.price?.currency_code || listing.price?.currency_code || 'USD',
+        price: created.price ? (typeof created.price === 'object' ? (created.price as any).amount / (created.price as any).divisor : created.price) : (typeof listing.price === 'object' ? (listing.price as any).amount / (listing.price as any).divisor : listing.price || 0),
+        currency: (created.price && typeof created.price === 'object' && (created.price as any).currency_code) || (listing.price && typeof listing.price === 'object' && (listing.price as any).currency_code) || 'USD',
         state: created.state || 'draft',
         tags: created.tags || listing.tags || [],
         materials: created.materials || listing.materials || [],
@@ -177,10 +218,9 @@ export async function POST(request: NextRequest) {
         lastSyncedAt: new Date(),
       });
       await dbListing.save();
-      
+
       // Invalidate shop listings cache
       try {
-        const userId = await getCurrentUserId(request);
         await invalidateCache(userId, { shopId: shop.shopId, cacheKeyPattern: 'shop-listings' });
       } catch (err) {
         console.warn('Failed to invalidate cache:', err);

@@ -4,6 +4,108 @@ import crypto from 'crypto';
 
 const ETSY_API_BASE = 'https://openapi.etsy.com/v3';
 
+/**
+ * Normalizes a string to prevent Etsy's "all_caps" validation error
+ * and other common title/string issues.
+ * Etsy rule: "more than 3 start with 2 sequential capital letters"
+ */
+export function normalizeEtsyString(str: string): string {
+  if (!str) return '';
+
+  // Etsy Title limit is 140 characters
+  let normalized = str.trim().substring(0, 140);
+
+  const words = normalized.split(/\s+/);
+  const sequentialCapsWords = words.filter(word => /^[A-Z]{2}/.test(word));
+
+  // If the string has words with sequential capitals (like ALL CAPS)
+  // we convert it to title case to avoid Etsy's validation errors.
+  if (sequentialCapsWords.length > 3 || (normalized === normalized.toUpperCase() && normalized.length > 10)) {
+    normalized = normalized
+      .toLowerCase()
+      .split(/(\s+|[-/])/) // Split by whitespace, hyphens, or slashes
+      .map(part => {
+        if (/^[\s\-/]+$/.test(part)) return part;
+        if (part.length === 0) return part;
+        // Capitalize first letter of each word
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join('');
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalizes a single Etsy tag.
+ * Etsy rules:
+ * - Max 20 characters
+ * - Only letters, numbers, and spaces
+ */
+export function normalizeEtsyTag(tag: string): string {
+  if (!tag) return '';
+
+  // Replace anything not a letter, number, or space with a space
+  // then collapse multiple spaces into one
+  let normalized = tag
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Crop to 20 characters
+  return normalized.substring(0, 20).trim();
+}
+
+/**
+ * Normalizes an array of tags.
+ * Etsy rule: Max 13 tags.
+ */
+export function normalizeEtsyTags(tags: string[]): string[] {
+  if (!tags || !Array.isArray(tags)) return [];
+
+  return tags
+    .map(t => normalizeEtsyTag(t))
+    .filter(t => t.length > 0)
+    .slice(0, 13);
+}
+
+/**
+ * Normalizes a single Etsy material string.
+ * Etsy rules: 
+ * - Max 20 characters
+ * - Letters, numbers, and spaces only
+ */
+export function normalizeEtsyMaterial(material: string): string {
+  if (!material) return '';
+  return material
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 20)
+    .trim();
+}
+
+/**
+ * Normalizes an array of materials.
+ * Etsy rule: Max 13 materials.
+ */
+export function normalizeEtsyMaterials(materials: string[]): string[] {
+  if (!materials || !Array.isArray(materials)) return [];
+  return materials
+    .map(m => normalizeEtsyMaterial(m))
+    .filter(m => m.length > 0)
+    .slice(0, 13);
+}
+
+/**
+ * Normalizes Etsy description.
+ * Etsy rule: Max 15,000 characters.
+ */
+export function normalizeEtsyDescription(desc: string): string {
+  if (!desc) return '';
+  return desc.substring(0, 15000);
+}
+
 export interface EtsyAuthResponse {
   access_token: string;
   refresh_token?: string;
@@ -54,6 +156,7 @@ export interface EtsyShopInfo {
   shop_location_country_iso?: string;
   review_count: number;
   review_average?: number;
+  is_star_seller?: boolean;
 }
 
 export interface EtsyListingData {
@@ -75,7 +178,7 @@ export interface EtsyListingData {
   category_path: string[];
   category_path_ids: number[];
   taxonomy_id: number;
-  price: {
+  price: number | {
     amount: number;
     divisor: number;
     currency_code: string;
@@ -100,6 +203,9 @@ export interface EtsyListingData {
   taxonomy_path: string[];
   used_manufacturer: boolean;
   is_vintage: boolean;
+  shipping_profile_id?: number;
+  readiness_state_id?: number;
+  type?: 'physical' | 'download' | 'both';
 }
 
 export interface EtsyOrderData {
@@ -333,8 +439,8 @@ export class EtsyPublicAPI {
   }
 
   // Get a single listing with full details (public API)
-  static async getListing(listingId: number | string): Promise<any> {
-    return this.request(`/application/listings/${listingId}`);
+  static async getListing(listingId: number | string, options: any = {}): Promise<any> {
+    return this.request(`/application/listings/${listingId}`, options);
   }
 
   // Get images for a listing (public API)
@@ -377,13 +483,20 @@ export class EtsyAPI {
       || process.env.ETSY_CLIENT_ID // fallback to client id if you've put the combined value here
       || '';
 
-    const finalHeaders: Record<string, string> = {
+    const defaultHeaders: Record<string, string> = {
       'Authorization': `Bearer ${this.accessToken}`,
       'x-api-key': apiKeyHeader, // Required for V3 endpoints per Etsy docs
-      // Default to JSON, but allow override from options.headers
       'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> | undefined),
     };
+
+    const requestHeaders = options.headers as Record<string, string> | undefined;
+    const finalHeaders = { ...defaultHeaders, ...requestHeaders };
+
+    // If Content-Type is explicitly set to empty string or null in options, remove it
+    // This allows fetch to set the correct boundary for FormData
+    if (requestHeaders && 'Content-Type' in requestHeaders && !requestHeaders['Content-Type']) {
+      delete finalHeaders['Content-Type'];
+    }
 
     // Prepare a safe-to-log body preview
     let bodyPreview: string | undefined;
@@ -519,6 +632,8 @@ export class EtsyAPI {
     }
   }
 
+
+
   private async refreshTokens() {
     if (!this.refreshToken) {
       throw new Error('No refresh token available');
@@ -570,6 +685,35 @@ export class EtsyAPI {
     return [];
   }
 
+  async getOrCreateReadinessState(shopId: string, readinessState: 1 | 2 = 2): Promise<number> {
+    try {
+      const states = await this.getReadinessStateDefinitions(shopId);
+      const state = states?.find((s: any) => s.readiness_state === readinessState);
+
+      if (state) {
+        return state.readiness_state_id;
+      }
+
+      if (states && states.length > 0) {
+        return states[0].readiness_state_id;
+      }
+
+      // Create a default one if none exist
+      // 2 = made_to_order, 1-3 days
+      const newState = await this.createReadinessStateDefinition(shopId, readinessState, 1, 3);
+      return newState.readiness_state_id;
+    } catch (error: any) {
+      if (error?.message?.includes('Conflict') || error?.message?.includes('409')) {
+        const states = await this.getReadinessStateDefinitions(shopId);
+        const state = states?.find((s: any) => s.readiness_state === readinessState);
+        if (state) return state.readiness_state_id;
+        if (states && states.length > 0) return states[0].readiness_state_id;
+      }
+      console.warn('[EtsyAPI] Failed to get/create readiness state:', error);
+      throw error;
+    }
+  }
+
   // Listing methods
   async getListings(shopId: string, limit = 100, offset = 0): Promise<EtsyListingData[]> {
     const response = await this.makeRequest(
@@ -618,8 +762,8 @@ export class EtsyAPI {
     const formData = new URLSearchParams();
 
     // Required fields
-    if (listingData.title) formData.append('title', listingData.title);
-    if (listingData.description) formData.append('description', listingData.description);
+    if (listingData.title) formData.append('title', normalizeEtsyString(listingData.title));
+    if (listingData.description) formData.append('description', normalizeEtsyDescription(listingData.description));
     if (listingData.quantity !== undefined) formData.append('quantity', listingData.quantity.toString());
 
     // Price: convert from object format to float
@@ -636,10 +780,12 @@ export class EtsyAPI {
 
     // Optional fields
     if (listingData.tags && Array.isArray(listingData.tags)) {
-      listingData.tags.forEach(tag => formData.append('tags[]', tag));
+      const cleanTags = normalizeEtsyTags(listingData.tags);
+      cleanTags.forEach(tag => formData.append('tags[]', tag));
     }
     if (listingData.materials && Array.isArray(listingData.materials)) {
-      listingData.materials.forEach(material => formData.append('materials[]', material));
+      const cleanMaterials = normalizeEtsyMaterials(listingData.materials);
+      cleanMaterials.forEach(material => formData.append('materials[]', material));
     }
     // Shipping profile ID is required for physical listings
     if (listingData.shipping_profile_id) {
@@ -696,10 +842,23 @@ export class EtsyAPI {
     // Process all fields in listingData
     Object.entries(listingData).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
+        if (key === 'title' && typeof value === 'string') {
+          formData.append('title', normalizeEtsyString(value));
+          return;
+        }
+
         if (Array.isArray(value)) {
           if (key === 'image_ids' || key === 'tags' || key === 'materials') {
             // Join certain arrays with commas
-            const validItems = value.filter(item => item !== null && item !== undefined);
+            let validItems = value.filter(item => item !== null && item !== undefined);
+
+            // Special handling for tags/materials in update
+            if (key === 'tags') {
+              validItems = normalizeEtsyTags(validItems as string[]);
+            } else if (key === 'materials') {
+              validItems = normalizeEtsyMaterials(validItems as string[]);
+            }
+
             if (validItems.length > 0) {
               formData.append(key, validItems.join(','));
             }
@@ -753,120 +912,106 @@ export class EtsyAPI {
   }
 
   // Image methods
+  // --- Media Library Management ---
+
+  // Images
   async getListingImages(listingId: string): Promise<any[]> {
     const response = await this.makeRequest(`/application/listings/${listingId}/images`);
-    return response.results;
+    return response.results || [];
+  }
+
+  async getListingImage(listingId: string, imageId: string): Promise<any> {
+    return this.makeRequest(`/application/listings/${listingId}/images/${imageId}`);
   }
 
   async uploadListingImage(listingId: string, imageData: FormData): Promise<any> {
-    // For FormData, we need to make a direct request without Content-Type header
-    // The browser will set it automatically with the boundary
-    const url = `${ETSY_API_BASE}/application/shops/${this.shopId}/listings/${listingId}/images`;
-    const apiKeyHeader =
-      process.env.ETSY_X_API_KEY
-      || process.env.ETSY_CLIENT_ID
-      || '';
-
-    const rateLimiter = EtsyRateLimiter.getInstance();
-    await rateLimiter.waitIfNeeded();
-
-    if (!rateLimiter.canMakeRequest()) {
-      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
-    }
-
-    const response = await fetch(url, {
+    // We expect imageData to contain 'image', optional 'rank', optional 'overwrite'
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/images`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'x-api-key': apiKeyHeader,
-        // Don't set Content-Type - let browser set it with boundary for FormData
-      },
+      headers: { 'Content-Type': '' }, // Let browser set boundary
       body: imageData,
     });
-
-    rateLimiter.recordCall();
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
-    }
-
-    return response.json();
   }
 
   async deleteListingImage(listingId: string, listingImageId: string): Promise<void> {
-    const url = `${ETSY_API_BASE}/application/shops/${this.shopId}/listings/${listingId}/images/${listingImageId}`;
-    const apiKeyHeader =
-      process.env.ETSY_X_API_KEY
-      || process.env.ETSY_CLIENT_ID
-      || '';
-
-    const rateLimiter = EtsyRateLimiter.getInstance();
-    await rateLimiter.waitIfNeeded();
-
-    if (!rateLimiter.canMakeRequest()) {
-      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
-    }
-
-    const response = await fetch(url, {
+    await this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/images/${listingImageId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'x-api-key': apiKeyHeader,
-      },
     });
-
-    rateLimiter.recordCall();
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
-    }
-
-    // DELETE returns 204 No Content, so no JSON to parse
-    return;
   }
 
   async updateListingImageRank(listingId: string, listingImageId: string, rank: number, overwrite: boolean = true): Promise<any> {
-    // To update image rank, we use the upload endpoint with overwrite=true
-    // We need to use the listing_image_id parameter to reference the existing image
-    const url = `${ETSY_API_BASE}/application/shops/${this.shopId}/listings/${listingId}/images`;
-    const apiKeyHeader =
-      process.env.ETSY_X_API_KEY
-      || process.env.ETSY_CLIENT_ID
-      || '';
-
-    const rateLimiter = EtsyRateLimiter.getInstance();
-    await rateLimiter.waitIfNeeded();
-
-    if (!rateLimiter.canMakeRequest()) {
-      throw new Error('Etsy API rate limit exceeded. Please wait before making another request.');
-    }
-
-    // Create form data with listing_image_id and rank
     const formData = new FormData();
     formData.append('listing_image_id', listingImageId);
     formData.append('rank', rank.toString());
     formData.append('overwrite', overwrite.toString());
 
-    const response = await fetch(url, {
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/images`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'x-api-key': apiKeyHeader,
-        // Don't set Content-Type - let browser set it with boundary for FormData
-      },
+      headers: { 'Content-Type': '' },
       body: formData,
     });
+  }
 
-    rateLimiter.recordCall();
+  // Videos
+  async getListingVideos(listingId: string): Promise<any[]> {
+    const response = await this.makeRequest(`/application/listings/${listingId}/videos`);
+    return response.results || [];
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
-    }
+  async getListingVideo(listingId: string, videoId: string): Promise<any> {
+    return this.makeRequest(`/application/listings/${listingId}/videos/${videoId}`);
+  }
 
-    return response.json();
+  async uploadListingVideo(listingId: string, videoData: FormData): Promise<any> {
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/videos`, {
+      method: 'POST',
+      headers: { 'Content-Type': '' },
+      body: videoData,
+    });
+  }
+
+  async deleteListingVideo(listingId: string, videoId: string): Promise<void> {
+    await this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/videos/${videoId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Files
+  async getListingFiles(listingId: string): Promise<any[]> {
+    const response = await this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/files`);
+    return response.results || [];
+  }
+
+  async getListingFile(listingId: string, fileId: string): Promise<any> {
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/files/${fileId}`);
+  }
+
+  async uploadListingFile(listingId: string, fileData: FormData): Promise<any> {
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': '' },
+      body: fileData,
+    });
+  }
+
+  async deleteListingFile(listingId: string, fileId: string): Promise<void> {
+    await this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/files/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Variation Images
+  async getVariationImages(listingId: string): Promise<any> {
+    console.log(`[EtsyAPI] Getting variation images for listing ${listingId}`);
+    return this.makeRequest(`/application/listings/${listingId}/variation-images`);
+  }
+
+  async updateVariationImages(listingId: string, variationImages: any[]): Promise<any> {
+    return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}/variation-images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variation_images: variationImages }),
+    });
   }
 
   // Inventory methods
@@ -877,8 +1022,36 @@ export class EtsyAPI {
   async updateListingInventory(listingId: string, inventoryData: any): Promise<any> {
     // Etsy API expects JSON format for inventory updates
     // Ensure all required fields are present
+    // Sanitize products array to remove read-only fields
+    const sanitizedProducts = (inventoryData.products || []).map((product: any) => {
+      const { product_id, is_deleted, productId, ...rest } = product;
+
+      // Also sanitize offerings
+      if (rest.offerings && Array.isArray(rest.offerings)) {
+        rest.offerings = rest.offerings.map((offering: any) => {
+          const { offering_id, is_deleted: offeringDeleted, offeringId, ...offeringRest } = offering;
+
+          // Convert price object to float if needed
+          if (offeringRest.price && typeof offeringRest.price === 'object' && 'amount' in offeringRest.price && 'divisor' in offeringRest.price) {
+            offeringRest.price = offeringRest.price.amount / offeringRest.price.divisor;
+          }
+
+          return offeringRest;
+        });
+      }
+
+      // Sanitize property_values
+      if (rest.property_values && Array.isArray(rest.property_values)) {
+        rest.property_values = rest.property_values.map((prop: any) => {
+          const { scale_name, ...propRest } = prop;
+          return propRest;
+        });
+      }
+      return rest;
+    });
+
     const payload: any = {
-      products: inventoryData.products || [],
+      products: sanitizedProducts,
     };
 
     if (inventoryData.price_on_property) {
@@ -903,6 +1076,14 @@ export class EtsyAPI {
         'Content-Type': 'application/json',
       },
     });
+  }
+
+  async getListingProduct(listingId: string, productId: string): Promise<any> {
+    return this.makeRequest(`/application/listings/${listingId}/products/${productId}`);
+  }
+
+  async getListingOffering(listingId: string, productId: string, offeringId: string): Promise<any> {
+    return this.makeRequest(`/application/listings/${listingId}/products/${productId}/offerings/${offeringId}`);
   }
 
   // Review methods

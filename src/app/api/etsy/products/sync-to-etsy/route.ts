@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { EtsyShop, EtsyListing, Product } from '@/models';
-import { EtsyAPI } from '@/lib/etsy';
+import { EtsyAPI, normalizeEtsyString } from '@/lib/etsy';
 import { getCurrentUserId } from '@/lib/etsy-auth-helper';
 
 // Helper function to download image from URL and return buffer for FormData
@@ -149,46 +149,11 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
 
   // Fetch or create readiness state definition - required for physical listings
   // readiness_state: 1 = ready_to_ship, 2 = made_to_order
-  let readinessStateId: number | undefined;
+  let readinessStateId: number;
   try {
-    const readinessStates = await etsyAPI.getReadinessStateDefinitions(shop.shopId);
-    // Since we're using 'made_to_order', look for readiness_state = 2
-    const madeToOrderState = readinessStates?.find((r: any) => r.readiness_state === 2);
-
-    if (madeToOrderState) {
-      readinessStateId = madeToOrderState.readiness_state_id;
-    } else if (readinessStates && readinessStates.length > 0) {
-      // Use first available state if no made_to_order found
-      readinessStateId = readinessStates[0].readiness_state_id;
-    } else {
-      // Create a default made_to_order readiness state definition
-      // Default processing time: 1-3 days for made_to_order
-      const newState = await etsyAPI.createReadinessStateDefinition(shop.shopId, 2, 1, 3);
-      readinessStateId = newState.readiness_state_id;
-    }
+    readinessStateId = await etsyAPI.getOrCreateReadinessState(shop.shopId, 2);
   } catch (error: any) {
-    // If creation fails (e.g., conflict - definition already exists), try to fetch again
-    if (error?.message?.includes('Conflict') || error?.message?.includes('409')) {
-      try {
-        const readinessStates = await etsyAPI.getReadinessStateDefinitions(shop.shopId);
-        const madeToOrderState = readinessStates?.find((r: any) => r.readiness_state === 2);
-        if (madeToOrderState) {
-          readinessStateId = madeToOrderState.readiness_state_id;
-        } else if (readinessStates && readinessStates.length > 0) {
-          readinessStateId = readinessStates[0].readiness_state_id;
-        }
-      } catch (retryError) {
-        console.warn('Failed to fetch readiness states after conflict:', retryError);
-      }
-    }
-
-    if (!readinessStateId) {
-      console.warn('Failed to get/create readiness state definition:', error);
-      throw new Error('Failed to get or create readiness state definition. Please create a processing profile in your Etsy shop settings.');
-    }
-  }
-
-  if (!readinessStateId) {
+    console.warn('Failed to get/create readiness state definition:', error);
     throw new Error('No readiness state definition found for this shop. Please create a processing profile in your Etsy shop settings before creating listings.');
   }
 
@@ -196,7 +161,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
   // Note: taxonomy_id is required by Etsy API - using a default for clothing/apparel
   // Users should set this properly via the Create Listing form
   const listingData: any = {
-    title: product.name || 'Untitled Product',
+    title: normalizeEtsyString(product.name || 'Untitled Product'),
     description: product.description || product.descriptionHtml || '',
     state: 'draft' as const,
     type: 'physical' as const, // All products are physical
@@ -300,6 +265,7 @@ async function createEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
       etsyListingId: listingId,
       etsyExported: true,
       etsyExportedAt: new Date(),
+      tags: [], // Tags removed as per request to avoid sync failures
     });
 
     return {
@@ -341,7 +307,7 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
   }
 
   const listingData: any = {
-    title: product.name || existingListing.title,
+    title: normalizeEtsyString(product.name || existingListing.title),
     description: product.description || product.descriptionHtml || existingListing.description,
     price: product.price || existingListing.price || 0, // Simple float value
     quantity: product.stockCount || product.inventory || existingListing.inventory?.quantity || 1,
@@ -432,6 +398,7 @@ async function updateEtsyListing(etsyAPI: EtsyAPI, product: any, shop: any, user
       etsyListingId: existingListing.etsyListingId,
       etsyExported: true,
       etsyExportedAt: new Date(),
+      tags: [], // Tags removed as per request to avoid sync failures
     });
 
     return {

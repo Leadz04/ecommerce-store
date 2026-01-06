@@ -34,15 +34,15 @@ export async function POST(request: NextRequest) {
     const maxPerRequest = 100;
     const requestedLimit = Math.min(Math.max(limit, 1), 500); // Allow up to 500 listings
     const numberOfRequests = Math.ceil(requestedLimit / maxPerRequest);
-    
+
     let allResults: any[] = [];
     let totalCount = 0;
-    
+
     try {
       for (let i = 0; i < numberOfRequests && allResults.length < requestedLimit; i++) {
         const offset = i * maxPerRequest;
         const currentLimit = Math.min(maxPerRequest, requestedLimit - allResults.length);
-        
+
         const raw = await EtsyPublicAPI.searchActiveListings({
           keywords,
           min_price: minPrice,
@@ -51,17 +51,18 @@ export async function POST(request: NextRequest) {
           shop_location: shopLocation,
           limit: currentLimit,
           offset: offset,
-        });
-        
+          includes: 'Images',
+        } as any);
+
         const batchResults = Array.isArray(raw.results) ? raw.results : [];
         allResults = [...allResults, ...batchResults];
         totalCount = raw.count || totalCount;
-        
+
         // If we got fewer results than requested, we've reached the end
         if (batchResults.length < currentLimit) {
           break;
         }
-        
+
         // Small delay to respect rate limits
         if (i < numberOfRequests - 1) {
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -103,15 +104,27 @@ export async function POST(request: NextRequest) {
         num_favorers: item.num_favorers ?? null,
         shop_id: item.shop_id ?? null,
         shop_name: item.shop?.shop_name ?? null,
+        is_star_seller: item.shop?.is_star_seller ?? false,
         taxonomy_id: item.taxonomy_id ?? null,
         category_path: item.category_path ?? [],
         tags: Array.isArray(item.tags) ? item.tags : [],
-        // Details will be fetched on-demand via separate API endpoint
-        description: null,
-        images: null,
+        // Include images from the search results
+        description: item.description ?? null,
+        images: Array.isArray(item.images) ? item.images : (Array.isArray(item.Images) ? item.Images : []),
         videos: null,
         created_timestamp: item.creation_timestamp ?? item.created_timestamp ?? null,
       };
+    });
+
+    // Sort listings: Star Sellers first, then by views/favorites
+    listings.sort((a, b) => {
+      if (a.is_star_seller !== b.is_star_seller) {
+        return a.is_star_seller ? -1 : 1;
+      }
+      // Secondary sort by engagement
+      const aEngagement = (a.views || 0) + (a.num_favorers || 0) * 5;
+      const bEngagement = (b.views || 0) + (b.num_favorers || 0) * 5;
+      return bEngagement - aEngagement;
     });
 
     // Compute simple stats
@@ -174,6 +187,7 @@ export async function POST(request: NextRequest) {
     const shopsMap: Record<string, {
       shop_id: number;
       shop_name: string | null;
+      is_star_seller: boolean;
       listingCount: number;
       totalPrice: number;
       totalViews: number;
@@ -184,11 +198,12 @@ export async function POST(request: NextRequest) {
     listings.forEach((l: any) => {
       if (!l.shop_id) return;
       const shopKey = String(l.shop_id);
-      
+
       if (!shopsMap[shopKey]) {
         shopsMap[shopKey] = {
           shop_id: l.shop_id,
           shop_name: l.shop_name || null,
+          is_star_seller: l.is_star_seller || false,
           listingCount: 0,
           totalPrice: 0,
           totalViews: 0,
@@ -210,10 +225,11 @@ export async function POST(request: NextRequest) {
         // Calculate engagement score as proxy for sales potential
         // Higher views and favorites indicate better performance
         const engagementScore = shop.totalViews * 0.7 + shop.totalFavorites * 10;
-        
+
         return {
           shop_id: shop.shop_id,
           shop_name: shop.shop_name || 'Unknown Shop',
+          is_star_seller: shop.is_star_seller,
           listingCount: shop.listingCount,
           averagePrice: shop.listingCount > 0 ? shop.totalPrice / shop.listingCount : 0,
           averageViews: shop.listingCount > 0 ? shop.totalViews / shop.listingCount : 0,
@@ -224,8 +240,11 @@ export async function POST(request: NextRequest) {
         };
       })
       .sort((a, b) => {
-        // Sort by engagement score first (proxy for sales performance)
-        // Then by listing count, then by average views
+        // Prioritize Star Sellers
+        if (a.is_star_seller !== b.is_star_seller) {
+          return a.is_star_seller ? -1 : 1;
+        }
+        // Then sort by engagement score
         if (Math.abs(b.engagementScore - a.engagementScore) > 0.1) {
           return b.engagementScore - a.engagementScore;
         }

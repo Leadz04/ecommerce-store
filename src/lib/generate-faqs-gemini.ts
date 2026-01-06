@@ -148,7 +148,7 @@ function shouldProcessProduct(product: any): boolean {
 
   // Must contain "leather" in name, description, or tags
   const hasLeather = /leather|cowhide|genuine\s+leather|real\s+leather|full[-\s]?grain/.test(combinedText);
-  
+
   if (!hasLeather) {
     return false;
   }
@@ -261,7 +261,7 @@ async function generateFAQsWithGemini(
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-1.5-flash';
+      const model = 'gemini-2.0-flash';
       // Flash-Lite doesn't support thinkingConfig, so we use a simpler config
       const config = {};
       const contents = [
@@ -356,10 +356,10 @@ function parseFAQJSON(jsonString: string): Array<{ question: string; answer: str
         cleaned = lines.slice(startIndex, endIndex + 1).join('\n');
       }
     }
-    
+
     // Remove markdown code block markers
     cleaned = cleaned.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    
+
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed)) {
       return parsed.filter(
@@ -402,7 +402,7 @@ export async function generateFAQsForProducts(logger?: Logger) {
 
     // Fetch all active products first
     const allProducts = await Product.find({ isActive: true });
-    
+
     // Filter to only leather products, excluding specified types
     const products = allProducts.filter(shouldProcessProduct);
 
@@ -441,9 +441,9 @@ export async function generateFAQsForProducts(logger?: Logger) {
       }
 
       // Check if product already has FAQs
-      if (product.generatedFAQs && 
-          Array.isArray(product.generatedFAQs) && 
-          product.generatedFAQs.length > 0) {
+      if (product.generatedFAQs &&
+        Array.isArray(product.generatedFAQs) &&
+        product.generatedFAQs.length > 0) {
         log('log', `  ⏭️  Skipping: Product already has ${product.generatedFAQs.length} FAQs`);
         skippedCount++;
         continue;
@@ -503,10 +503,10 @@ export async function generateFAQsForProducts(logger?: Logger) {
 
         // Step 3: Parse the FAQs
         const parsedFAQs = parseFAQJSON(faqResult.output);
-        
+
         if (parsedFAQs.length === 0) {
           log('log', '  ⚠️  No valid FAQs parsed from Gemini response');
-          log('log', '  Raw response preview:', faqResult.output.substring(0, 200));
+          log('log', '  Raw response preview: ' + faqResult.output.substring(0, 200));
           skippedCount++;
           await delay(2000);
           continue;

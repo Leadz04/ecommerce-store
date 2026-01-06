@@ -118,11 +118,9 @@ RANKING FACTORS:
 
 Optimize for high CTR, clear benefits, relevant keywords, and natural language that helps buyers find and purchase. Keep language natural and compliant.`;
 
-  const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${
-    input.description || ''
-  }\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${
-    input.category || ''
-  }\n- Brand: ${input.brand || ''}`;
+  const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${input.description || ''
+    }\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${input.category || ''
+    }\n- Brand: ${input.brand || ''}`;
 
   return `${baseContext}${productBits}\nTask: Write a natural, buyer-focused Etsy product title. 
 
@@ -165,11 +163,9 @@ RANKING FACTORS:
 
 Optimize for high CTR, clear benefits, relevant keywords, and natural language that helps buyers find and purchase. Keep language natural and compliant.`;
 
-  const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${
-    input.description || ''
-  }\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${
-    input.category || ''
-  }\n- Brand: ${input.brand || ''}`;
+  const productBits = `\nProduct Context:\n- Name: ${input.name || ''}\n- Description: ${input.description || ''
+    }\n- Tags: ${(input.tags || []).join(', ')}\n- Category: ${input.category || ''
+    }\n- Brand: ${input.brand || ''}`;
 
   return `${baseContext}${productBits}\nTask: Generate EXACTLY 13 natural, buyer-focused Etsy tags that complement the title and help buyers discover the product.
 
@@ -264,8 +260,8 @@ async function optimizeTitle(product: any) {
     try {
       await applyRateLimitDelay();
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-1.5-flash';
-      const config = { thinkingConfig: { thinkingBudget: -1 } };
+      const model = 'gemini-2.0-flash';
+      const config = {};
       const contents = [
         {
           role: 'user' as const,

@@ -4,7 +4,7 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 
 const ETSY_SELLER_HANDBOOK_URL = 'https://www.etsy.com/seller-handbook';
-const DEFAULT_GEMINI_POLICY_MODEL = process.env.GEMINI_POLICY_MODEL?.trim() || 'gemini-2.5-pro';
+const DEFAULT_GEMINI_POLICY_MODEL = process.env.GEMINI_POLICY_MODEL?.trim() || 'gemini-2.0-pro';
 
 type GeminiPolicySeverity = 'critical' | 'warning' | 'info';
 
@@ -45,7 +45,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Personal contact information (phone, email, address) is not allowed in listings'
   },
-  
+
   // External marketplace links (prohibited)
   externalLinks: {
     patterns: [
@@ -54,7 +54,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Links to external marketplaces are prohibited'
   },
-  
+
   // Prohibited content keywords
   prohibitedContent: {
     patterns: [
@@ -65,7 +65,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Prohibited content detected'
   },
-  
+
   // Misleading information
   misleadingInfo: {
     patterns: [
@@ -75,7 +75,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Misleading or spam-like language detected'
   },
-  
+
   // Copyright/trademark violations
   copyrightViolations: {
     patterns: [
@@ -84,7 +84,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Potential copyright or trademark violations'
   },
-  
+
   // Spam keywords
   spamKeywords: {
     patterns: [
@@ -94,7 +94,7 @@ const ETSY_POLICY_VIOLATIONS = {
     ],
     message: 'Spam-like keywords or formatting detected'
   },
-  
+
   // Misleading/Inaccurate Descriptors (PROHIBITED)
   misleadingDescriptors: {
     patterns: [
@@ -108,46 +108,46 @@ const ETSY_POLICY_VIOLATIONS = {
       return false;
     }
   },
-  
+
   // Keyword Stuffing - Repetitive Content (PROHIBITED)
   keywordStuffing: {
     check: (title: string, description: string, tags: string[]) => {
       const titleWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       const descText = description.toLowerCase().replace(/<[^>]*>/g, ' ');
       const descWords = descText.split(/\s+/).filter(w => w.length > 3);
-      
+
       // Check if title is copied verbatim into description (prohibited)
       const titlePhrase = title.toLowerCase().trim();
       if (descText.includes(titlePhrase) && titlePhrase.length > 10) {
         return true; // Title copied verbatim to description
       }
-      
+
       // Check for excessive repetition of same words/phrases
       const wordCounts: Record<string, number> = {};
       [...titleWords, ...descWords].forEach(word => {
         wordCounts[word] = (wordCounts[word] || 0) + 1;
       });
-      
+
       // Flag if any word appears more than 5 times (likely keyword stuffing)
       const excessiveRepetition = Object.values(wordCounts).some(count => count > 5);
       if (excessiveRepetition) {
         return true;
       }
-      
+
       // Check if description is just a list of keywords from title/tags
       const tagWords = tags.join(' ').toLowerCase().split(/\s+/);
-      const descIsKeywordList = descWords.every(word => 
+      const descIsKeywordList = descWords.every(word =>
         titleWords.includes(word) || tagWords.includes(word)
       );
       if (descIsKeywordList && descWords.length > 10) {
         return true; // Description is just keyword list
       }
-      
+
       return false;
     },
     message: 'Keyword stuffing detected: repetitive content, title copied to description, or keyword list instead of natural description'
   },
-  
+
   // Irrelevant Keywords (PROHIBITED)
   irrelevantKeywords: {
     check: (title: string, description: string, tags: string[], category: string, productType: string) => {
@@ -156,18 +156,18 @@ const ETSY_POLICY_VIOLATIONS = {
       const allText = `${title} ${description} ${tags.join(' ')}`.toLowerCase();
       const categoryLower = category.toLowerCase();
       const typeLower = productType.toLowerCase();
-      
+
       // Check for completely unrelated categories (basic check)
       const unrelatedCategories = ['electronics', 'software', 'digital', 'food', 'medicine'];
-      const hasUnrelated = unrelatedCategories.some(cat => 
+      const hasUnrelated = unrelatedCategories.some(cat =>
         allText.includes(cat) && !categoryLower.includes(cat) && !typeLower.includes(cat)
       );
-      
+
       return hasUnrelated;
     },
     message: 'Irrelevant or unrelated keywords detected - may negatively impact search ranking'
   },
-  
+
   // Required information missing
   missingInfo: {
     check: (text: string) => {
@@ -190,14 +190,14 @@ interface PolicyCheckResult {
 function checkTextForViolations(text: string, category: string): PolicyCheckResult[] {
   const results: PolicyCheckResult[] = [];
   const textLower = text.toLowerCase();
-  
+
   // Check each policy category
   for (const [key, policy] of Object.entries(ETSY_POLICY_VIOLATIONS)) {
     // Skip checks that require full product context (handled separately)
     if (key === 'keywordStuffing' || key === 'irrelevantKeywords') {
       continue;
     }
-    
+
     if (key === 'missingInfo') {
       // Special check for missing info
       if (!policy.check(text)) {
@@ -211,12 +211,12 @@ function checkTextForViolations(text: string, category: string): PolicyCheckResu
       }
       continue;
     }
-    
+
     // Skip checks that only have a check function (no patterns)
     if (!policy.patterns || policy.patterns.length === 0) {
       continue;
     }
-    
+
     // Check patterns
     const found: string[] = [];
     for (const pattern of policy.patterns) {
@@ -225,14 +225,14 @@ function checkTextForViolations(text: string, category: string): PolicyCheckResu
         found.push(...matches.slice(0, 5)); // Limit to first 5 matches
       }
     }
-    
+
     if (found.length > 0) {
-      const severity = key === 'personalInfo' || key === 'externalLinks' || key === 'prohibitedContent' 
-        ? 'error' 
-        : key === 'copyrightViolations' 
-        ? 'warning' 
-        : 'info';
-      
+      const severity = key === 'personalInfo' || key === 'externalLinks' || key === 'prohibitedContent'
+        ? 'error'
+        : key === 'copyrightViolations'
+          ? 'warning'
+          : 'info';
+
       let recommendation = '';
       switch (key) {
         case 'personalInfo':
@@ -256,7 +256,7 @@ function checkTextForViolations(text: string, category: string): PolicyCheckResu
         default:
           recommendation = 'Review Etsy\'s Seller Policy for guidelines.';
       }
-      
+
       results.push({
         category,
         severity,
@@ -266,7 +266,7 @@ function checkTextForViolations(text: string, category: string): PolicyCheckResu
       });
     }
   }
-  
+
   return results;
 }
 
@@ -328,8 +328,7 @@ async function callGeminiPolicyReview(prompt: string, apiKey?: string) {
     const config = {
       responseMimeType: 'application/json',
       maxOutputTokens: 2048,
-      temperature: 0.2,
-      thinkingConfig: { thinkingBudget: -1 }
+      temperature: 0.2
     } as any;
 
     const contents = [
@@ -596,7 +595,7 @@ export async function POST(
     if (title) {
       const titleViolations = checkTextForViolations(title, 'Title');
       violations.push(...titleViolations);
-      
+
       titleViolations.forEach(v => {
         if (v.severity === 'error') {
           overallScore -= 15;
@@ -623,11 +622,11 @@ export async function POST(
     const descriptionHtml = (product as any).descriptionHtml || '';
     const description = product.description || '';
     const plainDescription = descriptionHtml.replace(/<[^>]*>/g, ' ') || description;
-    
+
     if (plainDescription.trim()) {
       const descViolations = checkTextForViolations(plainDescription, 'Description');
       violations.push(...descViolations);
-      
+
       descViolations.forEach(v => {
         if (v.severity === 'error') {
           overallScore -= 20;
@@ -654,10 +653,10 @@ export async function POST(
     const tags = Array.isArray((product as any).tags) ? (product as any).tags : [];
     const category = product.category || '';
     const productType = (product as any).productType || '';
-    
+
     // Check keyword stuffing
-    if (ETSY_POLICY_VIOLATIONS.keywordStuffing.check && 
-        ETSY_POLICY_VIOLATIONS.keywordStuffing.check(title, plainDescription, tags)) {
+    if (ETSY_POLICY_VIOLATIONS.keywordStuffing.check &&
+      ETSY_POLICY_VIOLATIONS.keywordStuffing.check(title, plainDescription, tags)) {
       violations.push({
         category: 'Keyword Stuffing',
         severity: 'error',
@@ -668,10 +667,10 @@ export async function POST(
       overallScore -= 25;
       compliance.description = false;
     }
-    
+
     // Check irrelevant keywords
-    if (ETSY_POLICY_VIOLATIONS.irrelevantKeywords.check && 
-        ETSY_POLICY_VIOLATIONS.irrelevantKeywords.check(title, plainDescription, tags, category, productType)) {
+    if (ETSY_POLICY_VIOLATIONS.irrelevantKeywords.check &&
+      ETSY_POLICY_VIOLATIONS.irrelevantKeywords.check(title, plainDescription, tags, category, productType)) {
       violations.push({
         category: 'Irrelevant Keywords',
         severity: 'warning',
@@ -686,10 +685,10 @@ export async function POST(
     const images = product.images || [];
     const mainImage = product.image;
     const allImages = mainImage ? [mainImage, ...images] : images;
-    
+
     let altTextIssues = 0;
     let missingAltText = 0;
-    
+
     // Note: We can't check actual alt text from the database if it's not stored
     // But we can check if images exist and recommend adding alt text
     if (allImages.length === 0) {
@@ -712,7 +711,7 @@ export async function POST(
         }
         // We can't check actual alt text without it being stored, so we'll recommend it
       });
-      
+
       if (altTextIssues > 0) {
         violations.push({
           category: 'Image Alt Text',
@@ -723,7 +722,7 @@ export async function POST(
         });
         overallScore -= 5;
       }
-      
+
       // Recommend adding alt text if not present
       if (allImages.length > 0) {
         violations.push({

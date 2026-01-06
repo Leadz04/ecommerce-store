@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
       if (!apiKey) return { ok: false, status: 0, output: '', error: 'Missing API key' };
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const model = 'gemini-1.5-flash';
-        const config = { thinkingConfig: { thinkingBudget: -1 } } as any;
+        const model = 'gemini-2.0-flash';
+        const config = {};
         const contents = [
           {
             role: 'user',
@@ -143,10 +143,10 @@ export async function POST(request: NextRequest) {
       if (!secondary.ok) {
         const tertiary = await callGeminiStream(tertiaryKey);
         if (!tertiary.ok) {
-          const detail = { 
-            primaryStatus: primary.status, 
-            primaryDetail: primary.error, 
-            secondaryStatus: secondary.status, 
+          const detail = {
+            primaryStatus: primary.status,
+            primaryDetail: primary.error,
+            secondaryStatus: secondary.status,
             secondaryDetail: secondary.error,
             tertiaryStatus: tertiary.status,
             tertiaryDetail: tertiary.error
