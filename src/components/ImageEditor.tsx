@@ -39,7 +39,7 @@ export default function ImageEditor({
   const colorFillCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
-  
+
   // Studio background presets
   const studioBackgrounds = [
     { name: 'White', color: '#ffffff', label: 'Pure White' },
@@ -61,7 +61,7 @@ export default function ImageEditor({
   const [detectingColor, setDetectingColor] = useState(false);
   const [detectedColor, setDetectedColor] = useState<string | null>(null);
   // Client-side processing only (free, no paid APIs)
-  
+
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
@@ -92,7 +92,15 @@ export default function ImageEditor({
       img.onerror = () => {
         toast.error('Failed to load image');
       };
-      img.src = imageUrl;
+
+      // Use proxy for external URLs to avoid CORS issues
+      const isExternal = imageUrl.startsWith('http') && !imageUrl.includes(typeof window !== 'undefined' ? window.location.host : 'localhost:3000');
+      const finalUrl = isExternal
+        ? `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`
+        : imageUrl;
+
+      console.log('[ImageEditor] Loading image:', { original: imageUrl, used: finalUrl, isExternal });
+      img.src = finalUrl;
     }
   }, [isOpen, imageUrl]);
 
@@ -142,7 +150,7 @@ export default function ImageEditor({
         const fillCropY = cropY;
         const fillCropWidth = crop.width * scaleX;
         const fillCropHeight = crop.height * scaleY;
-        
+
         // Draw the color fills on top of the image
         ctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(
@@ -205,7 +213,7 @@ export default function ImageEditor({
     try {
       // Regenerate preview to ensure color fills are included
       await generatePreview();
-      
+
       // Use client-side processing (free, no paid APIs)
       const canvas = canvasRef.current;
       if (!canvas) throw new Error('Canvas not available');
@@ -221,8 +229,8 @@ export default function ImageEditor({
 
       // Process image (with background removal if requested)
       if (removeBg) {
-        setProcessingStage(fineEdges 
-          ? 'Removing background (high quality mode)...' 
+        setProcessingStage(fineEdges
+          ? 'Removing background (high quality mode)...'
           : 'Removing background (fast mode)...');
       } else {
         setProcessingStage('Processing image...');
@@ -273,19 +281,19 @@ export default function ImageEditor({
       const image = imgRef.current;
       if (image.complete && image.naturalWidth > 0) {
         const rect = image.getBoundingClientRect();
-        
+
         // Set canvas internal dimensions to natural image size
         colorFillCanvasRef.current.width = image.naturalWidth;
         colorFillCanvasRef.current.height = image.naturalHeight;
         previewCanvasRef.current.width = image.naturalWidth;
         previewCanvasRef.current.height = image.naturalHeight;
-        
+
         // Set canvas display size to match displayed image
         colorFillCanvasRef.current.style.width = `${rect.width}px`;
         colorFillCanvasRef.current.style.height = `${rect.height}px`;
         previewCanvasRef.current.style.width = `${rect.width}px`;
         previewCanvasRef.current.style.height = `${rect.height}px`;
-        
+
         // Clear canvases
         const fillCtx = colorFillCanvasRef.current.getContext('2d');
         const previewCtx = previewCanvasRef.current.getContext('2d');
@@ -322,7 +330,7 @@ export default function ImageEditor({
   // Draw preview square on preview canvas
   const drawPreview = useCallback((x: number, y: number) => {
     if (!previewCanvasRef.current || !imgRef.current) return;
-    
+
     const canvas = previewCanvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -353,7 +361,7 @@ export default function ImageEditor({
     const scaleY = image.naturalHeight / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
-    
+
     // Show preview
     drawPreview(x, y);
 
@@ -367,7 +375,7 @@ export default function ImageEditor({
         ctx.fillStyle = fillColor;
         // Draw square centered at (x, y)
         ctx.fillRect(x - brushSizeScaled / 2, y - brushSizeScaled / 2, brushSizeScaled, brushSizeScaled);
-        
+
         if (completedCrop) {
           generatePreview();
         }
@@ -378,16 +386,16 @@ export default function ImageEditor({
   const handleImageMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!colorFillMode || !imgRef.current || !colorFillCanvasRef.current) return;
     e.preventDefault();
-    
+
     isDrawingRef.current = true;
-    
+
     const image = imgRef.current;
     const rect = image.getBoundingClientRect();
     const scaleX = image.naturalWidth / rect.width;
     const scaleY = image.naturalHeight / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
-    
+
     const canvas = colorFillCanvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -398,7 +406,7 @@ export default function ImageEditor({
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = fillColor;
     ctx.fillRect(x - brushSizeScaled / 2, y - brushSizeScaled / 2, brushSizeScaled, brushSizeScaled);
-    
+
     if (completedCrop) {
       generatePreview();
     }
@@ -478,9 +486,9 @@ export default function ImageEditor({
                   <Crop className="w-5 h-5 text-gray-600" />
                   <h3 className="font-semibold text-gray-900">Crop Image</h3>
                 </div>
-                
+
                 {originalImage && (
-                  <div 
+                  <div
                     ref={imageContainerRef}
                     className="relative"
                     onMouseMove={handleImageMouseMove}
@@ -501,7 +509,9 @@ export default function ImageEditor({
                       <div className="relative">
                         <img
                           ref={imgRef}
-                          src={imageUrl}
+                          src={imageUrl.startsWith('http') && !imageUrl.includes(typeof window !== 'undefined' ? window.location.host : 'localhost:3000')
+                            ? `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`
+                            : imageUrl}
                           alt="Crop"
                           style={{ maxWidth: '100%', maxHeight: '60vh', pointerEvents: colorFillMode ? 'none' : 'auto' }}
                           onLoad={onImageLoad}
@@ -512,10 +522,10 @@ export default function ImageEditor({
                             <canvas
                               ref={colorFillCanvasRef}
                               className="absolute top-0 left-0 pointer-events-none"
-                              style={{ 
+                              style={{
                                 width: '100%',
                                 height: '100%',
-                                maxWidth: '100%', 
+                                maxWidth: '100%',
                                 maxHeight: '60vh',
                                 mixBlendMode: 'normal',
                                 zIndex: 2
@@ -524,10 +534,10 @@ export default function ImageEditor({
                             <canvas
                               ref={previewCanvasRef}
                               className="absolute top-0 left-0 pointer-events-none"
-                              style={{ 
+                              style={{
                                 width: '100%',
                                 height: '100%',
-                                maxWidth: '100%', 
+                                maxWidth: '100%',
                                 maxHeight: '60vh',
                                 mixBlendMode: 'normal',
                                 zIndex: 3
@@ -545,41 +555,37 @@ export default function ImageEditor({
                   <span className="text-sm text-gray-600">Aspect Ratio:</span>
                   <button
                     onClick={() => setAspectRatio(undefined)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      aspectRatio === undefined
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-3 py-1 text-sm rounded ${aspectRatio === undefined
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
                   >
                     Free
                   </button>
                   <button
                     onClick={() => setAspectRatio(1)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      aspectRatio === 1
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-3 py-1 text-sm rounded ${aspectRatio === 1
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
                   >
                     1:1
                   </button>
                   <button
                     onClick={() => setAspectRatio(4 / 3)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      aspectRatio === 4 / 3
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-3 py-1 text-sm rounded ${aspectRatio === 4 / 3
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
                   >
                     4:3
                   </button>
                   <button
                     onClick={() => setAspectRatio(16 / 9)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      aspectRatio === 16 / 9
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-3 py-1 text-sm rounded ${aspectRatio === 16 / 9
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
                   >
                     16:9
                   </button>
@@ -708,7 +714,7 @@ export default function ImageEditor({
                             <Eye className={`w-4 h-4 ${detectingColor ? 'animate-spin' : ''}`} />
                             <span>{detectingColor ? 'Detecting...' : 'Auto-detect (Corners)'}</span>
                           </button>
-                          
+
                           {/* Alternative detection methods */}
                           <div className="flex gap-2 flex-wrap">
                             <button
@@ -779,11 +785,11 @@ export default function ImageEditor({
                             </button>
                           </div>
                         </div>
-                        
+
                         {detectedColor && (
                           <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                            <div 
-                              className="w-5 h-5 rounded border-2 border-gray-300 shadow-sm" 
+                            <div
+                              className="w-5 h-5 rounded border-2 border-gray-300 shadow-sm"
                               style={{ backgroundColor: detectedColor }}
                             />
                             <span>Detected: <strong className="font-mono">{detectedColor}</strong></span>

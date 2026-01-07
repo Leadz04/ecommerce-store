@@ -653,7 +653,7 @@ export default function EtsyBusinessSuite() {
       if (activeModule === 'policies') {
         loadReturnPolicies();
       }
-      if (activeModule === 'listings' || activeModule === 'dashboard') {
+      if (activeModule === 'listings' || activeModule === 'dashboard' || activeModule === 'media') {
         // Only load stats if not already loading
         if (!isLoadingStats) {
           loadDashboardStats();
@@ -2510,8 +2510,8 @@ export default function EtsyBusinessSuite() {
       // Refresh shop details if needed
       await refetchShopDetails(shouldLoadAll);
 
-      // Load listings (only if dashboard, listings or inventory module)
-      if (shouldLoadAll || activeModule === 'listings' || activeModule === 'inventory') {
+      // Load listings (only if dashboard, listings, inventory or media module)
+      if (shouldLoadAll || activeModule === 'listings' || activeModule === 'inventory' || activeModule === 'media') {
         const offset = (listingsPage - 1) * listingsPerPage;
 
         // Use shared listings from store, but also fetch filtered/paginated data if needed
@@ -5571,7 +5571,11 @@ export default function EtsyBusinessSuite() {
         return (
           <EtsyMediaLibrary
             shopId={selectedShopId}
-            listings={listings}
+            listings={sharedListings.filter((l: any) => l.state === 'active').map((l: any) => ({
+              ...l,
+              listingId: l.listingId || l.listing_id,
+              title: l.title ? l.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : l.title
+            }))}
           />
         );
       case 'policies':

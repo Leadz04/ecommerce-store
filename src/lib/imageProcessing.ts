@@ -53,7 +53,7 @@ async function resizeImageIfNeeded(image: HTMLImageElement, maxDimension: number
 
   canvas.width = newWidth;
   canvas.height = newHeight;
-  
+
   // Use high-quality scaling
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -81,9 +81,19 @@ export async function processImageClientSide(
 
   // Convert source to image element
   if (typeof imageSource === 'string') {
-    imageUrl = imageSource;
+    const isExternal = imageSource.startsWith('http') &&
+      typeof window !== 'undefined' &&
+      !imageSource.includes(window.location.host);
+
+    // Use absolute URL for the proxy to be safer with some libraries
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    imageUrl = isExternal
+      ? `${origin}/api/proxy/image?url=${encodeURIComponent(imageSource)}`
+      : imageSource;
+
     image = await loadImage(imageUrl);
   } else {
+    // If it's already a Blob/File, no need to proxy it
     imageUrl = URL.createObjectURL(imageSource);
     image = await loadImage(imageUrl);
   }
@@ -99,7 +109,7 @@ export async function processImageClientSide(
     }
   }
 
-  let processedImage = image;
+  let processedImage: HTMLImageElement | ImageBitmap | HTMLCanvasElement = image;
 
   // Step 1: Crop if requested
   if (options.crop) {
@@ -114,14 +124,14 @@ export async function processImageClientSide(
 
   // Step 2: Remove background if requested
   if (options.removeBackground) {
-    const bgOptions = typeof options.removeBackground === 'object' 
-      ? options.removeBackground 
+    const bgOptions = typeof options.removeBackground === 'object'
+      ? options.removeBackground
       : {};
-    
+
     // Use @imgly/background-removal
     // Optimize for speed: use 'small' model by default, 'medium' only when fineEdges is needed
     const config: any = {};
-    
+
     if (bgOptions.fineEdges) {
       // Use medium model for better fine edge detection (slower but better quality)
       // Medium model (~80MB) provides better quality for detailed images
@@ -140,9 +150,32 @@ export async function processImageClientSide(
         type: 'foreground'
       };
     }
-    
-    const blob = await removeBackground(imageUrl, config);
-    
+
+    // Use the raw Blob directly if possible, it's more robust than a URL
+    let removalSource: string | Blob | File = imageUrl;
+    const isBlobOrFile = typeof imageSource !== 'string';
+
+    if (isBlobOrFile) {
+      // If we didn't crop, we can use the original source
+      if (!options.crop && !image.src.startsWith('data:')) {
+        removalSource = imageSource as Blob | File;
+      }
+    }
+
+    console.log('[imageProcessing] Removing background from:', typeof removalSource === 'string' ? removalSource.slice(0, 100) : 'Blob');
+
+    let blob: Blob;
+    try {
+      blob = await removeBackground(removalSource, config);
+    } catch (error: any) {
+      console.error('[imageProcessing] removeBackground failed:', error);
+      // Fallback: if it's an external URL that failed, the models might be missing
+      if (error.message?.includes('fetch') || error.message?.includes('Network')) {
+        throw new Error(`Background removal service unavailable. Please check your internet connection or try again. (${error.message})`);
+      }
+      throw error;
+    }
+
     // If background color replacement is requested
     if (bgOptions.backgroundColor) {
       const canvas = await blobToCanvas(blob);
@@ -163,7 +196,7 @@ export async function processImageClientSide(
         }
       }
     }
-    
+
     return blob;
   }
 
@@ -174,10 +207,19 @@ export async function processImageClientSide(
 
   // If no processing, return original as blob
   if (typeof imageSource === 'string') {
-    const response = await fetch(imageSource);
+    // Use proxy for external URLs to avoid CORS issues
+    const isExternal = imageSource.startsWith('http') &&
+      typeof window !== 'undefined' &&
+      !imageSource.includes(window.location.host);
+
+    const finalUrl = isExternal
+      ? `/api/proxy/image?url=${encodeURIComponent(imageSource)}`
+      : imageSource;
+
+    const response = await fetch(finalUrl);
     return await response.blob();
   }
-  
+
   return imageSource;
 }
 
@@ -190,7 +232,15 @@ function loadImage(source: string): Promise<HTMLImageElement> {
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = reject;
-    img.src = source;
+
+    // Use proxy for external URLs to avoid CORS issues
+    const isExternal = source.startsWith('http') &&
+      typeof window !== 'undefined' &&
+      !source.includes(window.location.host);
+
+    img.src = isExternal
+      ? `/api/proxy/image?url=${encodeURIComponent(source)}`
+      : source;
   });
 }
 
@@ -349,10 +399,10 @@ export function generateCloudinaryTransformUrl(
 
   // Add background removal
   if (options.removeBackground) {
-    const bgOptions = typeof options.removeBackground === 'object' 
-      ? options.removeBackground 
+    const bgOptions = typeof options.removeBackground === 'object'
+      ? options.removeBackground
       : {};
-    
+
     if (bgOptions.fineEdges) {
       transformations.push('e_background_removal:fineedges');
     } else {
@@ -652,8 +702,8 @@ function getDominantColorCluster(
   }
 
   // Group pixels into color clusters
-  const clusters: Array<{ 
-    color: { r: number; g: number; b: number; a: number }; 
+  const clusters: Array<{
+    color: { r: number; g: number; b: number; a: number };
     count: number;
     pixels: Array<{ r: number; g: number; b: number; a: number }>;
   }> = [];
@@ -705,7 +755,7 @@ function getDominantColorCluster(
   }
 
   // Find the cluster with the most pixels
-  const dominantCluster = clusters.reduce((max, cluster) => 
+  const dominantCluster = clusters.reduce((max, cluster) =>
     cluster.count > max.count ? cluster : max
   );
 
@@ -798,11 +848,11 @@ export async function detectBackgroundColor(
     // 'smart' method: try corners first (most likely to be background)
     // then check consistency, fallback to edges or dominant if needed
     pixels = sampleCornerPixels(imageData, canvas.width, canvas.height, 30);
-    
+
     if (pixels.length > 0) {
       // Use clustering to find most common color in corners
       const cornerColor = getDominantColorCluster(pixels, 25);
-      
+
       // Check if corners are consistent (low variance)
       let variance = 0;
       let matchingPixels = 0;
@@ -828,7 +878,7 @@ export async function detectBackgroundColor(
         // Try edges with clustering
         pixels = sampleEdgePixels(imageData, canvas.width, canvas.height, edgeWidth);
         const edgeColor = getDominantColorCluster(pixels, 30);
-        
+
         // Check edge consistency
         let edgeVariance = 0;
         let edgeMatching = 0;

@@ -608,7 +608,35 @@ export class EtsyAPI {
         throw new Error(`Etsy API Error: ${response.status} - ${errorText}`);
       }
 
-      const json = await response.json();
+      // Handle success but empty body (common for DELETE)
+      if (response.status === 204) {
+        console.log('[EtsyAPI] Response (Empty Body - 204)', {
+          endpoint,
+          url,
+          status: response.status,
+          durationMs,
+        });
+        return { success: true };
+      }
+
+      // Read text first to handle empty or non-JSON bodies safely
+      const text = await response.text();
+      let json: any = {};
+
+      try {
+        if (text) {
+          json = JSON.parse(text);
+        }
+      } catch (e) {
+        console.warn('[EtsyAPI] Failed to parse JSON response', {
+          endpoint,
+          status: response.status,
+          text: text.slice(0, 100),
+        });
+        // If it's a success status but not valid JSON, just return the text or success
+        return { success: true, message: text };
+      }
+
       console.log('[EtsyAPI] Response', {
         endpoint,
         url,

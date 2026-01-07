@@ -11,9 +11,15 @@ import {
     RefreshCw,
     Loader2,
     Plus,
-    AlertCircle
+    AlertCircle,
+    Edit,
+    ZoomIn,
+    ZoomOut,
+    Maximize2,
+    X
 } from 'lucide-react';
 import SelectField from './SelectField';
+import ImageEditor from './ImageEditor';
 import toast from 'react-hot-toast';
 
 interface EtsyMediaLibraryProps {
@@ -30,6 +36,9 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<any[] | any>([]);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [editingImage, setEditingImage] = useState<string | null>(null);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [zoomScale, setZoomScale] = useState(1);
 
     // Load data when tab or listing changes
     useEffect(() => {
@@ -176,6 +185,49 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
         }
     };
 
+    const handleSaveEditedImage = async (processedUrl: string) => {
+        if (!shopId || !selectedListingId) return;
+
+        try {
+            setLoading(true);
+            const token = localStorage.getItem('token');
+
+            // 1. Fetch the processed image from Cloudinary URL
+            const response = await fetch(processedUrl);
+            const blob = await response.blob();
+
+            // 2. Create a File object
+            const file = new File([blob], `edited_image_${Date.now()}.png`, { type: 'image/png' });
+
+            // 3. Upload to Etsy
+            const formData = new FormData();
+            const baseQuery = `?shopId=${shopId}`;
+            const endpoint = `/api/etsy/listings/${selectedListingId}/images${baseQuery}`;
+
+            formData.append('image', file);
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                body: formData,
+            });
+
+            const json = await res.json();
+            if (json.success) {
+                toast.success('Edited image saved to listing!');
+                setRefreshTrigger(prev => prev + 1);
+            } else {
+                toast.error(json.error || 'Failed to save edited image');
+            }
+        } catch (error) {
+            console.error('Error saving edited image:', error);
+            toast.error('Failed to save edited image');
+        } finally {
+            setLoading(false);
+            setEditingImage(null);
+        }
+    };
+
     // Helper to render content based on active tab
     const renderContent = () => {
         if (loading && (!data || data.length === 0)) {
@@ -200,11 +252,25 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
                     {data.map((img: any) => (
                         <div key={img.listing_image_id} className="relative group border rounded-lg overflow-hidden">
                             <img
-                                src={img.url_570xN || img.url_fullxfull}
+                                src={img.url_570xN || img.url_fullxfull || img.url}
                                 alt="Listing"
                                 className="w-full h-48 object-cover"
                             />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <button
+                                    onClick={() => setPreviewImage(img.url_fullxfull || img.url_570xN || img.url)}
+                                    className="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700"
+                                    title="View Larger"
+                                >
+                                    <Maximize2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => setEditingImage(img.url_fullxfull || img.url_570xN || img.url)}
+                                    className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700"
+                                    title="Edit"
+                                >
+                                    <Edit className="h-4 w-4" />
+                                </button>
                                 <button
                                     onClick={() => handleDelete(img.listing_image_id)}
                                     className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
@@ -394,7 +460,7 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
                                     const mainImage = listing.images && listing.images.length > 0
                                         ? (listing.images.find((img: any) => img.rank === 1) || listing.images[0])
                                         : null;
-                                    const imageUrl = mainImage?.url_570xN || mainImage?.url_fullxfull || mainImage?.url_170x135 || mainImage?.url_75x75;
+                                    const imageUrl = mainImage?.url || mainImage?.url_570xN || mainImage?.url_fullxfull || mainImage?.url_170x135 || mainImage?.url_75x75;
 
                                     return (
                                         <div
@@ -433,6 +499,99 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
                 )}
 
             </div>
+            {editingImage && (
+                <ImageEditor
+                    imageUrl={editingImage}
+                    isOpen={!!editingImage}
+                    onClose={() => setEditingImage(null)}
+                    onSave={handleSaveEditedImage}
+                    productName={`Etsy Listing ${selectedListingId}`}
+                />
+            )}
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="relative w-full h-full flex flex-col items-center justify-center">
+                        {/* Header Controls */}
+                        <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+                            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20">
+                                <button
+                                    onClick={() => setZoomScale(prev => Math.max(0.25, prev - 0.25))}
+                                    className="text-white hover:text-purple-400 transition-colors"
+                                    title="Zoom Out"
+                                >
+                                    <ZoomOut className="h-5 w-5" />
+                                </button>
+                                <span className="text-white text-sm font-medium w-12 text-center">
+                                    {Math.round(zoomScale * 100)}%
+                                </span>
+                                <button
+                                    onClick={() => setZoomScale(prev => Math.min(3, prev + 0.25))}
+                                    className="text-white hover:text-purple-400 transition-colors"
+                                    title="Zoom In"
+                                >
+                                    <ZoomIn className="h-5 w-5" />
+                                </button>
+                                <div className="w-px h-4 bg-white/20 mx-1" />
+                                <button
+                                    onClick={() => setZoomScale(1)}
+                                    className="text-xs text-white hover:text-purple-400 transition-colors px-1"
+                                >
+                                    Reset
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setPreviewImage(null);
+                                    setZoomScale(1);
+                                }}
+                                className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 transition-all"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+
+                        {/* Image Container */}
+                        <div
+                            className="w-full h-full flex items-center justify-center overflow-auto cursor-grab active:cursor-grabbing p-8"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    setPreviewImage(null);
+                                    setZoomScale(1);
+                                }
+                            }}
+                            onWheel={(e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                    e.preventDefault();
+                                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                                    setZoomScale(prev => Math.min(3, Math.max(0.25, prev + delta)));
+                                } else {
+                                    // Regular scroll zooming
+                                    const delta = e.deltaY > 0 ? -0.05 : 0.05;
+                                    setZoomScale(prev => Math.min(3, Math.max(0.25, prev + delta)));
+                                }
+                            }}
+                        >
+                            <img
+                                src={previewImage}
+                                alt="Preview"
+                                className="max-w-none transition-transform duration-200 ease-out shadow-2xl rounded-sm"
+                                style={{
+                                    transform: `scale(${zoomScale})`,
+                                    maxHeight: zoomScale <= 1 ? '85vh' : 'none',
+                                    maxWidth: zoomScale <= 1 ? '85vw' : 'none'
+                                }}
+                            />
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white/70 text-xs">
+                            Scroll to zoom or use controls above
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
