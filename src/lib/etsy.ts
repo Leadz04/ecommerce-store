@@ -839,42 +839,57 @@ export class EtsyAPI {
   async updateListing(listingId: string, listingData: Partial<EtsyListingData>): Promise<EtsyListingData> {
     const formData = new URLSearchParams();
 
-    // Process all fields in listingData
+    // Process all fields in listingData with explicit handling for types
     Object.entries(listingData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (key === 'title' && typeof value === 'string') {
-          formData.append('title', normalizeEtsyString(value));
-          return;
-        }
+      if (value === undefined || value === null) return;
 
-        if (Array.isArray(value)) {
-          if (key === 'image_ids' || key === 'tags' || key === 'materials') {
-            // Join certain arrays with commas
-            let validItems = value.filter(item => item !== null && item !== undefined);
-
-            // Special handling for tags/materials in update
-            if (key === 'tags') {
-              validItems = normalizeEtsyTags(validItems as string[]);
-            } else if (key === 'materials') {
-              validItems = normalizeEtsyMaterials(validItems as string[]);
-            }
-
-            if (validItems.length > 0) {
-              formData.append(key, validItems.join(','));
-            }
-          } else if (key === 'styles' || key === 'style') {
-            // Styles usually use brackets
-            value.forEach(item => formData.append('styles[]', String(item)));
-          } else {
-            // Other arrays, append individually
-            value.forEach(item => formData.append(key, String(item)));
-          }
-        } else if (typeof value === 'boolean') {
-          formData.append(key, value ? 'true' : 'false');
-        } else {
-          formData.append(key, String(value));
-        }
+      // Handle Title normalization
+      if (key === 'title' && typeof value === 'string') {
+        formData.append('title', normalizeEtsyString(value));
+        return;
       }
+
+      // Handle Description normalization
+      if (key === 'description' && typeof value === 'string') {
+        formData.append('description', normalizeEtsyDescription(value));
+        return;
+      }
+
+      // Handle Price (convert from object format if needed)
+      if (key === 'price') {
+        const priceValue = typeof value === 'object' && (value as any).amount !== undefined && (value as any).divisor !== undefined
+          ? ((value as any).amount / (value as any).divisor).toFixed(2)
+          : String(value);
+        formData.append('price', priceValue);
+        return;
+      }
+
+      // Handle Arrays (tags, materials, styles)
+      if (Array.isArray(value)) {
+        if (key === 'tags' || key === 'materials' || key === 'styles' || key === 'style') {
+          const validItems = value.filter(item => item !== null && item !== undefined);
+          const mappedKey = (key === 'style' || key === 'styles') ? 'styles[]' : `${key}[]`;
+
+          let cleanItems = validItems;
+          if (key === 'tags') cleanItems = normalizeEtsyTags(validItems as string[]);
+          if (key === 'materials') cleanItems = normalizeEtsyMaterials(validItems as string[]);
+
+          cleanItems.forEach(item => formData.append(mappedKey, String(item)));
+        } else {
+          // Other arrays
+          value.forEach(item => formData.append(`${key}[]`, String(item)));
+        }
+        return;
+      }
+
+      // Handle Booleans
+      if (typeof value === 'boolean') {
+        formData.append(key, value ? 'true' : 'false');
+        return;
+      }
+
+      // Default string appending
+      formData.append(key, String(value));
     });
 
     return this.makeRequest(`/application/shops/${this.shopId}/listings/${listingId}`, {

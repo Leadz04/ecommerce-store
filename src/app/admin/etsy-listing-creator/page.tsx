@@ -694,7 +694,7 @@ export default function EtsyListingCreatorPage() {
                     {/* Right Side - Create Listing Form */}
                     <div className="space-y-4">
                         <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-6">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                                 <Package className="h-5 w-5 text-purple-600" />
                                 Create Draft Listing
                             </h2>

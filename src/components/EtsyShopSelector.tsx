@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Store, ChevronDown, RefreshCw, Plus, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useEtsyDataStore } from '@/store/etsyDataStore';
+import { useAuthStore } from '@/store/authStore';
 
 interface EtsyShopSelectorProps {
   selectedShopId: string | null;
@@ -119,10 +120,16 @@ export default function EtsyShopSelector({
           <button
             onClick={async () => {
               try {
-                const token = localStorage.getItem('token');
+                let token = localStorage.getItem('token');
                 if (!token) {
-                  toast.error('Please log in to connect your Etsy shop');
-                  return;
+                  const authState = useAuthStore.getState();
+                  if (authState.isAuthenticated) {
+                    toast.error('Session error: Authentication token not found. Please try logging out and back in.');
+                    return;
+                  } else {
+                    toast.error('Please log in to connect your Etsy shop');
+                    return;
+                  }
                 }
                 const response = await fetch('/api/etsy/auth/init', {
                   method: 'POST',
@@ -241,9 +248,14 @@ export default function EtsyShopSelector({
                         e.stopPropagation();
                         setIsOpen(false);
                         try {
-                          const token = localStorage.getItem('token');
+                          let token = localStorage.getItem('token');
                           if (!token) {
-                            toast.error('Please log in to connect your Etsy shop');
+                            const authState = useAuthStore.getState();
+                            if (!authState.isAuthenticated) {
+                              toast.error('Please log in to connect your Etsy shop');
+                              return;
+                            }
+                            toast.error('Session error: Authentication token not found.');
                             return;
                           }
                           const response = await fetch('/api/etsy/auth/init', {
@@ -280,10 +292,16 @@ export default function EtsyShopSelector({
           <button
             onClick={async () => {
               try {
-                const token = localStorage.getItem('token');
+                let token = localStorage.getItem('token');
                 if (!token) {
-                  toast.error('Please log in to connect your Etsy shop');
-                  return;
+                  const authState = useAuthStore.getState();
+                  if (authState.isAuthenticated) {
+                    toast.error('Session error: Authentication token not found.');
+                    return;
+                  } else {
+                    toast.error('Please log in to connect your Etsy shop');
+                    return;
+                  }
                 }
                 const response = await fetch('/api/etsy/auth/init', {
                   method: 'POST',

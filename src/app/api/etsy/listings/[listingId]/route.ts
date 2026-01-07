@@ -50,7 +50,6 @@ export async function DELETE(
     );
 
     // Delete listing via Etsy API
-    // According to Etsy OpenAPI spec, delete endpoint is /application/listings/{listing_id} (without shop_id)
     await etsyAPI['makeRequest'](`/application/listings/${listingId}`, {
       method: 'DELETE',
     });
@@ -88,21 +87,24 @@ export async function PATCH(
   const { listingId } = await params;
   const { searchParams } = new URL(request.url);
   let shopId = searchParams.get('shopId');
-  let updateData: any = {};
 
   try {
     const userId = await getCurrentUserId(request);
+    let listingPayload: any = {};
+    let productImages: string[] = [];
 
     try {
       const body = await request.json();
-      if (body.shopId && !shopId) {
-        shopId = body.shopId;
-      }
-      // Extract updateData, excluding shopId
-      const { shopId: bodyShopId, ...rest } = body;
-      updateData = rest;
+      shopId = shopId || body.shopId;
+
+      // The frontend sends { shopId, listing, productImages }
+      // We want to update with the contents of 'listing'
+      listingPayload = body.listing || body;
+      productImages = body.productImages || [];
+
+      // Clean up metadata (remove non-Etsy fields if any)
+      delete (listingPayload as any).shopId;
     } catch (e) {
-      // Body might be empty or invalid JSON, that's okay
       console.warn('[Etsy Update API] Could not parse request body:', e);
     }
 
@@ -136,26 +138,53 @@ export async function PATCH(
       }
     );
 
-    // Update listing via Etsy API using the class method which handles normalization
-    const updatedListing = await etsyAPI.updateListing(listingId, updateData);
-    // Cast to any for easier access to properties not strictly in EtsyListingData interface
+    // 1. Update listing metadata via Etsy API
+    console.log(`[Etsy Update API] Updating metadata for listing ${listingId}...`);
+    const updatedListing = await etsyAPI.updateListing(listingId, listingPayload);
     const updated: any = updatedListing;
 
-    // Log the response to see if images were updated
-    console.log('[Etsy Update API] Update response - checking images:', {
-      listing_id: updated.listing_id,
-      has_images: !!updated.images,
-      images_count: updated.images?.length || 0,
-      image_ids: updated.images?.map((img: any) => img.listing_image_id) || [],
-    });
+    // 2. Handle Images if provided
+    const finalUploadedImages: any[] = [];
+    if (productImages && Array.isArray(productImages) && productImages.length > 0) {
+      console.log(`[Etsy Update API] Handling ${productImages.length} images for listing ${listingId}...`);
 
-    console.log('[Etsy Update API] Update successful, response:', {
-      listing_id: updated.listing_id,
-      title: updated.title,
-      state: updated.state,
-    });
+      try {
+        // Helper to download image
+        const downloadImage = async (url: string) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
+          const arrayBuffer = await res.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const filename = url.split('/').pop()?.split('?')[0] || 'image.jpg';
+          return { buffer, filename };
+        };
 
-    // Extract numerical price from Etsy response structure
+        for (let i = 0; i < Math.min(productImages.length, 10); i++) {
+          const imageUrl = productImages[i];
+          if (!imageUrl || typeof imageUrl !== 'string') continue;
+
+          try {
+            const { buffer, filename } = await downloadImage(imageUrl);
+            const formData = new FormData();
+            const file = new File([buffer as any], filename, { type: 'image/jpeg' });
+            formData.append('image', file);
+            formData.append('rank', (i + 1).toString());
+
+            const uploadedImg = await etsyAPI.uploadListingImage(listingId, formData);
+            finalUploadedImages.push(uploadedImg);
+
+            // Wait slightly between uploads
+            await new Promise(r => setTimeout(r, 400));
+          } catch (imgErr) {
+            console.error(`[Etsy Update API] Failed to upload image ${i}:`, imgErr);
+          }
+        }
+      } catch (imageErr) {
+        console.error('[Etsy Update API] Error in image processing:', imageErr);
+      }
+    }
+
+    // Helper to extract numerical price
     const getPriceValue = (price: any): number => {
       if (!price) return 0;
       if (typeof price === 'object' && price.amount !== undefined) {
@@ -171,27 +200,32 @@ export async function PATCH(
       return 'USD';
     };
 
-    // Update DB
-    const etsyListingId = listingId;
+    // 3. Update local DB to stay in sync
     await EtsyListing.findOneAndUpdate(
-      { etsyListingId, userId },
+      { etsyListingId: listingId, userId },
       {
         $set: {
-          title: updated.title || updateData.title,
-          description: updated.description || updateData.description,
-          price: getPriceValue(updated.price),
-          currency: getCurrencyCode(updated.price),
-          state: updated.state || updateData.state,
-          tags: updated.tags || updateData.tags || [],
-          materials: updated.materials || updateData.materials || [],
-          inventory: { quantity: updated.quantity || updateData.quantity || 0 },
+          title: updated.title || listingPayload.title,
+          description: updated.description || listingPayload.description,
+          price: getPriceValue(updated.price || listingPayload.price),
+          currency: getCurrencyCode(updated.price || listingPayload.price),
+          state: updated.state || listingPayload.state,
+          tags: updated.tags || listingPayload.tags || [],
+          materials: updated.materials || listingPayload.materials || [],
+          inventory: { quantity: updated.quantity || listingPayload.quantity || 0 },
+          ...(finalUploadedImages.length > 0 ? {
+            images: finalUploadedImages.map((img, idx) => ({
+              url: img.url_fullxfull || img.url_570xN || img.url,
+              rank: img.rank || idx + 1,
+              listingImageId: img.listing_image_id?.toString()
+            }))
+          } : {}),
           lastSyncedAt: new Date(),
         }
       },
       { upsert: true, new: true }
     );
 
-    // Invalidate all caches related to this listing
     await invalidateCache(userId, { shopId, listingId });
 
     return NextResponse.json({
@@ -200,44 +234,25 @@ export async function PATCH(
     });
   } catch (error: any) {
     console.error('[Etsy Update Listing API] Error:', error);
-
-    // Parse Etsy API error messages more clearly
     let errorMessage = error?.message || 'Failed to update listing';
     let statusCode = 500;
 
-    // Check for specific error types
-    if (error?.message?.includes('404') || error?.message?.includes('not found')) {
-      errorMessage = `Listing ${listingId} not found on Etsy. Please verify the listing ID and that it belongs to shop ${shopId}.`;
+    if (error?.message?.includes('404')) {
+      errorMessage = 'Listing not found on Etsy.';
       statusCode = 404;
-    } else if (error?.message?.includes('authentication') || error?.message?.includes('401')) {
-      errorMessage = 'Etsy API authentication failed. Please reconnect your shop.';
+    } else if (error?.message?.includes('401')) {
+      errorMessage = 'Authentication failed.';
       statusCode = 401;
-    } else if (error?.message?.includes('403') || error?.message?.includes('forbidden')) {
-      errorMessage = `You don't have permission to update this listing. Please verify the listing belongs to shop ${shopId}.`;
-      statusCode = 403;
-    } else if (error?.message?.includes('400') || error?.message?.includes('bad request')) {
-      // Try to extract more details from the error
-      const errorDetails = error?.message?.match(/\{.*\}/)?.[0];
-      if (errorDetails) {
-        try {
-          const parsed = JSON.parse(errorDetails);
-          errorMessage = parsed.error || parsed.message || errorMessage;
-        } catch (e) {
-          // Keep original message if parsing fails
-        }
-      }
+    } else if (error?.message?.includes('400')) {
       statusCode = 400;
+      try {
+        const details = JSON.parse(error.message.match(/\{.*\}/)?.[0] || '{}');
+        errorMessage = details.error || details.message || errorMessage;
+      } catch (e) { }
     }
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage
-      },
-      { status: statusCode }
-    );
+    return NextResponse.json({ success: false, error: errorMessage }, { status: statusCode });
   }
 }
 
-// Also support PUT for backwards compatibility
 export const PUT = PATCH;

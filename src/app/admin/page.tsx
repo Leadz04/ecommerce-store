@@ -7128,25 +7128,42 @@ export default function AdminDashboard() {
               {(activeTab as any) === 'etsy' && (
                 <div className="space-y-8">
 
-                  {/* Quick Access: Etsy Listing Creator */}
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg border-2 border-purple-400 p-6 hover:shadow-xl transition-all cursor-pointer"
-                    onClick={() => router.push('/admin/etsy-listing-creator')}>
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                          <Search className="h-8 w-8 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-bold text-white mb-1">🚀 Etsy Listing Creator</h3>
-                          <p className="text-purple-100 text-sm">
-                            Search Etsy marketplace & create draft listings instantly
-                          </p>
+                  {/* Quick Access Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Quick Access: Etsy Listing Creator */}
+                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg border-2 border-purple-400 p-6 hover:shadow-xl transition-all cursor-pointer"
+                      onClick={() => router.push('/admin/etsy-listing-creator')}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                            <Search className="h-8 w-8 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-white mb-1">🚀 Etsy Listing Creator</h3>
+                            <p className="text-purple-100 text-sm">
+                              Search Etsy marketplace & create draft listings instantly
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <button className="px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-purple-50 transition-all shadow-md flex items-center gap-2">
-                        <Sparkles className="h-5 w-5" />
-                        Open Creator
-                      </button>
+                    </div>
+
+                    {/* Quick Access: Etsy Listing Optimizer */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl shadow-lg border-2 border-blue-400 p-6 hover:shadow-xl transition-all cursor-pointer"
+                      onClick={() => router.push('/admin/etsy-listing-optimizer')}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                            <RefreshCw className="h-8 w-8 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-white mb-1">🔄 Etsy Listing Optimizer</h3>
+                            <p className="text-blue-100 text-sm">
+                              Update existing listings using market research insights
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -8073,7 +8090,11 @@ export default function AdminDashboard() {
                               try {
                                 const token = localStorage.getItem('token');
                                 if (!token) {
-                                  toast.error('Please log in to connect your Etsy shop');
+                                  if (isAuthenticated) {
+                                    toast.error('Session error: Authentication token not found. Please try logging out and back in.');
+                                  } else {
+                                    toast.error('Please log in to connect your Etsy shop');
+                                  }
                                   return;
                                 }
                                 // Fetch auth URL with token, then redirect
