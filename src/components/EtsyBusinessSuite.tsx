@@ -52,10 +52,12 @@ import {
   Sparkles,
   ArrowUp,
   ArrowDown,
+  Layers,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EtsyShopSelector from '@/components/EtsyShopSelector';
 import EtsyMediaLibrary from './EtsyMediaLibrary';
+import SelectField from './SelectField';
 
 interface Shop {
   shopId: number;
@@ -579,21 +581,42 @@ export default function EtsyBusinessSuite() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [productSearch, setProductSearch] = useState('');
 
-  // Inventory Intelligence State
-  const [inventoryListingId, setInventoryListingId] = useState('');
   const [inventoryResults, setInventoryResults] = useState<any>(null);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+  const [inventoryListingId, setInventoryListingId] = useState('');
   const [productResults, setProductResults] = useState<any>(null);
   const [offeringResults, setOfferingResults] = useState<any>(null);
   const [selectedInventoryProduct, setSelectedInventoryProduct] = useState<any>(null);
   const [selectedInventoryOffering, setSelectedInventoryOffering] = useState<any>(null);
   const [inventoryUpdateData, setInventoryUpdateData] = useState({ price: '', quantity: '' });
-  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+
+  // Variation management states
+  const [availablePropertiesForVariations, setAvailablePropertiesForVariations] = useState<any[]>([]);
+  const [showAddVariantForm, setShowAddVariantForm] = useState(false);
+  const [newVariantData, setNewVariantData] = useState({
+    value: '',
+    valueId: '',
+    price: '',
+    quantity: '1',
+    sku: '',
+    propertyId: '',
+    propertyName: ''
+  });
+  const [listingReadinessStateId, setListingReadinessStateId] = useState<number | null>(null);
+  const [isVariationListingDropdownOpen, setIsVariationListingDropdownOpen] = useState(false);
+  const [isPropertyDropdownOpen, setIsPropertyDropdownOpen] = useState(false);
+  const [isValueDropdownOpen, setIsValueDropdownOpen] = useState(false);
+
+  // Cache for taxonomy properties and listing details to avoid redundant API calls
+  const [taxonomyPropertiesCache, setTaxonomyPropertiesCache] = useState<Record<string, any[]>>({});
+  const [listingDetailsCache, setListingDetailsCache] = useState<Record<string, any>>({});
 
   const modules = [
     { id: 'dashboard', label: 'Business Dashboard', icon: BarChart3, description: 'Overview & KPIs' },
     { id: 'shops', label: 'Multi-Shop Management', icon: ShoppingCart, description: 'Manage multiple shops' },
     { id: 'listings', label: 'Listing Lifecycle', icon: Package, description: 'Create, update, optimize listings' },
     { id: 'inventory', label: 'Inventory & Pricing', icon: TrendingUp, description: 'Stock & pricing intelligence' },
+    { id: 'variations', label: 'Listing Variations', icon: Layers, description: 'Manage size & price variations' },
     { id: 'orders', label: 'Order Management', icon: FileCheck, description: 'Receipts & fulfillment' },
     { id: 'reviews', label: 'Review Management', icon: Star, description: 'Reputation & feedback' },
     { id: 'payments', label: 'Financial Analytics', icon: DollarSign, description: 'Payments & ledger' },
@@ -653,7 +676,7 @@ export default function EtsyBusinessSuite() {
       if (activeModule === 'policies') {
         loadReturnPolicies();
       }
-      if (activeModule === 'listings' || activeModule === 'dashboard' || activeModule === 'media') {
+      if (activeModule === 'listings' || activeModule === 'dashboard' || activeModule === 'media' || activeModule === 'variations') {
         // Only load stats if not already loading
         if (!isLoadingStats) {
           loadDashboardStats();
@@ -2511,7 +2534,7 @@ export default function EtsyBusinessSuite() {
       await refetchShopDetails(shouldLoadAll);
 
       // Load listings (only if dashboard, listings, inventory or media module)
-      if (shouldLoadAll || activeModule === 'listings' || activeModule === 'inventory' || activeModule === 'media') {
+      if (shouldLoadAll || activeModule === 'listings' || activeModule === 'inventory' || activeModule === 'media' || activeModule === 'variations') {
         const offset = (listingsPage - 1) * listingsPerPage;
 
         // Use shared listings from store, but also fetch filtered/paginated data if needed
@@ -4777,6 +4800,877 @@ export default function EtsyBusinessSuite() {
                     </div>
                   )}
 
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      case 'variations':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-black">Listing Variations Manager</h3>
+                  <p className="text-sm text-gray-600">Specifically manage size variations and pricing for your listings.</p>
+                </div>
+                {inventoryListingId && (
+                  <button
+                    onClick={async () => {
+                      setIsInventoryLoading(true);
+                      try {
+                        const token = localStorage.getItem('token');
+                        const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const data = await parseJsonResponse<any>(res);
+                        if (data.success) {
+                          setInventoryResults(data.inventory);
+                          toast.success('Inventory refreshed');
+                        }
+                      } catch (e: any) {
+                        toast.error(e.message);
+                      } finally {
+                        setIsInventoryLoading(false);
+                      }
+                    }}
+                    disabled={isInventoryLoading}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isInventoryLoading ? 'animate-spin' : ''}`} />
+                    Refresh Data
+                  </button>
+                )}
+              </div>
+
+              {/* Listing Selection */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <SelectField
+                  label="Select Listing"
+                  value={inventoryListingId}
+                  isOpen={isVariationListingDropdownOpen}
+                  onOpenChange={setIsVariationListingDropdownOpen}
+                  onSelect={async (newId) => {
+                    setInventoryListingId(newId);
+                    setShowAddVariantForm(false);
+                    if (!newId || !selectedShopId) return;
+
+                    setIsInventoryLoading(true);
+                    try {
+                      const token = localStorage.getItem('token');
+                      const res = await fetch(`/api/etsy/listings/${newId}/inventory?shopId=${selectedShopId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      const data = await parseJsonResponse<any>(res);
+                      if (data.success) {
+                        setInventoryResults(data.inventory);
+
+                        // Find listing to get taxonomyId - Check all possible sources
+                        const combinedListings = [...sharedListings, ...listings, ...draftListings, ...inactiveListings];
+                        let selectedListing = combinedListings.find(l =>
+                          (l.listingId || l.listing_id || '').toString() === newId.toString()
+                        );
+
+                        let taxId = selectedListing?.taxonomyId || (selectedListing as any)?.taxonomy_id;
+
+                        // Check cache first for listing details
+                        if (!taxId && listingDetailsCache[newId]) {
+                          console.log('[Variations] Using cached listing details for:', newId);
+                          selectedListing = { ...selectedListing, ...listingDetailsCache[newId] };
+                          taxId = listingDetailsCache[newId].taxonomy_id || listingDetailsCache[newId].taxonomyId;
+                        }
+
+                        // Fallback: If taxonomyId is still missing, fetch full listing details
+                        if (!taxId) {
+                          console.log('[Variations] Taxonomy ID missing, fetching full details for:', newId);
+                          try {
+                            const detailsRes = await fetch(`/api/etsy/listings/${newId}/details?shopId=${selectedShopId}`, {
+                              headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const detailsData = await parseJsonResponse<any>(detailsRes);
+                            if (detailsData.success && detailsData.listing) {
+                              taxId = detailsData.listing.taxonomy_id || detailsData.listing.taxonomyId;
+                              // Update selectedListing for property fetching
+                              selectedListing = { ...selectedListing, ...detailsData.listing };
+                              // Cache the listing details
+                              setListingDetailsCache(prev => ({
+                                ...prev,
+                                [newId]: detailsData.listing
+                              }));
+                            }
+                          } catch (err) {
+                            console.error('[Variations] Failed to fetch listing details:', err);
+                          }
+                        }
+
+                        if (taxId) {
+                          const cacheKey = `${taxId}_${selectedShopId}`;
+
+                          // Check cache first for taxonomy properties
+                          if (taxonomyPropertiesCache[cacheKey]) {
+                            console.log('[Variations] Using cached properties for taxId:', taxId);
+                            setAvailablePropertiesForVariations(taxonomyPropertiesCache[cacheKey]);
+                          } else {
+                            console.log('[Variations] Fetching properties for taxId:', taxId);
+                            const { fetchTaxonomyProperties } = useEtsyDataStore.getState();
+                            const props = await fetchTaxonomyProperties(Number(taxId), 'seller', selectedShopId);
+                            if (props && props.length > 0) {
+                              console.log('[Variations] All properties received:', props);
+
+                              // Strict filtering for variation properties only
+                              const filteredProps = props.filter((p: any) => {
+                                // Must explicitly support variations
+                                const supportsVariations = p.supports_variations === true;
+
+                                // Must have possible values (scales) for variations
+                                const hasPossibleValues = p.possible_values && p.possible_values.length > 0;
+
+                                // Must have a scale_id (indicates it's a standardized variation property)
+                                const hasScaleId = p.scale_id !== null && p.scale_id !== undefined;
+
+                                const isValid = supportsVariations && (hasPossibleValues || hasScaleId);
+
+                                if (isValid) {
+                                  console.log('[Variations] ✓ Valid variation property:', p.property_name || p.name, {
+                                    scale_id: p.scale_id,
+                                    possible_values_count: p.possible_values?.length || 0
+                                  });
+                                } else {
+                                  console.log('[Variations] ✗ Filtered out:', p.property_name || p.name, {
+                                    supports_variations: p.supports_variations,
+                                    has_possible_values: hasPossibleValues,
+                                    has_scale_id: hasScaleId
+                                  });
+                                }
+
+                                return isValid;
+                              });
+
+                              console.log('[Variations] Filtered properties count:', filteredProps.length);
+                              setAvailablePropertiesForVariations(filteredProps);
+                              // Cache the taxonomy properties
+                              setTaxonomyPropertiesCache(prev => ({
+                                ...prev,
+                                [cacheKey]: filteredProps
+                              }));
+                            } else {
+                              console.warn('[Variations] No properties found for taxonomy:', taxId);
+                            }
+                          }
+                        } else {
+                          console.warn('[Variations] Could not determine taxonomyId for listing:', newId);
+                          toast.error('Could not load variation properties for this listing.');
+                        }
+
+                        // Set readiness state from existing inventory or listing defaults
+                        if (data.inventory?.products?.[0]?.offerings?.[0]?.readiness_state_id) {
+                          setListingReadinessStateId(data.inventory.products[0].offerings[0].readiness_state_id);
+                        } else if (selectedListing?.readiness_state_id) {
+                          setListingReadinessStateId(selectedListing.readiness_state_id);
+                        } else {
+                          // Default to 2 (typically 'Ready to Ship')
+                          setListingReadinessStateId(2);
+                        }
+
+                        toast.success('Variations loaded');
+                      } else {
+                        toast.error(data.error || 'Failed to load variations');
+                        setInventoryResults(null);
+                      }
+                    } catch (e: any) {
+                      toast.error(e.message);
+                      setInventoryResults(null);
+                    } finally {
+                      setIsInventoryLoading(false);
+                    }
+                  }}
+                  options={Array.from(new Map([...sharedListings, ...listings, ...draftListings, ...inactiveListings].map(l => [l.listingId || l.listing_id, l])).values())
+                    .sort((a: any, b: any) => (a.title || '').localeCompare(b.title || ''))
+                    .map((l: any) => {
+                      const mainImage = l.images && l.images.length > 0
+                        ? (l.images.find((img: any) => img.rank === 1) || l.images[0])
+                        : null;
+                      const imageUrl = mainImage?.url || mainImage?.url_570xN || mainImage?.url_fullxfull || mainImage?.url_170x135 || mainImage?.url_75x75;
+
+                      return {
+                        value: (l.listingId || l.listing_id).toString(),
+                        label: `${l.state === 'draft' ? '[DRAFT] ' : l.state === 'inactive' ? '[INACTIVE] ' : ''}${l.title ? (l.title.length > 80 ? l.title.substring(0, 80) + '...' : l.title) : `Listing ${l.listingId || l.listing_id}`}`,
+                        imageUrl: imageUrl,
+                        description: `ID: ${l.listingId || l.listing_id}`
+                      };
+                    })}
+                  placeholder="Select a listing to manage..."
+                  className="w-full"
+                />
+              </div>
+
+              {isInventoryLoading && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-4" />
+                  <p className="text-gray-600">Loading listing variations...</p>
+                </div>
+              )}
+
+              {!isInventoryLoading && inventoryResults && (
+                <div className="space-y-6">
+                  {/* Variations Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                      <p className="text-xs text-purple-600 font-bold uppercase tracking-wider mb-1">Total Variants</p>
+                      <p className="text-2xl font-black text-purple-900">{inventoryResults.products?.length || 0}</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                      <p className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Active Offerings</p>
+                      <p className="text-2xl font-black text-blue-900">
+                        {inventoryResults.products?.reduce((acc: number, p: any) => acc + (p.offerings?.filter((o: any) => !o.is_deleted).length || 0), 0) || 0}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+                      <p className="text-xs text-green-600 font-bold uppercase tracking-wider mb-1">In Stock</p>
+                      <p className="text-2xl font-black text-green-900">
+                        {inventoryResults.products?.reduce((acc: number, p: any) => acc + (p.offerings?.reduce((sum: number, o: any) => sum + (o.quantity || 0), 0) || 0), 0) || 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Add New Variant Section */}
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Plus className="h-5 w-5 text-purple-600" />
+                        <h4 className="font-bold text-gray-900">Add New Variation</h4>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowAddVariantForm(!showAddVariantForm);
+                          // Initialize propertyId if variations already exist
+                          if (!showAddVariantForm && inventoryResults?.products?.length > 0) {
+                            const firstProd = inventoryResults.products[0];
+                            if (firstProd.property_values?.length > 0) {
+                              const pv = firstProd.property_values[0];
+                              setNewVariantData(prev => ({
+                                ...prev,
+                                propertyId: pv.property_id.toString(),
+                                propertyName: pv.property_name
+                              }));
+                            }
+                          }
+                        }}
+                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${showAddVariantForm ? 'bg-gray-200 text-gray-700' : 'bg-purple-600 text-white shadow-lg shadow-purple-500/20 hover:scale-105'
+                          }`}
+                      >
+                        {showAddVariantForm ? 'Cancel' : 'Add Variant Value'}
+                      </button>
+                    </div>
+
+                    {showAddVariantForm && (
+                      <div className="mt-4 grid grid-cols-1 md:grid-cols-6 gap-3 p-4 bg-white rounded-lg border border-purple-100 shadow-sm">
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Property</label>
+                          <SelectField
+                            options={availablePropertiesForVariations.map((p: any) => ({
+                              value: (p.property_id || p.id).toString(),
+                              label: p.property_name || p.name || p.display_name
+                            }))}
+                            value={newVariantData.propertyId}
+                            isOpen={isPropertyDropdownOpen}
+                            onOpenChange={setIsPropertyDropdownOpen}
+                            onSelect={(value) => {
+                              const prop = availablePropertiesForVariations.find(p => (p.property_id || p.id).toString() === value);
+                              setNewVariantData({
+                                ...newVariantData,
+                                propertyId: value,
+                                propertyName: prop ? (prop.property_name || prop.name || prop.display_name) : '',
+                                value: '',
+                                valueId: ''
+                              });
+                              setIsValueDropdownOpen(false);
+                            }}
+                            placeholder="Select Property..."
+                            disabled={availablePropertiesForVariations.length === 0}
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Value</label>
+                          {(() => {
+                            const selectedProp = availablePropertiesForVariations.find(p => (p.property_id || p.id).toString() === newVariantData.propertyId);
+
+                            // Debug logging
+                            if (newVariantData.propertyId && selectedProp) {
+                              console.log('[Variations] Selected Property:', selectedProp);
+                              console.log('[Variations] Possible Values:', selectedProp.possible_values);
+                            }
+
+                            const possibleValues = selectedProp?.possible_values || selectedProp?.values || [];
+
+                            if (possibleValues.length > 0) {
+                              return (
+                                <SelectField
+                                  options={possibleValues.map((v: any) => ({
+                                    value: (v.value_id || v.id) + '|' + (v.value || v.name),
+                                    label: v.value || v.name
+                                  }))}
+                                  value={newVariantData.valueId + '|' + newVariantData.value}
+                                  isOpen={isValueDropdownOpen}
+                                  onOpenChange={setIsValueDropdownOpen}
+                                  onSelect={(value) => {
+                                    const [vId, vVal] = value.split('|');
+                                    setNewVariantData({ ...newVariantData, valueId: vId, value: vVal });
+                                  }}
+                                  placeholder="Select Value..."
+                                  disabled={!newVariantData.propertyId}
+                                />
+                              );
+                            }
+
+                            // Fallback to text input if no predefined values
+                            return (
+                              <input
+                                type="text"
+                                value={newVariantData.value}
+                                onChange={(e) => setNewVariantData({ ...newVariantData, valueId: '', value: e.target.value })}
+                                placeholder={selectedProp ? `Enter ${selectedProp.property_name || selectedProp.name} value` : "Select property first"}
+                                disabled={!newVariantData.propertyId}
+                                className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-black bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
+                              />
+                            );
+                          })()}
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Price ($)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={newVariantData.price}
+                            onChange={(e) => setNewVariantData({ ...newVariantData, price: e.target.value })}
+                            placeholder="0.00"
+                            className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-black bg-white"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Stock</label>
+                          <input
+                            type="number"
+                            value={newVariantData.quantity}
+                            onChange={(e) => setNewVariantData({ ...newVariantData, quantity: e.target.value })}
+                            placeholder="1"
+                            className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-black bg-white"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">SKU (Optional)</label>
+                          <input
+                            type="text"
+                            value={newVariantData.sku}
+                            onChange={(e) => setNewVariantData({ ...newVariantData, sku: e.target.value })}
+                            placeholder="SKU"
+                            className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-black bg-white"
+                          />
+                        </div>
+                        <div className="md:col-span-1 flex items-end">
+                          <button
+                            onClick={() => {
+                              if (!newVariantData.value || !newVariantData.propertyId) {
+                                toast.error('Please provide property and value');
+                                return;
+                              }
+
+                              const newInv = JSON.parse(JSON.stringify(inventoryResults));
+
+                              if (!newInv.products) {
+                                newInv.products = [];
+                              }
+
+                              // Only remove the default variant if we're adding the FIRST variation
+                              // (default variant has no property_values or empty property_values)
+                              const hasOnlyDefaultVariant = newInv.products.length === 1 &&
+                                (!newInv.products[0].property_values || newInv.products[0].property_values.length === 0);
+
+                              if (hasOnlyDefaultVariant) {
+                                console.log('[Variations] Removing default variant to add first variation');
+                                newInv.products = [];
+                              }
+
+                              // Check if this exact variant already exists
+                              const variantExists = newInv.products.some((p: any) =>
+                                p.property_values?.some((pv: any) =>
+                                  pv.property_id === Number(newVariantData.propertyId) &&
+                                  (pv.values?.includes(newVariantData.value) || pv.value_ids?.includes(Number(newVariantData.valueId)))
+                                )
+                              );
+
+                              if (variantExists) {
+                                toast.error('This variant already exists!');
+                                return;
+                              }
+
+                              const newProduct = {
+                                sku: newVariantData.sku,
+                                property_values: [
+                                  {
+                                    property_id: Number(newVariantData.propertyId),
+                                    property_name: newVariantData.propertyName,
+                                    value_ids: newVariantData.valueId ? [Number(newVariantData.valueId)] : [],
+                                    values: newVariantData.valueId ? [] : [newVariantData.value]
+                                  }
+                                ],
+                                offerings: [
+                                  {
+                                    price: Number(newVariantData.price) || 0,
+                                    quantity: Number(newVariantData.quantity) || 0,
+                                    is_enabled: true,
+                                    readiness_state_id: listingReadinessStateId || 2
+                                  }
+                                ]
+                              };
+
+                              newInv.products.push(newProduct);
+
+                              // Set flags - Don't overwrite, append if not present
+                              const propId = Number(newVariantData.propertyId);
+                              if (!newInv.price_on_property) newInv.price_on_property = [];
+                              if (!newInv.price_on_property.includes(propId)) newInv.price_on_property.push(propId);
+
+                              if (!newInv.quantity_on_property) newInv.quantity_on_property = [];
+                              if (!newInv.quantity_on_property.includes(propId)) newInv.quantity_on_property.push(propId);
+
+                              if (!newInv.sku_on_property) newInv.sku_on_property = [];
+                              if (!newInv.sku_on_property.includes(propId)) newInv.sku_on_property.push(propId);
+
+                              setInventoryResults(newInv);
+                              // Clear ALL form fields after successful add
+                              setNewVariantData({
+                                value: '',
+                                valueId: '',
+                                price: '',
+                                quantity: '1',
+                                sku: '',
+                                propertyId: '',
+                                propertyName: ''
+                              });
+                              toast.success('Added to list locally. Save all changes to sync.');
+                            }}
+                            className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-bold hover:shadow-lg transition-all"
+                          >
+                            Add to List
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Variations Table - Desktop */}
+                  <div className="hidden md:block overflow-x-auto border border-gray-100 rounded-xl">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Product Variations</th>
+                          <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">SKU</th>
+                          <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Price ($)</th>
+                          <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Stock Qty</th>
+                          <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {inventoryResults.products?.map((product: any, pIdx: number) => {
+                          const offering = product.offerings?.[0];
+                          if (!offering) return null;
+
+                          const variantLabels = product.property_values?.map((pv: any) =>
+                            `${pv.property_name}: ${pv.values?.join(', ')}`
+                          ).join(' | ');
+
+                          return (
+                            <tr key={product.product_id || pIdx} className="hover:bg-gray-50 group transition-colors">
+                              <td className="px-4 py-4">
+                                <p className="text-sm font-bold text-gray-900">{variantLabels || "Default Variant"}</p>
+                                <p className="text-[10px] text-gray-500 font-mono mt-1">ID: {product.product_id}</p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <input
+                                  type="text"
+                                  value={product.sku || ''}
+                                  onChange={(e) => {
+                                    const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                    if (newInv.products[pIdx]) {
+                                      newInv.products[pIdx].sku = e.target.value;
+                                      setInventoryResults(newInv);
+                                    }
+                                  }}
+                                  placeholder="No SKU"
+                                  className="w-full px-2 py-1 text-sm border-transparent group-hover:border-gray-200 border rounded bg-transparent focus:bg-white focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                                />
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400 font-bold text-xs">$</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={offering.price?.amount && offering.price?.divisor
+                                      ? (offering.price.amount / offering.price.divisor).toFixed(2)
+                                      : (typeof offering.price === 'number' ? offering.price : (typeof offering.price === 'string' ? parseFloat(offering.price) : 0)).toFixed(2)}
+                                    onChange={(e) => {
+                                      const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                      if (newInv.products[pIdx]?.offerings?.[0]) {
+                                        const newPrice = parseFloat(e.target.value);
+                                        newInv.products[pIdx].offerings[0].price = newPrice;
+                                        setInventoryResults(newInv);
+                                      }
+                                    }}
+                                    className="w-24 px-2 py-1 text-sm font-bold text-gray-900 border-transparent group-hover:border-gray-200 border rounded bg-transparent focus:bg-white focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <input
+                                  type="number"
+                                  value={offering.quantity}
+                                  onChange={(e) => {
+                                    const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                    if (newInv.products[pIdx]?.offerings?.[0]) {
+                                      newInv.products[pIdx].offerings[0].quantity = parseInt(e.target.value) || 0;
+                                      setInventoryResults(newInv);
+                                    }
+                                  }}
+                                  className="w-16 px-2 py-1 text-sm font-bold text-gray-900 border-transparent group-hover:border-gray-200 border rounded bg-transparent focus:bg-white focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                                />
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={async () => {
+                                      setIsInventoryLoading(true);
+                                      try {
+                                        const token = localStorage.getItem('token');
+                                        const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json'
+                                          },
+                                          body: JSON.stringify(inventoryResults)
+                                        });
+
+                                        const data = await parseJsonResponse<any>(res);
+                                        if (data.success) {
+                                          toast.success('Variant updated!');
+                                          setInventoryResults(data.inventory);
+
+                                          // Update the listing cache
+                                          if (listingDetailsCache[inventoryListingId]) {
+                                            setListingDetailsCache(prev => ({
+                                              ...prev,
+                                              [inventoryListingId]: {
+                                                ...prev[inventoryListingId],
+                                                inventory: data.inventory
+                                              }
+                                            }));
+                                          }
+                                        } else {
+                                          toast.error(data.error || 'Failed to update');
+                                        }
+                                      } catch (e: any) {
+                                        toast.error(e.message);
+                                      } finally {
+                                        setIsInventoryLoading(false);
+                                      }
+                                    }}
+                                    className="p-1.5 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-600 hover:text-white transition-all"
+                                    title="Save changes for this variant"
+                                  >
+                                    <Save className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`Delete variant "${variantLabels || 'Default Variant'}"?`)) return;
+
+                                      setIsInventoryLoading(true);
+                                      try {
+                                        const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                        newInv.products.splice(pIdx, 1);
+
+                                        const token = localStorage.getItem('token');
+                                        const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json'
+                                          },
+                                          body: JSON.stringify(newInv)
+                                        });
+
+                                        const data = await parseJsonResponse<any>(res);
+                                        if (data.success) {
+                                          toast.success('Variant deleted!');
+                                          setInventoryResults(data.inventory);
+
+                                          // Update the listing cache
+                                          if (listingDetailsCache[inventoryListingId]) {
+                                            setListingDetailsCache(prev => ({
+                                              ...prev,
+                                              [inventoryListingId]: {
+                                                ...prev[inventoryListingId],
+                                                inventory: data.inventory
+                                              }
+                                            }));
+                                          }
+                                        } else {
+                                          toast.error(data.error || 'Failed to delete');
+                                        }
+                                      } catch (e: any) {
+                                        toast.error(e.message);
+                                      } finally {
+                                        setIsInventoryLoading(false);
+                                      }
+                                    }}
+                                    className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                                    title="Delete this variant"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Variations Cards - Mobile */}
+                  <div className="md:hidden space-y-3">
+                    {inventoryResults.products?.map((product: any, pIdx: number) => {
+                      const offering = product.offerings?.[0];
+                      if (!offering) return null;
+
+                      const variantLabels = product.property_values?.map((pv: any) =>
+                        `${pv.property_name}: ${pv.values?.join(', ')}`
+                      ).join(' | ');
+
+                      return (
+                        <div key={product.product_id || pIdx} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <p className="text-sm font-bold text-gray-900">{variantLabels || "Default Variant"}</p>
+                              <p className="text-[10px] text-gray-500 font-mono mt-1">ID: {product.product_id}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  setIsInventoryLoading(true);
+                                  try {
+                                    const token = localStorage.getItem('token');
+                                    const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                                      method: 'PUT',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                      },
+                                      body: JSON.stringify(inventoryResults)
+                                    });
+
+                                    const data = await parseJsonResponse<any>(res);
+                                    if (data.success) {
+                                      toast.success('Variant updated!');
+                                      setInventoryResults(data.inventory);
+                                      if (listingDetailsCache[inventoryListingId]) {
+                                        setListingDetailsCache(prev => ({
+                                          ...prev,
+                                          [inventoryListingId]: {
+                                            ...prev[inventoryListingId],
+                                            inventory: data.inventory
+                                          }
+                                        }));
+                                      }
+                                    } else {
+                                      toast.error(data.error || 'Failed to update');
+                                    }
+                                  } catch (e: any) {
+                                    toast.error(e.message);
+                                  } finally {
+                                    setIsInventoryLoading(false);
+                                  }
+                                }}
+                                className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-600 hover:text-white transition-all"
+                              >
+                                <Save className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Delete variant "${variantLabels || 'Default Variant'}"?`)) return;
+
+                                  setIsInventoryLoading(true);
+                                  try {
+                                    const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                    newInv.products.splice(pIdx, 1);
+
+                                    const token = localStorage.getItem('token');
+                                    const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                                      method: 'PUT',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                      },
+                                      body: JSON.stringify(newInv)
+                                    });
+
+                                    const data = await parseJsonResponse<any>(res);
+                                    if (data.success) {
+                                      toast.success('Variant deleted!');
+                                      setInventoryResults(data.inventory);
+                                      if (listingDetailsCache[inventoryListingId]) {
+                                        setListingDetailsCache(prev => ({
+                                          ...prev,
+                                          [inventoryListingId]: {
+                                            ...prev[inventoryListingId],
+                                            inventory: data.inventory
+                                          }
+                                        }));
+                                      }
+                                    } else {
+                                      toast.error(data.error || 'Failed to delete');
+                                    }
+                                  } catch (e: any) {
+                                    toast.error(e.message);
+                                  } finally {
+                                    setIsInventoryLoading(false);
+                                  }
+                                }}
+                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">SKU</label>
+                              <input
+                                type="text"
+                                value={product.sku || ''}
+                                onChange={(e) => {
+                                  const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                  if (newInv.products[pIdx]) {
+                                    newInv.products[pIdx].sku = e.target.value;
+                                    setInventoryResults(newInv);
+                                  }
+                                }}
+                                placeholder="No SKU"
+                                className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500 outline-none bg-white text-black"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Stock</label>
+                              <input
+                                type="number"
+                                value={offering.quantity}
+                                onChange={(e) => {
+                                  const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                  if (newInv.products[pIdx]?.offerings?.[0]) {
+                                    newInv.products[pIdx].offerings[0].quantity = parseInt(e.target.value) || 0;
+                                    setInventoryResults(newInv);
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500 outline-none bg-white text-black"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Price ($)</label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400 font-bold">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={offering.price?.amount && offering.price?.divisor
+                                    ? (offering.price.amount / offering.price.divisor).toFixed(2)
+                                    : (typeof offering.price === 'number' ? offering.price : (typeof offering.price === 'string' ? parseFloat(offering.price) : 0)).toFixed(2)}
+                                  onChange={(e) => {
+                                    const newInv = JSON.parse(JSON.stringify(inventoryResults));
+                                    if (newInv.products[pIdx]?.offerings?.[0]) {
+                                      const newPrice = parseFloat(e.target.value);
+                                      newInv.products[pIdx].offerings[0].price = newPrice;
+                                      setInventoryResults(newInv);
+                                    }
+                                  }}
+                                  className="flex-1 px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500 outline-none bg-white text-black"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex justify-between items-center bg-gray-900 text-white p-6 rounded-2xl shadow-xl border border-gray-800">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                        <Package className="h-6 w-6 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-400">Bulk Variations Update</p>
+                        <p className="text-xs text-gray-500">Save all changes made to the variation table above.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setIsInventoryLoading(true);
+                        try {
+                          const token = localStorage.getItem('token');
+                          const res = await fetch(`/api/etsy/listings/${inventoryListingId}/inventory?shopId=${selectedShopId}`, {
+                            method: 'PUT',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(inventoryResults)
+                          });
+
+                          const data = await parseJsonResponse<any>(res);
+                          if (data.success) {
+                            toast.success('All variations updated successfully!');
+                            setInventoryResults(data.inventory);
+
+                            // Update the listing cache with the new inventory data
+                            if (listingDetailsCache[inventoryListingId]) {
+                              setListingDetailsCache(prev => ({
+                                ...prev,
+                                [inventoryListingId]: {
+                                  ...prev[inventoryListingId],
+                                  inventory: data.inventory,
+                                  has_variations: data.inventory?.products?.length > 1 ||
+                                    (data.inventory?.products?.[0]?.property_values?.length > 0)
+                                }
+                              }));
+                            }
+                          } else {
+                            toast.error(data.error || 'Failed to update variations');
+                          }
+                        } catch (e: any) {
+                          toast.error(e.message);
+                        } finally {
+                          setIsInventoryLoading(false);
+                        }
+                      }}
+                      disabled={isInventoryLoading}
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-black hover:scale-105 active:scale-95 transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                    >
+                      {isInventoryLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                      Save All Changes
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!inventoryResults && !isInventoryLoading && (
+                <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                  <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
+                    <Layers className="h-10 w-10 text-gray-300" />
+                  </div>
+                  <h4 className="text-lg font-bold text-gray-900 mb-2">No Variations Loaded</h4>
+                  <p className="text-gray-500 text-sm max-w-xs text-center">Select a listing from the dropdown above to start managing its size and price variations.</p>
                 </div>
               )}
             </div>
