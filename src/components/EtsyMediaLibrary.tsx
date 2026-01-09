@@ -462,6 +462,37 @@ export default function EtsyMediaLibrary({ shopId, listings }: EtsyMediaLibraryP
                                     </div>
                                 </div>
 
+                                {/* Mobile/Tablet Action Bar (Always visible on small screens) */}
+                                <div className="flex md:hidden bg-white border-t border-gray-100 p-2 py-3 items-center justify-around mt-auto w-full z-20 relative">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setPreviewImage(img.url_fullxfull || img.url_570xN || img.url); }}
+                                        className="flex flex-col items-center gap-1.5 p-1 transition-colors text-purple-600 active:scale-95"
+                                    >
+                                        <div className="bg-purple-50 p-2 rounded-full">
+                                            <Maximize2 className="h-5 w-5" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Zoom</span>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setEditingImage(img.url_fullxfull || img.url_570xN || img.url); }}
+                                        className="flex flex-col items-center gap-1.5 p-1 transition-colors text-blue-600 active:scale-95"
+                                    >
+                                        <div className="bg-blue-50 p-2 rounded-full">
+                                            <Edit className="h-5 w-5" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Edit</span>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDelete([id]); }}
+                                        className="flex flex-col items-center gap-1.5 p-1 transition-colors text-red-600 active:scale-95"
+                                    >
+                                        <div className="bg-red-50 p-2 rounded-full">
+                                            <Trash2 className="h-5 w-5" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Delete</span>
+                                    </button>
+                                </div>
+
                                 <div className="p-2 border-t border-gray-50 bg-gray-50/30">
                                     <p className="text-[10px] text-gray-400 font-mono truncate">ID: {id}</p>
                                 </div>

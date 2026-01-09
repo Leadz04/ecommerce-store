@@ -130,50 +130,82 @@ export async function processImageClientSide(
 
     // Use @imgly/background-removal
     // Optimize for speed: use 'small' model by default, 'medium' only when fineEdges is needed
-    const config: any = {};
+    const config: { publicPath?: string; model?: 'small' | 'medium'; output?: { format: string; type: string } } = {};
+
+    // config.publicPath = 'https://static.imgly.com/lib/background-removal-js/v1/'; // OLD CDN
+    // Use local proxy to tunnel model requests through the server, bypassing mobile network/DNS blocks
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    config.publicPath = `${origin}/api/proxy/models/`;
 
     if (bgOptions.fineEdges) {
-      // Use medium model for better fine edge detection (slower but better quality)
-      // Medium model (~80MB) provides better quality for detailed images
       config.model = 'medium';
-      // Use PNG format to preserve transparency and fine details
-      config.output = {
-        format: 'image/png',
-        type: 'foreground'
-      };
+      config.output = { format: 'image/png', type: 'foreground' } as any;
     } else {
-      // Use small model for faster processing (~40MB, faster but may have minor artifacts)
-      // Small model is significantly faster while still providing good results
       config.model = 'small';
-      config.output = {
-        format: 'image/png',
-        type: 'foreground'
-      };
+      config.output = { format: 'image/png', type: 'foreground' } as any;
     }
 
     // Use the raw Blob directly if possible, it's more robust than a URL
-    let removalSource: string | Blob | File = imageUrl;
-    const isBlobOrFile = typeof imageSource !== 'string';
+    let removalSource: Blob | File | string = imageUrl;
 
-    if (isBlobOrFile) {
-      // If we didn't crop, we can use the original source
-      if (!options.crop && !image.src.startsWith('data:')) {
-        removalSource = imageSource as Blob | File;
+    // Logic to ensure we are passing a Blob to removeBackground:
+    // 1. If we cropped, 'imageUrl' is a blob: URL pointing to the cropped blob. We should convert it back to a Blob or keep track of the blob separately.
+    // 2. If we resized, 'imageUrl' is a data: URL. We should convert that to a Blob.
+    // 3. If we did nothing, 'imageUrl' is the original source (URL or blob URL).
+
+    if (options.crop) {
+      // If we cropped, processedImage is the cropped canvas/bitmap.
+      // Convert it to blob now to be safe
+      removalSource = await imageToBlob(processedImage);
+    }
+    else if (image.src.startsWith('data:')) {
+      // If resized (data url), convert to blob
+      const res = await fetch(image.src);
+      removalSource = await res.blob();
+    }
+    else if (typeof imageSource !== 'string') {
+      // Original source was a blob/file, and we haven't modified it (no crop, no resize)
+      removalSource = imageSource;
+    }
+    else if (imageUrl.startsWith('blob:')) {
+      // If it's a blob url but we lost the ref, try to fetch it
+      const res = await fetch(imageUrl);
+      removalSource = await res.blob();
+    }
+    // If it's still a string (http url), we leave it as string, but the library might fail to fetch.
+    // Ideally, we fetch it here to control the fetch.
+    else if (typeof removalSource === 'string' && removalSource.startsWith('http')) {
+      try {
+        const res = await fetch(removalSource);
+        removalSource = await res.blob();
+      } catch (e) {
+        console.warn('[imageProcessing] Failed to pre-fetch image for removal, letting library try:', e);
       }
     }
 
-    console.log('[imageProcessing] Removing background from:', typeof removalSource === 'string' ? removalSource.slice(0, 100) : 'Blob');
+    console.log('[imageProcessing] Removing background from:', typeof removalSource === 'string' ? removalSource.slice(0, 100) : 'Blob', 'Model:', config.model);
 
     let blob: Blob;
     try {
-      blob = await removeBackground(removalSource, config);
+      blob = await removeBackground(removalSource, config as any);
     } catch (error: any) {
-      console.error('[imageProcessing] removeBackground failed:', error);
-      // Fallback: if it's an external URL that failed, the models might be missing
-      if (error.message?.includes('fetch') || error.message?.includes('Network')) {
-        throw new Error(`Background removal service unavailable. Please check your internet connection or try again. (${error.message})`);
+      console.warn('[imageProcessing] Initial removal failed, retrying with fallback...', error);
+
+      // Fallback strategy:
+      // 1. If we tried medium model and it failed, try small model (less bandwidth/memory)
+      // 2. If it was a network error, maybe the small model will work (smaller download)
+      if (config.model === 'medium' || error.message?.includes('fetch') || error.message?.includes('Network')) {
+        try {
+          console.log('[imageProcessing] Retrying with small model...');
+          config.model = 'small';
+          blob = await removeBackground(removalSource, config as any);
+        } catch (retryError: any) {
+          console.error('[imageProcessing] Retry failed:', retryError);
+          throw new Error(`Background removal failed. Please check your internet connection. (Error: ${retryError.message})`);
+        }
+      } else {
+        throw error;
       }
-      throw error;
     }
 
     // If background color replacement is requested
