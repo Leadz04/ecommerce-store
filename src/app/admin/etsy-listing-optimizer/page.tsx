@@ -24,6 +24,7 @@ import {
     History,
     Edit3,
     ChevronDown,
+    Filter,
 } from 'lucide-react';
 
 interface EtsyListing {
@@ -44,6 +45,7 @@ interface EtsyListing {
     description: string | null;
     images: any[] | null;
     state?: string;
+    shop_location_country?: string;
 }
 
 interface ShopInfo {
@@ -114,6 +116,17 @@ export default function EtsyListingOptimizerPage() {
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+    // Filters State
+    const [showMarketFilters, setShowMarketFilters] = useState(false);
+    const [marketFilterStarSeller, setMarketFilterStarSeller] = useState(false);
+    const [marketFilterCountry, setMarketFilterCountry] = useState('');
+    const [marketMinPrice, setMarketMinPrice] = useState('');
+    const [marketMaxPrice, setMarketMaxPrice] = useState('');
+
+    const [showUserFilters, setShowUserFilters] = useState(false);
+    const [userFilterStarSeller, setUserFilterStarSeller] = useState(false);
+    const [userFilterCountry, setUserFilterCountry] = useState('');
 
     // Check authentication
     useEffect(() => {
@@ -202,6 +215,15 @@ export default function EtsyListingOptimizerPage() {
         }
     };
 
+    const handleMarketReset = () => {
+        setSearchTerm('');
+        setMarketMinPrice('');
+        setMarketMaxPrice('');
+        setMarketFilterCountry('');
+        setMarketFilterStarSeller(false);
+        setSearchResults([]);
+    };
+
     const handleSearch = async () => {
         if (!searchTerm.trim()) return;
         setSearching(true);
@@ -214,7 +236,14 @@ export default function EtsyListingOptimizerPage() {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ keywords: searchTerm, limit: 100 }),
+                body: JSON.stringify({
+                    keywords: searchTerm,
+                    limit: 500,
+                    minPrice: marketMinPrice ? parseFloat(marketMinPrice) : undefined,
+                    maxPrice: marketMaxPrice ? parseFloat(marketMaxPrice) : undefined,
+                    shopLocation: marketFilterCountry || undefined,
+                    isStarSeller: marketFilterStarSeller,
+                }),
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Search failed');
@@ -382,22 +411,120 @@ export default function EtsyListingOptimizerPage() {
                     {/* SECTION 1: MARKET SEARCH */}
                     <div className="space-y-4">
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-5 overflow-hidden flex flex-col h-auto lg:h-[700px]">
-                            <h2 className="text-md font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <Search className="h-4 w-4 text-purple-600" />
-                                1. Search Market Place
-                            </h2>
-                            <div className="flex gap-2 mb-2">
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                    placeholder="Keywords..."
-                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none text-gray-900 text-sm"
-                                />
-                                <button onClick={handleSearch} disabled={searching} className="bg-purple-600 text-white px-4 py-2 rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center min-w-[50px]">
-                                    {searching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                                </button>
+                            {/* Search Controls (Sample UI Inspired) */}
+                            <div className="space-y-4 mb-4 bg-white p-4 rounded-xl border border-purple-100 shadow-sm">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                            Keywords
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                                placeholder="e.g. leather jacket, wedding ring, wall art"
+                                                className="w-full h-10 px-3 pr-10 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 transition-all outline-none"
+                                            />
+                                            <Search className="h-4 w-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                                Min Price ($)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={marketMinPrice}
+                                                onChange={(e) => setMarketMinPrice(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full h-10 px-3 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 transition-all outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                                Max Price ($)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={marketMaxPrice}
+                                                onChange={(e) => setMarketMaxPrice(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full h-10 px-3 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 transition-all outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                            Shop Location <span className="text-gray-400 font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            list="market-countries"
+                                            type="text"
+                                            value={marketFilterCountry}
+                                            onChange={(e) => setMarketFilterCountry(e.target.value)}
+                                            placeholder="e.g. United States, Germany"
+                                            className="w-full h-10 px-3 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm text-gray-900 transition-all outline-none"
+                                        />
+                                        <datalist id="market-countries">
+                                            {Array.from(new Set(searchResults.map(l => l.shop_location_country || '').filter(Boolean))).sort().map((country) => (
+                                                <option key={country} value={country} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 pt-1">
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={marketFilterStarSeller}
+                                                onChange={(e) => setMarketFilterStarSeller(e.target.checked)}
+                                                className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 transition-all"
+                                            />
+                                            <span className="text-gray-900 font-medium flex items-center gap-1.5 text-xs">
+                                                <Star className="h-3.5 w-3.5 fill-purple-600 text-purple-600" />
+                                                Star Seller Only
+                                            </span>
+                                        </label>
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleMarketReset}
+                                                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium border-2 border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm"
+                                            >
+                                                <RefreshCw className="h-3.5 w-3.5" />
+                                                Reset
+                                            </button>
+                                            <button
+                                                onClick={handleSearch}
+                                                disabled={searching}
+                                                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
+                                            >
+                                                {searching ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Search className="h-4 w-4" />
+                                                )}
+                                                Analyze Market
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {!searchResults.length && !searching && (
+                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 pt-2 border-t border-gray-100 mt-1">
+                                        <AlertCircle className="h-3 w-3 text-blue-500 shrink-0" />
+                                        <span>Click &quot;Analyze Market&quot; to see results.</span>
+                                    </div>
+                                )}
                             </div>
 
                             {searchResults.length > 0 && (
@@ -406,7 +533,7 @@ export default function EtsyListingOptimizerPage() {
                                         <span className="bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
                                             Found {searchResults.length}+ matches
                                         </span>
-                                        <span className="text-gray-400">Showing top 100 by views</span>
+                                        <span className="text-gray-400">Showing filtered results</span>
                                     </div>
                                     <Sparkles className="h-3 w-3 text-amber-400 animate-pulse" />
                                 </div>
@@ -515,10 +642,15 @@ export default function EtsyListingOptimizerPage() {
                     {/* SECTION 3: YOUR SHOP LISTING */}
                     <div className="space-y-4">
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-5 h-auto lg:h-[700px] flex flex-col">
-                            <h2 className="text-md font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <Store className="h-4 w-4 text-purple-600" />
-                                3. Your Existing Listing
-                            </h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-md font-bold text-gray-800 flex items-center gap-2">
+                                    <Store className="h-4 w-4 text-purple-600" />
+                                    3. Your Existing Listing
+                                </h2>
+
+                            </div>
+
+
 
                             <div className="mb-4">
                                 <label className="text-[10px] uppercase font-bold text-gray-500 mb-2 block tracking-widest">Select Target Listing</label>
@@ -541,7 +673,21 @@ export default function EtsyListingOptimizerPage() {
                                         </div>
                                     ) : (
                                         userListings
-                                            .filter(l => l.title.toLowerCase().includes(userListingSearchTerm.toLowerCase()))
+                                            .filter(l => {
+                                                // Existing Search Term
+                                                if (!l.title.toLowerCase().includes(userListingSearchTerm.toLowerCase())) return false;
+
+                                                // New Filters
+                                                if (userFilterStarSeller && !l.is_star_seller) return false;
+                                                if (userFilterCountry) {
+                                                    // User listings usually don't have country info on them directly unless I added it,
+                                                    // or we assume they match independent shop info.
+                                                    // But we can check shopInfo if available, but that filters ALL or NONE.
+                                                    // Let's assume we filter by what the user selected in dropdown (which matches shopInfo).
+                                                    if (shopInfo?.shopLocationCountryIso !== userFilterCountry) return false;
+                                                }
+                                                return true;
+                                            })
                                             .map((l, index) => (
                                                 <div
                                                     key={l.etsyListingId}

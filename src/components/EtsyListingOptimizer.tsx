@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Sparkles, Loader2, CheckCircle, AlertCircle, ArrowRight, RefreshCw, Zap } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Sparkles, Loader2, CheckCircle, AlertCircle, ArrowRight, RefreshCw, Zap, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useEtsyListings } from '@/hooks/useEtsyData';
 import { useEtsyDataStore } from '@/store/etsyDataStore';
@@ -35,7 +35,20 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
   const [optimizing, setOptimizing] = useState(false);
   const [result, setResult] = useState<OptimizationResult | null>(null);
 
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterStarSeller, setFilterStarSeller] = useState(false);
+  const [filterCountry, setFilterCountry] = useState('');
   const shopId = propShopId;
+
+  // Derive filtered listings
+  const filteredListings = useMemo(() => {
+    if (!listings) return [];
+
+    return listings.filter(l => {
+      return true;
+    });
+  }, [listings, filterStarSeller, filterCountry]);
 
   // Basic HTML entity decoding for titles coming from Etsy (e.g. Men&#39;s → Men's)
   const decodeHtmlEntities = (value: string) => {
@@ -57,8 +70,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
 
     try {
       setLoadingDetails(true);
-      const { accessToken } = useEtsyDataStore.getState();
-      const token = accessToken || localStorage.getItem('token');
+      const token = localStorage.getItem('token');
 
       // Fetch from DB via details endpoint (which checks DB first, then API)
       const detailsRes = await fetch(`/api/etsy/listings/${listingId}/details?shopId=${shopId}`, {
@@ -96,8 +108,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
       setOptimizing(true);
       setResult(null);
 
-      const { accessToken } = useEtsyDataStore.getState();
-      const token = accessToken || localStorage.getItem('token');
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/etsy/listing-optimizer', {
         method: 'POST',
         headers: {
@@ -151,8 +162,7 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
         if (tags) updateData.tags = tags;
       }
 
-      const { accessToken } = useEtsyDataStore.getState();
-      const token = accessToken || localStorage.getItem('token');
+      const token = localStorage.getItem('token');
       toast.loading('Updating listing on Etsy...', { id: 'apply-optimization' });
 
       // Update on Etsy API first (this endpoint updates Etsy API, then DB)
@@ -240,12 +250,57 @@ export default function EtsyListingOptimizer({ shopId: propShopId }: { shopId: s
         {/* Left: Listing Selection */}
         <div className="space-y-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h4 className="font-medium text-gray-900 mb-3">Select Listing to Optimize</h4>
+            <h4 className="font-medium text-gray-900 mb-3 flex items-center justify-between">
+              Select Listing to Optimize
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="p-1 rounded hover:bg-gray-100 text-gray-500"
+                  title="Toggle Filters"
+                >
+                  <Filter className="h-4 w-4" />
+                </button>
+              </div>
+            </h4>
+
+            {showFilters && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="opt-star-seller"
+                    checked={filterStarSeller}
+                    onChange={(e) => setFilterStarSeller(e.target.checked)}
+                    className="rounded text-purple-600 focus:ring-purple-500"
+                  />
+                  <label htmlFor="opt-star-seller" className="text-sm text-gray-700 font-medium">Star Seller</label>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                  <select
+                    value={filterCountry}
+                    onChange={(e) => setFilterCountry(e.target.value)}
+                    className="w-full text-sm border-gray-300 rounded-md text-black focus:ring-purple-500 focus:border-purple-500"
+                  >
+                    <option value="">All Countries</option>
+                    <option value="US">United States</option>
+                    <option value="CA">Canada</option>
+                    <option value="GB">United Kingdom</option>
+                    <option value="AU">Australia</option>
+                    <option value="DE">Germany</option>
+                    <option value="FR">France</option>
+                  </select>
+                </div>
+
+              </div>
+            )}
+
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {listings.length === 0 ? (
+              {filteredListings.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-8">No listings found</p>
               ) : (
-                listings.map((listing) => (
+                filteredListings.map((listing) => (
                   <div
                     key={listing.listing_id}
                     onClick={async () => {

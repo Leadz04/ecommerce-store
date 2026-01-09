@@ -20,6 +20,8 @@ import {
     Image as ImageIcon,
     X,
     ExternalLink,
+    Filter,
+    RefreshCw,
 } from 'lucide-react';
 
 interface EtsyListing {
@@ -64,6 +66,13 @@ export default function EtsyListingCreatorPage() {
     const [searching, setSearching] = useState(false);
     const [searchResults, setSearchResults] = useState<EtsyListing[]>([]);
     const [searchError, setSearchError] = useState<string | null>(null);
+
+    // Filter state
+    const [showFilters, setShowFilters] = useState(false);
+    const [isStarSeller, setIsStarSeller] = useState(false);
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
+    const [shopLocation, setShopLocation] = useState('');
 
     // Selected listing for details
     const [selectedListing, setSelectedListing] = useState<EtsyListing | null>(null);
@@ -196,7 +205,11 @@ export default function EtsyListingCreatorPage() {
                 },
                 body: JSON.stringify({
                     keywords: searchTerm,
-                    limit: 50,
+                    limit: 500, // Increase limit for better filtering
+                    minPrice: minPrice ? parseFloat(minPrice) : undefined,
+                    maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+                    shopLocation: shopLocation || undefined,
+                    isStarSeller: isStarSeller,
                 }),
             });
 
@@ -206,13 +219,8 @@ export default function EtsyListingCreatorPage() {
                 throw new Error(data.error || 'Search failed');
             }
 
-            // Filter to show only high-view listings (views > 100)
-            let highViewListings = (data.listings || []).filter(
-                (listing: EtsyListing) => listing.views && listing.views > 100
-            );
-
-            // Sort by Star Seller first, then by views
-            highViewListings.sort((a, b) => {
+            // Sort all results: Star Seller first, then by views
+            const allListings = (data.listings || []).sort((a: EtsyListing, b: EtsyListing) => {
                 // Star Sellers first
                 if (a.is_star_seller !== b.is_star_seller) {
                     return a.is_star_seller ? -1 : 1;
@@ -221,11 +229,11 @@ export default function EtsyListingCreatorPage() {
                 return (b.views || 0) - (a.views || 0);
             });
 
-            if (highViewListings.length === 0) {
-                setSearchError('No high-view listings found. Try a different search term.');
+            if (allListings.length === 0) {
+                setSearchError('No listings found. Try a different search term.');
             }
 
-            setSearchResults(highViewListings);
+            setSearchResults(allListings);
         } catch (error: any) {
             console.error('Search error:', error);
             setSearchError(error.message || 'Failed to search Etsy listings');
@@ -409,6 +417,15 @@ export default function EtsyListingCreatorPage() {
         setSelectedImages([]);
     };
 
+    const handleReset = () => {
+        setSearchTerm('');
+        setMinPrice('');
+        setMaxPrice('');
+        setShopLocation('');
+        setIsStarSeller(false);
+        setSearchResults([]);
+    };
+
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -513,47 +530,148 @@ export default function EtsyListingCreatorPage() {
                                 Search Etsy Listings
                             </h2>
 
-                            {/* Search Input */}
-                            <div className="flex gap-2 mb-4">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                                        placeholder="Search for items on Etsy..."
-                                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:ring-0 transition-all text-gray-900"
-                                    />
+                            {/* Search Controls (Sample UI Inspired) */}
+                            <div className="space-y-4 mb-6 bg-white p-5 rounded-xl border border-purple-100 shadow-sm">
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Keywords
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                                placeholder="e.g. leather jacket, wedding ring, wall art"
+                                                className="w-full h-11 px-4 pr-11 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base text-gray-900 transition-all outline-none"
+                                            />
+                                            <Search className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2" />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Min Price ($)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={minPrice}
+                                                onChange={(e) => setMinPrice(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full h-11 px-4 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base text-gray-900 transition-all outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Max Price ($)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={maxPrice}
+                                                onChange={(e) => setMaxPrice(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full h-11 px-4 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base text-gray-900 transition-all outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Shop Location <span className="text-gray-400 font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            list="creator-countries"
+                                            type="text"
+                                            value={shopLocation}
+                                            onChange={(e) => setShopLocation(e.target.value)}
+                                            placeholder="e.g. United States, Germany"
+                                            className="w-full h-11 px-4 rounded-lg border-2 border-gray-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base text-gray-900 transition-all outline-none"
+                                        />
+                                        <datalist id="creator-countries">
+                                            {Array.from(new Set(searchResults.map(l => l.shop_name?.split(' ')?.pop() || '').filter(s => s.length === 2))).sort().map((country) => (
+                                                <option key={country} value={country} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={isStarSeller}
+                                                onChange={(e) => setIsStarSeller(e.target.checked)}
+                                                className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 transition-all"
+                                            />
+                                            <span className="text-gray-900 font-medium flex items-center gap-1.5 text-sm">
+                                                <Star className="h-4 w-4 fill-purple-600 text-purple-600" />
+                                                Star Seller Only
+                                            </span>
+                                        </label>
+
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            <button
+                                                onClick={handleReset}
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border-2 border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm"
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                                Reset
+                                            </button>
+                                            <button
+                                                onClick={handleSearch}
+                                                disabled={searching}
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2 text-[15px] font-bold rounded-lg text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
+                                            >
+                                                {searching ? (
+                                                    <>
+                                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                                        Searching...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Search className="h-5 w-5" />
+                                                        Analyze Market
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={handleSearch}
-                                    disabled={searching || !searchTerm.trim()}
-                                    className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
-                                >
-                                    {searching ? (
-                                        <>
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                            Searching...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Search className="h-5 w-5" />
-                                            Search
-                                        </>
-                                    )}
-                                </button>
+
+                                {!searchResults.length && !searching && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 pt-3 border-t border-gray-100 mt-2">
+                                        <AlertCircle className="h-4 w-4 text-blue-500" />
+                                        <span>Enter a query and click &quot;Analyze Market&quot; to see results from public Etsy listings.</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Search Error */}
                             {searchError && (
-                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm mt-4">
                                     <XCircle className="h-4 w-4 flex-shrink-0" />
                                     {searchError}
                                 </div>
                             )}
 
                             {/* Search Results */}
+                            {searchResults.length > 0 && (
+                                <div className="mb-3 flex items-center justify-between text-[10px] sm:text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <span className="bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
+                                            Found {searchResults.length}+ matches
+                                        </span>
+                                        <span className="text-gray-400">Showing filtered results</span>
+                                    </div>
+                                    <Sparkles className="h-3 w-3 text-amber-400 animate-pulse" />
+                                </div>
+                            )}
+
                             <div className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
                                 {searchResults.length === 0 && !searching && (
                                     <div className="text-center py-12 text-gray-500">

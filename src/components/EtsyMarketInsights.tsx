@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Search, BarChart3, Loader2, AlertCircle, RefreshCw, TrendingUp, Tag, Store, ChevronDown, ChevronUp, Image as ImageIcon, Video, Eye, DollarSign, Star } from 'lucide-react';
+import { Search, BarChart3, Loader2, AlertCircle, RefreshCw, TrendingUp, Tag, Store, ChevronDown, ChevronUp, Image as ImageIcon, Video, Eye, DollarSign, Star, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ColumnDef } from '@tanstack/react-table';
 import { MarketDataTable } from './MarketDataTable';
@@ -17,6 +17,7 @@ interface MarketListing {
   shop_id: number | null;
   shop_name: string | null;
   is_star_seller?: boolean;
+  shop_location_country?: string;
   category_path: string[];
   tags?: string[];
   description?: string;
@@ -74,6 +75,7 @@ export default function EtsyMarketInsights() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [shopLocation, setShopLocation] = useState('');
+  const [isStarSeller, setIsStarSeller] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MarketInsightsResponse | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -609,7 +611,8 @@ export default function EtsyMarketInsights() {
           minPrice: minPrice ? parseFloat(minPrice) : undefined,
           maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
           shopLocation: shopLocation || undefined,
-          limit: 200, // Fetch 200 listings for better insights
+          isStarSeller: isStarSeller,
+          limit: 500, // Fetch max listings for better insights
         }),
       });
 
@@ -651,6 +654,7 @@ export default function EtsyMarketInsights() {
     setMinPrice('');
     setMaxPrice('');
     setShopLocation('');
+    setIsStarSeller(false);
     setData(null);
     setExpandedRows(new Set());
     setListingDetailsCache(new Map());
@@ -658,6 +662,11 @@ export default function EtsyMarketInsights() {
     setShopListingsCache(new Map());
     setListingImagesCache(new Map());
   };
+
+  // Derived listings (now just pass-through as filtering is API-based)
+  const filteredListings = useMemo(() => {
+    return data?.listings || [];
+  }, [data?.listings]);
 
   return (
     <div className="space-y-6">
@@ -741,6 +750,21 @@ export default function EtsyMarketInsights() {
               />
             </div>
 
+            <div className="flex items-center pb-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isStarSeller}
+                  onChange={(e) => setIsStarSeller(e.target.checked)}
+                  className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 transition-all"
+                />
+                <span className="text-gray-900 font-medium flex items-center gap-1.5">
+                  <Star className="h-4 w-4 fill-purple-600 text-purple-600" />
+                  Star Seller Only
+                </span>
+              </label>
+            </div>
+
             <div className="md:col-span-3 flex gap-3 justify-end">
               <button
                 type="button"
@@ -783,6 +807,9 @@ export default function EtsyMarketInsights() {
       {/* Results */}
       {data && (
         <div className="space-y-4">
+
+          {/* Post-Search Filters Removed (Managed via API inputs now) */}
+
           {/* Summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -999,7 +1026,7 @@ export default function EtsyMarketInsights() {
           )}
 
           {/* Star Seller Spotlights */}
-          {data.listings.some(l => l.is_star_seller) && (
+          {filteredListings.some(l => l.is_star_seller) && (
             <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -1008,16 +1035,16 @@ export default function EtsyMarketInsights() {
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-purple-900">Star Seller Spotlights</h4>
-                    <p className="text-xs text-purple-700">Top performing listings from Etsy Star Sellers</p>
+                    <p className="text-xs text-purple-700">Top performing listings from Etsy Star Sellers (Filtered)</p>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold border border-purple-200">
-                  {data.listings.filter(l => l.is_star_seller).length} DISCOVERED
+                  {filteredListings.filter(l => l.is_star_seller).length} DISCOVERED
                 </span>
               </div>
               <MarketDataTable
                 columns={listingsColumns}
-                data={data.listings.filter(l => l.is_star_seller)}
+                data={filteredListings.filter(l => l.is_star_seller)}
                 getRowId={(row, index) => `star-${row.listing_id}-${index}`}
                 pageSize={5}
                 showPagination={true}
@@ -1150,7 +1177,7 @@ export default function EtsyMarketInsights() {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-gray-900">
-                Sample Listings ({data.listings.length}
+                Sample Listings ({filteredListings.length}
                 {data.query?.totalAvailable && data.query.totalAvailable > data.listings.length
                   ? ` of ${data.query.totalAvailable.toLocaleString()} available`
                   : ''}
@@ -1164,7 +1191,7 @@ export default function EtsyMarketInsights() {
             </div>
             <MarketDataTable
               columns={listingsColumns}
-              data={data.listings}
+              data={filteredListings}
               getRowId={(row, index) => `${row.listing_id}-${index}`}
               pageSize={20}
               showPagination={true}

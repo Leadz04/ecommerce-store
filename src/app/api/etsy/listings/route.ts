@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       .lean();
 
     let refreshed = false;
-    const needsRefresh = forceRefresh || dbListings.length === 0 || dbListings.some(listing => 
+    const needsRefresh = forceRefresh || dbListings.length === 0 || dbListings.some(listing =>
       needsEtsyDataRefresh(listing.lastSyncedAt, 'listing')
     );
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       // Step 2: Check cache before API call (if not forcing refresh)
       const cacheKey = generateCacheKey('shop-listings', { shopId });
       let useCache = false;
-      
+
       if (!forceRefresh) {
         const cachedListings = await getCachedData<any[]>(cacheKey, userId);
         if (cachedListings && cachedListings.length > 0) {
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
               if (etsyListingId) {
                 await EtsyListing.findOneAndUpdate(
                   { etsyListingId, userId },
-                  { 
+                  {
                     $set: {
                       userId,
                       etsyListingId,
@@ -89,70 +89,70 @@ export async function GET(request: NextRequest) {
 
       if (!useCache) {
         // Step 3: Fetch from Etsy API
-      const etsyAPI = new EtsyAPI(
-        shop.accessToken,
-        shop.shopId,
-        shop.refreshToken,
-        async (newTokens) => {
-          await EtsyShop.updateOne(
-            { userId: shop.userId, shopId: shop.shopId },
-            {
-              $set: {
-                accessToken: newTokens.access_token,
-                refreshToken: newTokens.refresh_token,
-                tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+        const etsyAPI = new EtsyAPI(
+          shop.accessToken,
+          shop.shopId,
+          shop.refreshToken,
+          async (newTokens) => {
+            await EtsyShop.updateOne(
+              { userId: shop.userId, shopId: shop.shopId },
+              {
+                $set: {
+                  accessToken: newTokens.access_token,
+                  refreshToken: newTokens.refresh_token,
+                  tokenExpiresAt: new Date(Date.now() + newTokens.expires_in * 1000),
+                }
               }
-            }
+            );
+          }
+        );
+
+        const etsyListings = await etsyAPI.getListings(shopId);
+
+        // Step 4: Update database with fresh data
+        for (const listing of etsyListings) {
+          const etsyListingId = listing.listing_id.toString();
+
+          // Fetch images for the listing
+          let images: Array<{ url: string; rank: number; listingImageId: string }> = [];
+          try {
+            const listingImages = await etsyAPI.getListingImages(etsyListingId);
+            images = listingImages.map((img: any, index: number) => ({
+              url: img.url_fullxfull || img.url_570xN || img.url_75x75 || '',
+              rank: img.rank ?? index,
+              listingImageId: img.listing_image_id?.toString() || `${etsyListingId}-${index}`,
+            })).filter((img: any) => img.url);
+          } catch (error) {
+            console.warn(`Failed to fetch images for listing ${etsyListingId}:`, error);
+          }
+
+          const listingData = {
+            userId,
+            etsyListingId,
+            shopId: shop.shopId,
+            title: listing.title,
+            description: listing.description,
+            price: listing.price.amount / listing.price.divisor,
+            currency: listing.price.currency_code,
+            state: listing.state,
+            tags: listing.tags,
+            materials: listing.materials,
+            categoryPath: listing.category_path,
+            images,
+            inventory: {
+              quantity: listing.quantity,
+            },
+            views: (listing as any).views ?? 0,
+            numFavorers: (listing as any).num_favorers ?? 0,
+            lastSyncedAt: new Date(),
+          };
+
+          await EtsyListing.findOneAndUpdate(
+            { etsyListingId },
+            { $set: listingData },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
           );
         }
-      );
-
-      const etsyListings = await etsyAPI.getListings(shopId);
-      
-        // Step 4: Update database with fresh data
-      for (const listing of etsyListings) {
-        const etsyListingId = listing.listing_id.toString();
-        
-        // Fetch images for the listing
-        let images: Array<{ url: string; rank: number; listingImageId: string }> = [];
-        try {
-          const listingImages = await etsyAPI.getListingImages(etsyListingId);
-          images = listingImages.map((img: any, index: number) => ({
-            url: img.url_fullxfull || img.url_570xN || img.url_75x75 || '',
-            rank: img.rank ?? index,
-            listingImageId: img.listing_image_id?.toString() || `${etsyListingId}-${index}`,
-            })).filter((img: any) => img.url);
-        } catch (error) {
-          console.warn(`Failed to fetch images for listing ${etsyListingId}:`, error);
-        }
-        
-        const listingData = {
-          userId,
-          etsyListingId,
-          shopId: shop.shopId,
-          title: listing.title,
-          description: listing.description,
-          price: listing.price.amount / listing.price.divisor,
-          currency: listing.price.currency_code,
-          state: listing.state,
-          tags: listing.tags,
-          materials: listing.materials,
-          categoryPath: listing.category_path,
-          images,
-          inventory: {
-            quantity: listing.quantity,
-          },
-          views: (listing as any).views ?? 0,
-          numFavorers: (listing as any).num_favorers ?? 0,
-          lastSyncedAt: new Date(),
-        };
-
-        await EtsyListing.findOneAndUpdate(
-          { etsyListingId },
-          { $set: listingData },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-      }
 
         // Step 5: Update cache
         await setCachedData(cacheKey, userId, etsyListings.map(l => ({
@@ -166,9 +166,9 @@ export async function GET(request: NextRequest) {
           tags: l.tags,
         })), CACHE_TTL.LISTING, shopId);
 
-      refreshed = true;
+        refreshed = true;
       }
-      
+
       // Re-fetch from database after sync/cache update
       dbListings = await EtsyListing.find(query)
         .sort({ lastSyncedAt: -1 })
@@ -204,6 +204,7 @@ export async function GET(request: NextRequest) {
       views: listing.views ?? 0,
       num_favorers: listing.numFavorers ?? 0,
       state: listing.state,
+      category_path: listing.categoryPath || [],
       lastSyncedAt: listing.lastSyncedAt,
     }));
 

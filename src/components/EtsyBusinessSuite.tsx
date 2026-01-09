@@ -436,6 +436,10 @@ export default function EtsyBusinessSuite() {
   const [draftListings, setDraftListings] = useState<Listing[]>([]);
   const [inactiveListings, setInactiveListings] = useState<Listing[]>([]);
   const [listingsTab, setListingsTab] = useState<'active' | 'draft' | 'inactive'>('active');
+  const [filterStarSeller, setFilterStarSeller] = useState(false);
+  const [filterCountry, setFilterCountry] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [optimizingListing, setOptimizingListing] = useState<number | null>(null);
   const [optimizationResult, setOptimizationResult] = useState<any | null>(null);
   const [showListingModal, setShowListingModal] = useState(false);
@@ -4128,6 +4132,13 @@ export default function EtsyBusinessSuite() {
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`p-2 rounded hover:bg-gray-100 ${showFilters ? 'bg-purple-100 text-purple-700' : 'text-gray-500'}`}
+                        title="Toggle Filters"
+                      >
+                        <Filter className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={loadDashboardStats}
                         disabled={isLoadingStats}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -4147,6 +4158,49 @@ export default function EtsyBusinessSuite() {
                       </button>
                     </div>
                   </div>
+
+                  {showFilters && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center gap-2 h-full pt-6">
+                        <input
+                          type="checkbox"
+                          id="bs-star-seller"
+                          checked={filterStarSeller}
+                          onChange={(e) => setFilterStarSeller(e.target.checked)}
+                          className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500"
+                        />
+                        <label htmlFor="bs-star-seller" className="text-sm text-black font-medium">Filter by Star Seller</label>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Country</label>
+                        <select
+                          value={filterCountry}
+                          onChange={(e) => setFilterCountry(e.target.value)}
+                          className="w-full text-sm border-gray-300 rounded-md text-black focus:ring-purple-500 focus:border-purple-500 h-9"
+                        >
+                          <option value="">All Countries</option>
+                          <option value="US">United States</option>
+                          <option value="CA">Canada</option>
+                          <option value="GB">United Kingdom</option>
+                          <option value="AU">Australia</option>
+                          <option value="DE">Germany</option>
+                          <option value="FR">France</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Category (Tag)</label>
+                        <input
+                          type="text"
+                          value={filterCategory}
+                          onChange={(e) => setFilterCategory(e.target.value)}
+                          placeholder="Filter by tag..."
+                          className="w-full text-sm border-gray-300 rounded-md text-black focus:ring-purple-500 focus:border-purple-500 h-9"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Tabs for Active/Draft/Inactive */}
                   <div className="flex gap-2 mb-4 border-b">
@@ -4182,9 +4236,20 @@ export default function EtsyBusinessSuite() {
 
                   <div className="space-y-3">
                     {(() => {
-                      const currentListings = listingsTab === 'active' ? listings :
+                      let currentListings = listingsTab === 'active' ? listings :
                         listingsTab === 'draft' ? draftListings :
                           inactiveListings;
+
+                      // Apply filters
+                      if (filterCategory) {
+                        const lowerCat = filterCategory.toLowerCase();
+                        currentListings = currentListings.filter(l =>
+                          l.tags?.some(t => t.toLowerCase().includes(lowerCat)) ||
+                          l.title?.toLowerCase().includes(lowerCat)
+                        );
+                      }
+
+                      // Note: Star Seller and Country filters are placeholders here as explained
 
                       if (currentListings.length === 0) {
                         return (

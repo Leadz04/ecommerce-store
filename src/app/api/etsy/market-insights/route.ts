@@ -12,13 +12,14 @@ interface MarketInsightsRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: MarketInsightsRequest = await request.json();
+    const body: MarketInsightsRequest & { isStarSeller?: boolean } = await request.json();
     const {
       keywords,
       minPrice,
       maxPrice,
       taxonomyId,
       shopLocation,
+      isStarSeller,
       limit = 50,
     } = body;
 
@@ -29,45 +30,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Etsy public search with pagination to fetch more listings
-    // Etsy API allows max 100 per request, so we'll make multiple requests if needed
+    // Call Etsy public search with pagination
     const maxPerRequest = 100;
-    const requestedLimit = Math.min(Math.max(limit, 1), 500); // Allow up to 500 listings
-    const numberOfRequests = Math.ceil(requestedLimit / maxPerRequest);
+    const targetLimit = Math.min(Math.max(limit, 1), 500);
+
+    // Safety break to prevent infinite loops if few results match
+    const maxRequests = 20;
 
     let allResults: any[] = [];
     let totalCount = 0;
+    let offset = 0;
+    let requestedLimit = 0;
 
     try {
-      for (let i = 0; i < numberOfRequests && allResults.length < requestedLimit; i++) {
-        const offset = i * maxPerRequest;
-        const currentLimit = Math.min(maxPerRequest, requestedLimit - allResults.length);
-
+      for (let i = 0; i < maxRequests && allResults.length < targetLimit; i++) {
+        // Fetch a full batch to filter from
         const raw = await EtsyPublicAPI.searchActiveListings({
           keywords,
           min_price: minPrice,
           max_price: maxPrice,
           taxonomy_id: taxonomyId,
           shop_location: shopLocation,
-          limit: currentLimit,
+          limit: maxPerRequest,
           offset: offset,
-          includes: 'Images',
+          includes: 'Images,Shop',
         } as any);
 
         const batchResults = Array.isArray(raw.results) ? raw.results : [];
-        allResults = [...allResults, ...batchResults];
         totalCount = raw.count || totalCount;
 
-        // If we got fewer results than requested, we've reached the end
-        if (batchResults.length < currentLimit) {
+        // Filter batch if needed
+        const filteredBatch = isStarSeller
+          ? batchResults.filter((item: any) => item.shop?.is_star_seller)
+          : batchResults;
+
+        allResults = [...allResults, ...filteredBatch];
+
+        // Prepare next offset
+        offset += maxPerRequest;
+
+        // Stop if we've exhausted available results from API
+        if (batchResults.length < maxPerRequest) {
           break;
         }
 
         // Small delay to respect rate limits
-        if (i < numberOfRequests - 1) {
+        if (allResults.length < targetLimit) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
+
+      // Trim to exact limit if we over-fetched
+      if (allResults.length > targetLimit) {
+        allResults = allResults.slice(0, targetLimit);
+      }
+
     } catch (apiError: any) {
       console.error('[Market Insights] Etsy API error:', apiError);
       const errorMessage = apiError?.message || 'Etsy API request failed';
@@ -84,7 +101,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results = allResults.slice(0, requestedLimit);
+    const results = allResults;
 
     // Normalize basic listing info only (no detailed fetching for performance)
     // Details (images, videos, description) will be fetched on-demand when user expands a row
@@ -105,6 +122,7 @@ export async function POST(request: NextRequest) {
         shop_id: item.shop_id ?? null,
         shop_name: item.shop?.shop_name ?? null,
         is_star_seller: item.shop?.is_star_seller ?? false,
+        shop_location_country: item.shop?.shop_location_country_iso ?? null,
         taxonomy_id: item.taxonomy_id ?? null,
         category_path: item.category_path ?? [],
         tags: Array.isArray(item.tags) ? item.tags : [],
@@ -116,15 +134,13 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Sort listings: Star Sellers first, then by views/favorites
+    // Sort listings: Star Sellers first, then by views
     listings.sort((a, b) => {
       if (a.is_star_seller !== b.is_star_seller) {
         return a.is_star_seller ? -1 : 1;
       }
-      // Secondary sort by engagement
-      const aEngagement = (a.views || 0) + (a.num_favorers || 0) * 5;
-      const bEngagement = (b.views || 0) + (b.num_favorers || 0) * 5;
-      return bEngagement - aEngagement;
+      // Secondary sort by views (highest on top)
+      return (b.views || 0) - (a.views || 0);
     });
 
     // Compute simple stats
